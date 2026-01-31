@@ -1,0 +1,205 @@
+{
+  "timestamp": "2026-01-28T01:21:38.496241",
+  "services": {
+    "Airflow Webserver": "healthy",
+    "Airflow API": "healthy",
+    "MLflow Tracking": "healthy",
+    "Model Server": "healthy",
+    "MinIO": "healthy"
+  },
+  "mlflow": {
+    "running": true,
+    "experiments": {
+      "experiments": [
+        {
+          "experiment_id": "13",
+          "name": "test_experiment_1769552454",
+          "artifact_location": "s3://mlflow-artifacts/13",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769552454641,
+          "creation_time": 1769552454641
+        },
+        {
+          "experiment_id": "12",
+          "name": "test_experiment_1769552425",
+          "artifact_location": "s3://mlflow-artifacts/12",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769552425391,
+          "creation_time": 1769552425391
+        },
+        {
+          "experiment_id": "11",
+          "name": "test_experiment_1769552292",
+          "artifact_location": "s3://mlflow-artifacts/11",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769552292747,
+          "creation_time": 1769552292747
+        },
+        {
+          "experiment_id": "10",
+          "name": "test_experiment_1769552103",
+          "artifact_location": "s3://mlflow-artifacts/10",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769552103313,
+          "creation_time": 1769552103313
+        },
+        {
+          "experiment_id": "9",
+          "name": "test_experiment_1769551780",
+          "artifact_location": "s3://mlflow-artifacts/9",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769551780691,
+          "creation_time": 1769551780691
+        },
+        {
+          "experiment_id": "8",
+          "name": "model_registry_test",
+          "artifact_location": "s3://mlflow-artifacts/8",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769532602239,
+          "creation_time": 1769532602239
+        },
+        {
+          "experiment_id": "5",
+          "name": "container_test",
+          "artifact_location": "s3://mlflow-artifacts/5",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769531252032,
+          "creation_time": 1769531252032
+        },
+        {
+          "experiment_id": "4",
+          "name": "simple_test",
+          "artifact_location": "s3://mlflow-artifacts/4",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769530191772,
+          "creation_time": 1769530191772
+        },
+        {
+          "experiment_id": "3",
+          "name": "demand_forecasting_test_1769530050",
+          "artifact_location": "s3://mlflow-artifacts/3",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769530050317,
+          "creation_time": 1769530050317,
+          "tags": [
+            {
+              "key": "purpose",
+              "value": "system_test"
+            },
+            {
+              "key": "environment",
+              "value": "development"
+            }
+          ]
+        },
+        {
+          "experiment_id": "2",
+          "name": "test_experiment",
+          "artifact_location": "s3://mlflow-artifacts/2",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769528359466,
+          "creation_time": 1769528359466
+        },
+        {
+          "experiment_id": "1",
+          "name": "demand_forecasting",
+          "artifact_location": "s3://mlflow-artifacts/1",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769439345076,
+          "creation_time": 1769439345076
+        },
+        {
+          "experiment_id": "0",
+          "name": "Default",
+          "artifact_location": "s3://mlflow-artifacts/0",
+          "lifecycle_stage": "active",
+          "last_update_time": 1769418387153,
+          "creation_time": 1769418387153
+        }
+      ]
+    },
+    "created_experiment": {
+      "experiment_id": "14"
+    },
+    "s3_configured": true
+  },
+  "feature_engineering": {
+    "lag_creation": "passed",
+    "interactions": "passed"
+  },
+  "optimization": {
+    "trials": 5,
+    "best_value": 21.407377292208253
+  },
+  "model_training": {
+    "dags": {
+      "dags": [
+        {
+          "dag_display_name": "dataset_monitoring",
+          "dag_id": "dataset_monitoring",
+          "default_view": "grid",
+          "description": null,
+          "file_token": "Ii9vcHQvYWlyZmxvdy9kYWdzL2RhdGFzZXRfbW9uaXRvcmluZ19kYWcucHki.tDpAYHzurskdglUvCy9IiZQkRcI",
+          "fileloc": "/opt/airflow/dags/dataset_monitoring_dag.py",
+          "has_import_errors": false,
+          "has_task_concurrency_limits": false,
+          "is_active": true,
+          "is_paused": false,
+          "is_subdag": false,
+          "last_expired": null,
+          "last_parsed_time": "2026-01-27T22:21:21.173368+00:00",
+          "last_pickled": null,
+          "max_active_runs": 16,
+          "max_active_tasks": 16,
+          "max_consecutive_failed_dag_runs": 0,
+          "next_dagrun": "2026-01-27T22:00:00+00:00",
+          "next_dagrun_create_after": "2026-01-27T23:00:00+00:00",
+          "next_dagrun_data_interval_end": "2026-01-27T23:00:00+00:00",
+          "next_dagrun_data_interval_start": "2026-01-27T22:00:00+00:00",
+          "owners": [
+            "data-ops"
+          ],
+          "pickle_id": null,
+          "root_dag_id": null,
+          "schedule_interval": {
+            "__type": "CronExpression",
+            "value": "@hourly"
+          },
+          "scheduler_lock": null,
+          "tags": [
+            {
+              "name": "datasets"
+            },
+            {
+              "name": "ops"
+            },
+            {
+              "name": "monitoring"
+            }
+          ],
+          "timetable_description": "Every hour"
+        }
+      ],
+      "total_entries": 1
+    }
+  },
+  "data_validation": {
+    "schema": "passed",
+    "constraints": "passed"
+  },
+  "model_server": {
+    "health": {
+      "status": "healthy",
+      "models_loaded": 0,
+      "timestamp": "2026-01-27T22:21:50.046533"
+    },
+    "auth_required": true
+  },
+  "summary": {
+    "total_tests": 19,
+    "passed": 19,
+    "failed": 0,
+    "success_rate": "100.0%"
+  }
+}

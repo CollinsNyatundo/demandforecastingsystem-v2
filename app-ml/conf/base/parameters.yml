@@ -1,0 +1,99 @@
+# Demand Forecasting System Parameters
+# Configuration for all pipeline stages
+train_fraction: 0.8
+target_column: "cnt"
+dataset_name: "bike_sharing"
+# Data Profiling Configuration
+enable_data_docs: true
+data_docs_dir: "/opt/airflow/data/docs"
+data_docs_url: "http://localhost:8000"
+data_docs_username: "admin"
+data_docs_password: "admin"
+# Data Processing Parameters
+data_processing:
+  train_test_split: 0.2
+  random_state: 42
+  validation_split: 0.1
+
+# Feature Engineering Configuration
+feature_engineering:
+  # Target lag values (for cnt/demand column)
+  target_lags: [1, 2, 22, 23]
+  
+  # Feature lag configuration
+  feature_lags:
+    hr: [1, 2, 3]
+    weekday: [1, 2, 3]
+    weathersit: [1, 2, 3]
+    temp: [1, 2, 3]
+    hum: [1, 2, 3]
+  
+  # Other parameters
+  min_dataset_size: 100
+  max_nan_percentage: 0.05
+  temporal_features:
+    - hour
+    - day_of_week
+    - month
+    - quarter
+    - day_of_year
+
+# Model Training Parameters
+model_training:
+  random_forest:
+    n_estimators: 100
+    max_depth: 20
+    min_samples_split: 5
+    random_state: 42
+  
+  catboost:
+    learning_rate: 0.1
+    max_depth: 6
+    iterations: 1000
+    l2_leaf_reg: 1.0
+    early_stopping_rounds: 50
+    verbose: false
+    random_state: 42
+
+# Optuna Hyperparameter Optimization
+optimization:
+  n_trials: 150
+  metric: "rmse"
+  direction: "minimize"
+  learning_rate:
+    min: 0.01
+    max: 0.3
+    log: true
+  max_depth:
+    min: 3
+    max: 10
+  iterations:
+    min: 100
+    max: 1000
+  l2_leaf_reg:
+    min: 1e-8
+    max: 10.0
+    log: true
+  border_count:
+    min: 32
+    max: 255
+
+# Explainability Parameters
+explainability:
+  shap_background_samples: 100
+  feature_importance_top_k: 10
+  mlflow_tracking: true
+
+# API Serving Parameters
+api:
+  batch_size: 32
+  timeout_seconds: 30
+  enable_caching: true
+  cache_ttl_seconds: 300
+
+# Monitoring Parameters
+monitoring:
+  alert_threshold_rmse: 50.0
+  alert_threshold_r2: 0.7
+  data_drift_threshold: 0.1
+  enable_alerts: true

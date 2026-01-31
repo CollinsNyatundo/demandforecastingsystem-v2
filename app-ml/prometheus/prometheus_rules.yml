@@ -1,0 +1,179 @@
+# Prometheus alerting rules for demand forecasting system
+
+groups:
+  - name: demand_forecasting_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighPredictionErrorRate
+        expr: |
+          (
+            rate(prediction_requests_total{status="error"}[5m]) 
+            / 
+            rate(prediction_requests_total[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: model-server
+          component: prediction-api
+        annotations:
+          summary: "High prediction error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#prediction-errors"
+
+      # Model performance degradation
+      - alert: ModelPerformanceDegradation
+        expr: |
+          (
+            model_accuracy{model_id="production"} < 0.85
+          )
+        for: 5m
+        labels:
+          severity: critical
+          service: model-server
+          component: model-performance
+        annotations:
+          summary: "Model accuracy below threshold"
+          description: "Model accuracy is {{ $value }}, below 85% threshold"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#model-performance"
+
+      # High latency alert
+      - alert: HighPredictionLatency
+        expr: |
+          (
+            histogram_quantile(0.95, rate(prediction_duration_seconds_bucket[5m]))
+          ) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+          service: model-server
+          component: prediction-api
+        annotations:
+          summary: "High prediction latency detected"
+          description: "95th percentile latency is {{ $value }}s"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#high-latency"
+
+      # Low prediction rate
+      - alert: LowPredictionRate
+        expr: |
+          (
+            rate(prediction_requests_total{status="success"}[5m])
+          ) < 0.1
+        for: 5m
+        labels:
+          severity: info
+          service: model-server
+          component: prediction-api
+        annotations:
+          summary: "Low prediction rate detected"
+          description: "Prediction rate is {{ $value }} requests/second"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#low-rate"
+
+      # Model server down
+      - alert: ModelServerDown
+        expr: |
+          up{job="model-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: model-server
+          component: availability
+        annotations:
+          summary: "Model server is down"
+          description: "Model server has been down for more than 1 minute"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#server-down"
+
+      # High memory usage (if node exporter added)
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+          component: memory
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#high-memory"
+
+      # High CPU usage (if node exporter added)
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+          component: cpu
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}%"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#high-cpu"
+
+      # Disk space alert (if node exporter added)
+      - alert: LowDiskSpace
+        expr: |
+          (
+            (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100
+          ) < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: infrastructure
+          component: disk
+        annotations:
+          summary: "Low disk space detected"
+          description: "Disk space is {{ $value }}% available"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#low-disk"
+
+  - name: mlflow_alerts
+    interval: 60s
+    rules:
+      # MLflow server down
+      - alert: MLflowServerDown
+        expr: |
+          up{job="mlflow"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: mlflow
+          component: tracking-server
+        annotations:
+          summary: "MLflow server is down"
+          description: "MLflow tracking server has been down for more than 2 minutes"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#mlflow-down"
+
+  - name: airflow_alerts
+    interval: 60s
+    rules:
+      # Airflow DAG failures
+      - alert: AirflowDAGFailure
+        expr: |
+          airflow_task_status{status="failed"} > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: airflow
+          component: dag-execution
+        annotations:
+          summary: "Airflow DAG failure detected"
+          description: "DAG {{ $labels.dag_id }} has {{ $value }} failed tasks"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#dag-failure"
+
+      # Airflow scheduler down
+      - alert: AirflowSchedulerDown
+        expr: |
+          up{job="airflow-scheduler"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: airflow
+          component: scheduler
+        annotations:
+          summary: "Airflow scheduler is down"
+          description: "Airflow scheduler has been down for more than 2 minutes"
+          runbook_url: "https://github.com/demand-forecasting/runbooks#scheduler-down"

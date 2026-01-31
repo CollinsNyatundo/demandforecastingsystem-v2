@@ -1,0 +1,89 @@
+[12/23/25 14:06:38] INFO     Using                        __init__.py:269
+                             'D:\micromamba\envs\demand-f                
+                             orecasting\Lib\site-packages                
+                             \kedro\framework\project\ric                
+                             h_logging.yml' as logging                   
+                             configuration.                              
+Usage: kedro new [OPTIONS]
+
+  Create a new kedro project.
+
+Options:
+  -v, --verbose                  See extensive logging and error stack traces.
+  -c, --config PATH              Non-interactive mode, using a configuration
+                                 yaml file. This file must supply  the keys
+                                 required by the template's prompts.yml. When
+                                 not using a starter, these are
+                                 `project_name`, `repo_name` and
+                                 `python_package`.
+  -s, --starter TEXT             Specify the starter template to use when
+                                 creating the project. This can be the path to
+                                 a local directory, a URL to a remote VCS
+                                 repository supported by `cookiecutter` or one
+                                 of the aliases listed in ``kedro starter
+                                 list``.
+  --checkout TEXT                An optional tag, branch or commit to checkout
+                                 in the starter repository.
+  --directory TEXT               An optional directory inside the repository
+                                 where the starter resides.
+  -n, --name TEXT                The name of your new Kedro project.
+  -t, --tools TEXT               Select which tools you'd like to include. By
+                                 default, none are included.
+                                 
+                                 Tools
+                                 
+                                 1) Linting: Provides a basic linting setup
+                                 with Ruff
+                                 
+                                 2) Testing: Provides basic testing setup with
+                                 pytest
+                                 
+                                 3) Custom Logging: Provides more logging
+                                 options
+                                 
+                                 4) Documentation: Basic documentation setup
+                                 with Sphinx
+                                 
+                                 5) Data Structure: Provides a directory
+                                 structure for storing data
+                                 
+                                 6) PySpark: Provides set up configuration for
+                                 working with PySpark
+                                 
+                                 Example usage:
+                                 
+                                 kedro new
+                                 --tools=lint,test,log,docs,data,pyspark (or
+                                 any subset of these options)
+                                 
+                                 kedro new --tools=all
+                                 
+                                 kedro new --tools=none
+                                 
+                                 For more information on using tools, see http
+                                 s://docs.kedro.org/en/stable/starters/new_pro
+                                 ject_tools.html
+  -e, --example TEXT             Enter y to enable, n to disable the example
+                                 pipeline.
+  -tc, --telemetry [yes|no|y|n]  Allow or not allow Kedro to collect usage
+                                 analytics. We cannot see nor store
+                                 information contained into a Kedro project.
+                                 Opt in with "yes" and out with "no".
+  --help                         Show this message and exit.
+                    INFO     Kedro is sending anonymous     plugin.py:242
+                             usage data with the sole                    
+                             purpose of improving the                    
+                             product. No personal data or                
+                             IP addresses are stored on our              
+                             side. To opt out, set the                   
+                             `KEDRO_DISABLE_TELEMETRY` or                
+                             `DO_NOT_TRACK` environment                  
+                             variables, or create a                      
+                             `.telemetry` file in the                    
+                             current working directory with              
+                             the contents `consent: false`.              
+                             To hide this message,                       
+                             explicitly grant or deny                    
+                             consent. Read more at                       
+                             https://docs.kedro.org/en/stab              
+                             le/about/telemetry/                         

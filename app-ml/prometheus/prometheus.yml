@@ -1,0 +1,65 @@
+# Prometheus configuration for demand forecasting system
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'demand-forecasting-monitor'
+    source: 'prometheus'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Rule files
+rule_files:
+  - "prometheus_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Model Server Metrics
+  - job_name: 'model-server'
+    static_configs:
+      - targets: ['model-server:8001']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # Nginx Metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:8080']
+    scrape_interval: 30s
+    metrics_path: /nginx_status
+    honor_labels: true
+
+  # Node Exporter (if added later)
+  # - job_name: 'node-exporter'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+  #   scrape_interval: 30s
+
+# Remote write configuration (optional - for sending to remote storage)
+# remote_write:
+#   - url: "http://remote-storage/api/v1/write"
+#     queue_config:
+#       max_samples_per_send: 1000
+#       max_shards: 200
+#       capacity: 2500
+
+# Storage retention is configured via command-line flags:
+# --storage.tsdb.retention.time=15d
+# --storage.tsdb.retention.size=10GB

@@ -1,0 +1,16 @@
+# Security Requirements for Production Deployment
+# Install these packages for security scanning and monitoring
+
+# Security scanning
+safety>=2.3.0
+bandit>=1.7.5
+pip-audit>=2.6.0
+
+# Secret detection
+detect-secrets>=1.4.0
+
+# Secure dependencies
+cryptography>=41.0.0
+
+# Monitoring and logging
+structlog>=23.0.0

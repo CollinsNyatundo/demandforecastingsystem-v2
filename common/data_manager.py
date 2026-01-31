@@ -23,7 +23,9 @@ class DataManager:
         """
         Append new data to an existing DataFrame and reset the index.
         """
-        return df_updated
+        # Placeholder implementation
+        return data_to_append
+
 
     @staticmethod
     def load_data(path: str) -> pd.DataFrame:

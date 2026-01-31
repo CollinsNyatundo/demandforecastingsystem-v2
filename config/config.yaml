@@ -6,6 +6,7 @@ inference_api:
 
 data_manager:
 # Data Manager Parameters
+  raw_data_path: "data/raw_data/raw_data_full.parquet"
 
 pipeline_runner:
 # Pipeline Runner Parameters

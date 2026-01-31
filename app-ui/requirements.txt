@@ -1,5 +1,5 @@
 # UI & Web Framework
-dash==3.0.4
+dash==3.3.0
 dash-bootstrap-components==1.6.0
 gunicorn==23.0.0
 
@@ -7,7 +7,7 @@ gunicorn==23.0.0
 plotly==6.1.2
 
 # HTTP Requests
-requests==2.31.0
+requests>=2.32.5
 
 # Core Data & Config
 numpy==1.26.4

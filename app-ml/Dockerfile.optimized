@@ -1,0 +1,59 @@
+# syntax=docker/dockerfile:1
+
+# Optimized Airflow Dockerfile with cache and timeout handling
+FROM apache/airflow:2.10.4
+
+# Set working directory
+WORKDIR /opt/airflow
+
+# Install system dependencies with timeout
+RUN apt-get update && \
+    timeout 300 apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        && apt-get autoremove -yqq --purge && \
+        apt-get clean && \
+        rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt /requirements.txt
+
+# Install Python dependencies with cache mount and timeout
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=requirements.txt,target=/requirements.txt \
+    pip install --default-timeout=300 --retries=3 --no-cache-dir -r /requirements.txt
+
+# Copy application code
+COPY src/ /opt/airflow/src/
+COPY logging_config.py /opt/airflow/logging_config.py
+
+# Copy configuration files
+COPY conf/ /opt/airflow/conf/
+
+# Copy DAGs
+COPY dags/ /opt/airflow/dags/
+
+# Copy scripts
+COPY scripts/ /opt/airflow/scripts/
+
+# Create necessary directories
+RUN mkdir -p /opt/airflow/logs /opt/airflow/models /opt/airflow/data
+
+# Set permissions
+RUN chown -R airflow:airflow /opt/airflow
+
+# Switch to airflow user
+USER airflow
+
+# Environment variables
+ENV PYTHONPATH=/opt/airflow/src
+ENV AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+ENV AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql://airflow:airflow@postgres:5432/airflow
+ENV AIRFLOW__CELERY__BROKER_URL=redis://:redis123@redis:6379/0
+ENV AIRFLOW__CELERY__RESULT_BACKEND=redis://:redis123@redis:6379/0
+ENV AIRFLOW__CORE__LOAD_EXAMPLES=False
+ENV AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+ENV AIRFLOW__CORE__DAG_DISCOVERY_SAFE_MODE=False
+
+# Default command
+CMD ["airflow", "version"]

@@ -1,0 +1,12 @@
+# Framework and API requirements
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+kedro==1.1.1
+kedro-datasets
+kedro-datasets[pandas]
+pandera>=0.17.2
+great-expectations>=1.10.0
+multimethod==1.12
+omegaconf>=2.3.0
+pendulum>=3.0.0
