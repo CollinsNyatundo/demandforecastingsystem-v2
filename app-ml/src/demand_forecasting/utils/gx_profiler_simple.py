@@ -15,34 +15,34 @@ logger = logging.getLogger(__name__)
 
 
 def profile_dataset_gx(
-    df: pd.DataFrame, 
-    dataset_name: str, 
+    df: pd.DataFrame,
+    dataset_name: str,
     docs_dir: str = "/opt/airflow/data/docs",
-    enable_data_docs: bool = True
+    enable_data_docs: bool = True,
 ) -> Optional[str]:
     """
     Profile dataset using Great Expectations.
-    
+
     Args:
         df: DataFrame to profile
         dataset_name: Name of the dataset
         docs_dir: Directory to store Data Docs
         enable_data_docs: Whether to generate Data Docs
-        
+
     Returns:
         Path to generated Data Docs index, or None if disabled
     """
     if not enable_data_docs:
         logger.info(f"Data Docs generation disabled for {dataset_name}")
         return None
-    
+
     if len(df) == 0:
         raise ValueError("Cannot profile empty DataFrame")
-    
+
     # Create docs directory
     docs_path = Path(docs_dir)
     docs_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Generate comprehensive profiling report
     profile_data = {
         "dataset_name": dataset_name,
@@ -55,18 +55,18 @@ def profile_dataset_gx(
         "numeric_summary": {},
         "categorical_summary": {},
         "quality_flags": [],
-        "data_quality_checks": []
+        "data_quality_checks": [],
     }
-    
+
     # Numeric columns analysis
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     if len(numeric_cols) > 0:
         profile_data["numeric_summary"] = df[numeric_cols].describe().to_dict()
-        
+
         # Data quality checks for numeric columns
         for col in numeric_cols:
             col_data = df[col]
-            
+
             # Check for outliers using IQR method
             Q1 = col_data.quantile(0.25)
             Q3 = col_data.quantile(0.75)
@@ -74,89 +74,105 @@ def profile_dataset_gx(
             lower_bound = Q1 - 1.5 * IQR
             upper_bound = Q3 + 1.5 * IQR
             outliers = col_data[(col_data < lower_bound) | (col_data > upper_bound)]
-            
+
             if len(outliers) > 0:
                 outlier_percentage = (len(outliers) / len(col_data)) * 100
-                profile_data["data_quality_checks"].append({
-                    "column": col,
-                    "check": "outliers",
-                    "status": "warning" if outlier_percentage > 5 else "info",
-                    "message": f"{len(outliers)} outliers detected ({outlier_percentage:.1f}%)"
-                })
-            
+                profile_data["data_quality_checks"].append(
+                    {
+                        "column": col,
+                        "check": "outliers",
+                        "status": "warning" if outlier_percentage > 5 else "info",
+                        "message": f"{len(outliers)} outliers detected ({outlier_percentage:.1f}%)",
+                    }
+                )
+
             # Check for zero values
             zero_count = (col_data == 0).sum()
             if zero_count > 0:
                 zero_percentage = (zero_count / len(col_data)) * 100
-                profile_data["data_quality_checks"].append({
-                    "column": col,
-                    "check": "zero_values",
-                    "status": "warning" if zero_percentage > 20 else "info",
-                    "message": f"{zero_count} zero values ({zero_percentage:.1f}%)"
-                })
-    
+                profile_data["data_quality_checks"].append(
+                    {
+                        "column": col,
+                        "check": "zero_values",
+                        "status": "warning" if zero_percentage > 20 else "info",
+                        "message": f"{zero_count} zero values ({zero_percentage:.1f}%)",
+                    }
+                )
+
     # Categorical columns analysis
-    categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+    categorical_cols = df.select_dtypes(include=["object", "category"]).columns
     if len(categorical_cols) > 0:
         for col in categorical_cols:
             col_data = df[col]
             profile_data["categorical_summary"][col] = {
                 "unique_count": col_data.nunique(),
-                "most_frequent": col_data.mode().iloc[0] if not col_data.mode().empty else None,
-                "frequency": col_data.value_counts().head().to_dict()
+                "most_frequent": (
+                    col_data.mode().iloc[0] if not col_data.mode().empty else None
+                ),
+                "frequency": col_data.value_counts().head().to_dict(),
             }
-            
+
             # Check for high cardinality
             if col_data.nunique() > len(col_data) * 0.5:
-                profile_data["data_quality_checks"].append({
-                    "column": col,
-                    "check": "high_cardinality",
-                    "status": "warning",
-                    "message": f"High cardinality: {col_data.nunique()} unique values"
-                })
-    
+                profile_data["data_quality_checks"].append(
+                    {
+                        "column": col,
+                        "check": "high_cardinality",
+                        "status": "warning",
+                        "message": f"High cardinality: {col_data.nunique()} unique values",
+                    }
+                )
+
     # Overall data quality flags
     total_missing = df.isnull().sum().sum()
     missing_percentage = (total_missing / (len(df) * len(df.columns))) * 100
-    
+
     if missing_percentage > 5:
         profile_data["quality_flags"].append("HIGH_MISSING_VALUES")
-    
+
     if len(df) < 1000:
         profile_data["quality_flags"].append("SMALL_DATASET")
-    
+
     # Special handling for target column (cnt)
-    if 'cnt' in df.columns:
+    if "cnt" in df.columns:
         cnt_stats = {
-            "mean": df['cnt'].mean(),
-            "std": df['cnt'].std(),
-            "skewness": df['cnt'].skew(),
-            "zeros": (df['cnt'] == 0).sum(),
-            "zero_percentage": ((df['cnt'] == 0).sum() / len(df)) * 100
+            "mean": df["cnt"].mean(),
+            "std": df["cnt"].std(),
+            "skewness": df["cnt"].skew(),
+            "zeros": (df["cnt"] == 0).sum(),
+            "zero_percentage": ((df["cnt"] == 0).sum() / len(df)) * 100,
         }
         profile_data["target_analysis"] = cnt_stats
-        
+
         if cnt_stats["zero_percentage"] > 10:
             profile_data["quality_flags"].append("HIGH_ZERO_COUNT")
-        
+
         # Check for negative values (shouldn't exist for bike counts)
-        negative_count = (df['cnt'] < 0).sum()
+        negative_count = (df["cnt"] < 0).sum()
         if negative_count > 0:
-            profile_data["data_quality_checks"].append({
-                "column": "cnt",
-                "check": "negative_values",
-                "status": "error",
-                "message": f"{negative_count} negative values detected"
-            })
-    
+            profile_data["data_quality_checks"].append(
+                {
+                    "column": "cnt",
+                    "check": "negative_values",
+                    "status": "error",
+                    "message": f"{negative_count} negative values detected",
+                }
+            )
+
     # Save profiling data
-    profile_file = docs_path / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(profile_file, 'w') as f:
+    profile_file = (
+        docs_path
+        / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    )
+    with open(profile_file, "w") as f:
         json.dump(profile_data, f, indent=2, default=str)
-    
+
     # Generate HTML report
-    html_file = docs_path / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-    
+    html_file = (
+        docs_path
+        / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    )
+
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -240,12 +256,12 @@ def profile_dataset_gx(
     </body>
     </html>
     """
-    
-    with open(html_file, 'w', encoding='utf-8') as f:
+
+    with open(html_file, "w", encoding="utf-8") as f:
         f.write(html_content)
-    
+
     logger.info(f"Generated data profile report for {dataset_name}")
     logger.info(f"HTML report: {html_file}")
     logger.info(f"JSON data: {profile_file}")
-    
+
     return str(html_file)

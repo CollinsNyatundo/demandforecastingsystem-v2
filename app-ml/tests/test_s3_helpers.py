@@ -19,13 +19,13 @@ class TestS3Helpers:
     def setup_method(self):
         """Set up test fixtures."""
         self.test_config = {
-            'minio_endpoint': 'http://localhost:9000',
-            'minio_access_key': 'minioadmin',
-            'minio_secret_key': 'minioadmin',
-            's3_bucket': 'demand-forecasting'
+            "minio_endpoint": "http://localhost:9000",
+            "minio_access_key": "minioadmin",
+            "minio_secret_key": "minioadmin",
+            "s3_bucket": "demand-forecasting",
         }
 
-    @patch('src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem')
+    @patch("src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
     def test_get_s3_filesystem_success(self, mock_s3fs):
         """Test successful S3 filesystem creation."""
         # Mock the S3FileSystem
@@ -36,45 +36,55 @@ class TestS3Helpers:
         from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
         # Set environment variables
-        with patch.dict(os.environ, {
-            'MINIO_ENDPOINT': self.test_config['minio_endpoint'],
-            'MINIO_ACCESS_KEY': self.test_config['minio_access_key'],
-            'MINIO_SECRET_KEY': self.test_config['minio_secret_key']
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "MINIO_ENDPOINT": self.test_config["minio_endpoint"],
+                "MINIO_ACCESS_KEY": self.test_config["minio_access_key"],
+                "MINIO_SECRET_KEY": self.test_config["minio_secret_key"],
+            },
+        ):
             fs = get_s3_filesystem()
 
             # Verify S3FileSystem was created with correct parameters
             mock_s3fs.assert_called_once_with(
                 client_kwargs={
-                    'endpoint_url': self.test_config['minio_endpoint'],
-                    'aws_access_key_id': self.test_config['minio_access_key'],
-                    'aws_secret_access_key': self.test_config['minio_secret_key']
+                    "endpoint_url": self.test_config["minio_endpoint"],
+                    "aws_access_key_id": self.test_config["minio_access_key"],
+                    "aws_secret_access_key": self.test_config["minio_secret_key"],
                 }
             )
 
             assert fs == mock_fs
 
-    @patch('src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem')
+    @patch("src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
     def test_get_s3_filesystem_with_retry(self, mock_s3fs):
         """Test S3 filesystem creation with retry logic."""
         # Mock the S3FileSystem to fail twice then succeed
         mock_fs = MagicMock()
-        mock_s3fs.side_effect = [Exception("Connection failed"), Exception("Connection failed"), mock_fs]
+        mock_s3fs.side_effect = [
+            Exception("Connection failed"),
+            Exception("Connection failed"),
+            mock_fs,
+        ]
 
         from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
-        with patch.dict(os.environ, {
-            'MINIO_ENDPOINT': self.test_config['minio_endpoint'],
-            'MINIO_ACCESS_KEY': self.test_config['minio_access_key'],
-            'MINIO_SECRET_KEY': self.test_config['minio_secret_key']
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "MINIO_ENDPOINT": self.test_config["minio_endpoint"],
+                "MINIO_ACCESS_KEY": self.test_config["minio_access_key"],
+                "MINIO_SECRET_KEY": self.test_config["minio_secret_key"],
+            },
+        ):
             fs = get_s3_filesystem()
 
             # Should have been called 3 times (initial + 2 retries)
             assert mock_s3fs.call_count == 3
             assert fs == mock_fs
 
-    @patch('src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem')
+    @patch("src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
     def test_get_s3_filesystem_max_retries_exceeded(self, mock_s3fs):
         """Test S3 filesystem creation when max retries exceeded."""
         # Mock the S3FileSystem to always fail
@@ -82,11 +92,14 @@ class TestS3Helpers:
 
         from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
-        with patch.dict(os.environ, {
-            'MINIO_ENDPOINT': self.test_config['minio_endpoint'],
-            'MINIO_ACCESS_KEY': self.test_config['minio_access_key'],
-            'MINIO_SECRET_KEY': self.test_config['minio_secret_key']
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "MINIO_ENDPOINT": self.test_config["minio_endpoint"],
+                "MINIO_ACCESS_KEY": self.test_config["minio_access_key"],
+                "MINIO_SECRET_KEY": self.test_config["minio_secret_key"],
+            },
+        ):
             with pytest.raises(Exception, match="Connection failed"):
                 get_s3_filesystem()
 
@@ -95,18 +108,17 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_valid(self):
         """Test parameter validation with valid parameters."""
-        from src.demand_forecasting.utils.s3_helpers import validate_search_space_parameters
+        from src.demand_forecasting.utils.s3_helpers import (
+            validate_search_space_parameters,
+        )
 
         valid_params = {
-            'optuna': {
-                'n_trials': 150,
-                'metric': 'rmse'
+            "optuna": {"n_trials": 150, "metric": "rmse"},
+            "catboost_search_space": {
+                "learning_rate": {"min": 0.01, "max": 0.2},
+                "depth": {"min": 3, "max": 8},
+                "l2_leaf_reg": {"min": 0.5, "max": 5.0},
             },
-            'catboost_search_space': {
-                'learning_rate': {'min': 0.01, 'max': 0.2},
-                'depth': {'min': 3, 'max': 8},
-                'l2_leaf_reg': {'min': 0.5, 'max': 5.0}
-            }
         }
 
         # Should not raise any exception
@@ -114,12 +126,12 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_missing_optuna(self):
         """Test parameter validation with missing optuna section."""
-        from src.demand_forecasting.utils.s3_helpers import validate_search_space_parameters
+        from src.demand_forecasting.utils.s3_helpers import (
+            validate_search_space_parameters,
+        )
 
         invalid_params = {
-            'catboost_search_space': {
-                'learning_rate': {'min': 0.01, 'max': 0.2}
-            }
+            "catboost_search_space": {"learning_rate": {"min": 0.01, "max": 0.2}}
         }
 
         with pytest.raises(ValueError, match="Missing required 'optuna' section"):
@@ -127,16 +139,13 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_invalid_trials(self):
         """Test parameter validation with invalid n_trials."""
-        from src.demand_forecasting.utils.s3_helpers import validate_search_space_parameters
+        from src.demand_forecasting.utils.s3_helpers import (
+            validate_search_space_parameters,
+        )
 
         invalid_params = {
-            'optuna': {
-                'n_trials': -5,  # Invalid negative value
-                'metric': 'rmse'
-            },
-            'catboost_search_space': {
-                'learning_rate': {'min': 0.01, 'max': 0.2}
-            }
+            "optuna": {"n_trials": -5, "metric": "rmse"},  # Invalid negative value
+            "catboost_search_space": {"learning_rate": {"min": 0.01, "max": 0.2}},
         }
 
         with pytest.raises(ValueError, match="n_trials must be positive"):
@@ -144,16 +153,15 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_invalid_range(self):
         """Test parameter validation with invalid parameter range."""
-        from src.demand_forecasting.utils.s3_helpers import validate_search_space_parameters
+        from src.demand_forecasting.utils.s3_helpers import (
+            validate_search_space_parameters,
+        )
 
         invalid_params = {
-            'optuna': {
-                'n_trials': 150,
-                'metric': 'rmse'
+            "optuna": {"n_trials": 150, "metric": "rmse"},
+            "catboost_search_space": {
+                "learning_rate": {"min": 0.5, "max": 0.1}  # min > max
             },
-            'catboost_search_space': {
-                'learning_rate': {'min': 0.5, 'max': 0.1}  # min > max
-            }
         }
 
         with pytest.raises(ValueError, match="min value must be less than max value"):
@@ -163,7 +171,7 @@ class TestS3Helpers:
         """Test trial files list validation with valid list."""
         from src.demand_forecasting.utils.s3_helpers import validate_trial_files_list
 
-        valid_files = ['trial_1.json', 'trial_2.json', 'trial_3.json']
+        valid_files = ["trial_1.json", "trial_2.json", "trial_3.json"]
         validate_trial_files_list(valid_files)  # Should not raise
 
     def test_validate_trial_files_list_empty(self):
@@ -180,7 +188,7 @@ class TestS3Helpers:
         with pytest.raises(ValueError, match="Trial files list is empty"):
             validate_trial_files_list(None)
 
-    @patch('src.demand_forecasting.utils.s3_helpers.get_s3_filesystem')
+    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_validate_model_save_success(self, mock_get_fs):
         """Test model save validation with successful save."""
         mock_fs = MagicMock()
@@ -197,7 +205,7 @@ class TestS3Helpers:
 
         mock_fs.exists.assert_called_once_with("s3://bucket/models/model.pickle")
 
-    @patch('src.demand_forecasting.utils.s3_helpers.get_s3_filesystem')
+    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_validate_model_save_file_not_found(self, mock_get_fs):
         """Test model save validation when file doesn't exist."""
         mock_fs = MagicMock()
@@ -211,7 +219,7 @@ class TestS3Helpers:
         with pytest.raises(FileNotFoundError, match="Model file was not saved"):
             validate_model_save(mock_fs, "s3://bucket/models/model.pickle")
 
-    @patch('src.demand_forecasting.utils.s3_helpers.get_s3_filesystem')
+    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_validate_model_save_empty_file(self, mock_get_fs):
         """Test model save validation with empty file."""
         mock_fs = MagicMock()
@@ -231,27 +239,30 @@ class TestS3Helpers:
         from src.demand_forecasting.utils.s3_helpers import get_email_config
 
         test_config = {
-            'smtp_host': 'smtp.gmail.com',
-            'smtp_port': 587,
-            'smtp_user': 'test@example.com',
-            'smtp_password': 'test-password',
-            'alert_email': 'alert@example.com'
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_user": "test@example.com",
+            "smtp_password": "test-password",
+            "alert_email": "alert@example.com",
         }
 
-        with patch.dict(os.environ, {
-            'AIRFLOW__SMTP__SMTP_HOST': test_config['smtp_host'],
-            'AIRFLOW__SMTP__SMTP_PORT': str(test_config['smtp_port']),
-            'AIRFLOW__SMTP__SMTP_USER': test_config['smtp_user'],
-            'AIRFLOW__SMTP__SMTP_PASSWORD': test_config['smtp_password'],
-            'AIRFLOW_ALERT_EMAIL': test_config['alert_email']
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "AIRFLOW__SMTP__SMTP_HOST": test_config["smtp_host"],
+                "AIRFLOW__SMTP__SMTP_PORT": str(test_config["smtp_port"]),
+                "AIRFLOW__SMTP__SMTP_USER": test_config["smtp_user"],
+                "AIRFLOW__SMTP__SMTP_PASSWORD": test_config["smtp_password"],
+                "AIRFLOW_ALERT_EMAIL": test_config["alert_email"],
+            },
+        ):
             config = get_email_config()
 
-            assert config['smtp_host'] == test_config['smtp_host']
-            assert config['smtp_port'] == test_config['smtp_port']
-            assert config['smtp_user'] == test_config['smtp_user']
-            assert config['smtp_password'] == test_config['smtp_password']
-            assert config['alert_email'] == test_config['alert_email']
+            assert config["smtp_host"] == test_config["smtp_host"]
+            assert config["smtp_port"] == test_config["smtp_port"]
+            assert config["smtp_user"] == test_config["smtp_user"]
+            assert config["smtp_password"] == test_config["smtp_password"]
+            assert config["alert_email"] == test_config["alert_email"]
 
     def test_get_email_config_missing_env_vars(self):
         """Test email config retrieval with missing environment variables."""
@@ -259,20 +270,26 @@ class TestS3Helpers:
 
         # Clear relevant environment variables
         env_vars_to_clear = [
-            'AIRFLOW__SMTP__SMTP_HOST',
-            'AIRFLOW__SMTP__SMTP_PORT',
-            'AIRFLOW__SMTP__SMTP_USER',
-            'AIRFLOW__SMTP__SMTP_PASSWORD',
-            'AIRFLOW_ALERT_EMAIL'
+            "AIRFLOW__SMTP__SMTP_HOST",
+            "AIRFLOW__SMTP__SMTP_PORT",
+            "AIRFLOW__SMTP__SMTP_USER",
+            "AIRFLOW__SMTP__SMTP_PASSWORD",
+            "AIRFLOW_ALERT_EMAIL",
         ]
 
-        with patch.dict(os.environ, {var: '' for var in env_vars_to_clear}, clear=True):
+        with patch.dict(os.environ, {var: "" for var in env_vars_to_clear}, clear=True):
             config = get_email_config()
 
             # Should return defaults or None
             assert isinstance(config, dict)
             # At minimum should have the expected keys
-            expected_keys = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_password', 'alert_email']
+            expected_keys = [
+                "smtp_host",
+                "smtp_port",
+                "smtp_user",
+                "smtp_password",
+                "alert_email",
+            ]
             for key in expected_keys:
                 assert key in config
 
@@ -285,10 +302,10 @@ class TestS3Helpers:
         result = parse_s3_timestamp_path(test_path)
 
         assert result is not None
-        assert result['dag_id'] == 'demand_forecasting'
-        assert result['run_date'] == '2023-01-01'
-        assert result['task_name'] == 'preprocess'
-        assert result['attempt'] == '1'
+        assert result["dag_id"] == "demand_forecasting"
+        assert result["run_date"] == "2023-01-01"
+        assert result["task_name"] == "preprocess"
+        assert result["attempt"] == "1"
 
     def test_parse_s3_timestamp_path_invalid(self):
         """Test S3 timestamp path parsing with invalid path."""
@@ -298,7 +315,7 @@ class TestS3Helpers:
             "s3://bucket/file.txt",
             "s3://bucket/logs/invalid_format.log",
             "not_an_s3_path/file.log",
-            ""
+            "",
         ]
 
         for invalid_path in invalid_paths:
@@ -315,12 +332,12 @@ class TestS3Helpers:
 
         # Should still parse correctly despite the extra equals sign
         assert result is not None
-        assert result['dag_id'] == 'demand_forecasting'
-        assert result['run_date'] == '2023-01-01'
-        assert result['task_name'] == 'preprocess'
-        assert result['attempt'] == ''
+        assert result["dag_id"] == "demand_forecasting"
+        assert result["run_date"] == "2023-01-01"
+        assert result["task_name"] == "preprocess"
+        assert result["attempt"] == ""
 
-    @patch('src.demand_forecasting.utils.s3_helpers.get_s3_filesystem')
+    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_s3_operations_with_context_manager(self, mock_get_fs):
         """Test S3 operations using context manager pattern."""
         mock_fs = MagicMock()
@@ -347,10 +364,13 @@ class TestS3Helpers:
         from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
         # Test with partial environment variables
-        with patch.dict(os.environ, {
-            'MINIO_ENDPOINT': 'http://localhost:9000',
-            # Missing access key and secret key
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "MINIO_ENDPOINT": "http://localhost:9000",
+                # Missing access key and secret key
+            },
+        ):
             # Should use default values
             fs = get_s3_filesystem()
             # Function should handle missing env vars gracefully or use defaults
@@ -363,7 +383,7 @@ class TestS3Helpers:
             validate_trial_files_list,
             validate_model_save,
             get_email_config,
-            parse_s3_timestamp_path
+            parse_s3_timestamp_path,
         )
 
         # Test that all functions handle None/empty inputs gracefully
@@ -393,8 +413,11 @@ class TestS3HelpersIntegration:
         # This would test the complete workflow in a real environment
         # For now, we'll use mocks to simulate the workflow
 
-        with patch('src.demand_forecasting.utils.s3_helpers.get_s3_filesystem') as mock_get_fs, \
-             patch('src.demand_forecasting.utils.s3_helpers.validate_search_space_parameters') as mock_validate_params:
+        with patch(
+            "src.demand_forecasting.utils.s3_helpers.get_s3_filesystem"
+        ) as mock_get_fs, patch(
+            "src.demand_forecasting.utils.s3_helpers.validate_search_space_parameters"
+        ) as mock_validate_params:
 
             mock_fs = MagicMock()
             mock_get_fs.return_value = mock_fs
@@ -402,7 +425,7 @@ class TestS3HelpersIntegration:
             # Simulate workflow steps
             from src.demand_forecasting.utils.s3_helpers import (
                 get_s3_filesystem,
-                validate_search_space_parameters
+                validate_search_space_parameters,
             )
 
             # 1. Get filesystem
@@ -410,7 +433,7 @@ class TestS3HelpersIntegration:
             assert fs is not None
 
             # 2. Validate parameters
-            test_params = {'optuna': {'n_trials': 100}}
+            test_params = {"optuna": {"n_trials": 100}}
             validate_search_space_parameters(test_params)
 
             # 3. Simulate file operations

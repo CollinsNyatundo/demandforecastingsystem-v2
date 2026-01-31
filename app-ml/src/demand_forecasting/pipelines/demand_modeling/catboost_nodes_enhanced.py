@@ -416,9 +416,11 @@ def optimize_catboost_hyperparameters_enhanced(
         "total_trials": len(study.trials),
         "best_params": best_params,
         "study_name": study_name,
-        "n_iterations": final_model.get_best_iteration()
-        if hasattr(final_model, "get_best_iteration")
-        else None,
+        "n_iterations": (
+            final_model.get_best_iteration()
+            if hasattr(final_model, "get_best_iteration")
+            else None
+        ),
     }
 
     # Log final metrics to MLflow
@@ -541,9 +543,11 @@ def get_study_history(
                     "value": trial.value,
                     "params": trial.params,
                     "state": trial.state.name,
-                    "datetime": trial.datetime_start.isoformat()
-                    if trial.datetime_start
-                    else None,
+                    "datetime": (
+                        trial.datetime_start.isoformat()
+                        if trial.datetime_start
+                        else None
+                    ),
                 }
             )
 

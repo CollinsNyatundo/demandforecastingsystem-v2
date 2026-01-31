@@ -35,29 +35,29 @@ class DatasetMonitor:
         s3_endpoint: str = "http://host.docker.internal:9000",
         s3_key: str = None,
         s3_secret: str = None,
-        s3_bucket: str = "demand-forecasting"
+        s3_bucket: str = "demand-forecasting",
     ):
         self.metrics_dir = Path(metrics_dir)
         self.metrics_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # S3 filesystem for actual file timestamp checking
         self.s3_endpoint = s3_endpoint
         self.s3_key = s3_key or os.getenv("MINIO_ROOT_USER", "minioadmin")
         self.s3_secret = s3_secret or os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
         self.s3_bucket = s3_bucket
-        
+
         # Initialize S3 filesystem
         try:
             self.fs = s3fs.S3FileSystem(
-                client_kwargs={'endpoint_url': s3_endpoint},
+                client_kwargs={"endpoint_url": s3_endpoint},
                 key=self.s3_key,
-                secret=self.s3_secret
+                secret=self.s3_secret,
             )
             logger.info(f"S3 filesystem initialized for endpoint: {s3_endpoint}")
         except Exception as e:
             logger.warning(f"Failed to initialize S3 filesystem: {e}")
             self.fs = None
-        
+
         self.metrics_file = self.metrics_dir / "dataset_metrics.json"
         self.events_file = self.metrics_dir / "dataset_events.jsonl"
 
@@ -100,20 +100,22 @@ class DatasetMonitor:
         # Update metrics file
         self._update_metrics(dataset_uri, event)
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    @retry(
+        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10)
+    )
     def _get_s3_file_timestamp(self, dataset_uri: str) -> Optional[datetime]:
         """
         Get actual file modification timestamp from S3.
-        
+
         Args:
             dataset_uri: S3 URI (e.g., s3://demand-forecasting/01_raw/raw_data_full.parquet)
-            
+
         Returns:
             File modification timestamp or None if file doesn't exist
         """
         if not self.fs:
             return None
-            
+
         try:
             # Convert S3 URI to S3FS path
             if dataset_uri.startswith("s3://"):
@@ -121,23 +123,25 @@ class DatasetMonitor:
                 uri_parts = dataset_uri.replace("s3://", "").split("/", 1)
                 bucket = uri_parts[0]
                 path = uri_parts[1] if len(uri_parts) > 1 else ""
-                
+
                 # Construct correct S3FS path
                 if bucket != self.s3_bucket:
-                    logger.warning(f"Dataset bucket {bucket} != configured bucket {self.s3_bucket}")
-                
+                    logger.warning(
+                        f"Dataset bucket {bucket} != configured bucket {self.s3_bucket}"
+                    )
+
                 s3_path = f"{bucket}/{path}"
             else:
                 s3_path = f"{self.s3_bucket}/{dataset_uri.lstrip('/')}"
-            
+
             # Get file info
             file_info = self.fs.stat(s3_path)
-            return datetime.fromtimestamp(file_info['LastModified'].timestamp())
-            
+            return datetime.fromtimestamp(file_info["LastModified"].timestamp())
+
         except Exception as e:
             logger.debug(f"Could not get S3 timestamp for {dataset_uri}: {e}")
             return None
-    
+
     def check_dataset_freshness(
         self, dataset_uri: str, max_age_hours: int = 24, alert: bool = True
     ) -> Tuple[bool, Optional[float]]:
@@ -155,43 +159,45 @@ class DatasetMonitor:
         """
         # First try to get actual S3 file timestamp
         s3_timestamp = self._get_s3_file_timestamp(dataset_uri)
-        
+
         if s3_timestamp:
             # Use actual S3 file timestamp
             now = datetime.utcnow()
             hours_since_update = (now - s3_timestamp).total_seconds() / 3600
             is_fresh = hours_since_update <= max_age_hours
-            
-            logger.info(f"S3 freshness check for {dataset_uri}: {hours_since_update:.1f}h old (S3 timestamp)")
-            
+
+            logger.info(
+                f"S3 freshness check for {dataset_uri}: {hours_since_update:.1f}h old (S3 timestamp)"
+            )
+
             # Update metrics with S3 timestamp for consistency
             self._update_s3_timestamp(dataset_uri, s3_timestamp)
-            
+
         else:
             # Fall back to logged metrics
             logger.debug(f"Using logged metrics for {dataset_uri} (S3 check failed)")
             metrics = self._load_metrics()
-            
+
             if dataset_uri not in metrics:
                 logger.warning(f"No update history found for dataset: {dataset_uri}")
                 return False, None
-            
+
             last_update_str = metrics[dataset_uri].get("last_update")
             if not last_update_str:
                 logger.warning(f"No last_update timestamp for dataset: {dataset_uri}")
                 return False, None
-            
+
             last_update = datetime.fromisoformat(last_update_str)
             now = datetime.utcnow()
             hours_since_update = (now - last_update).total_seconds() / 3600
             is_fresh = hours_since_update <= max_age_hours
-        
+
         if not is_fresh and alert:
             logger.warning(
                 f"⚠️  STALE DATA ALERT: Dataset {dataset_uri} is {hours_since_update:.1f} hours old "
                 f"(threshold: {max_age_hours} hours)."
             )
-        
+
         return is_fresh, hours_since_update
 
     def log_dataset_metrics(
@@ -274,7 +280,7 @@ class DatasetMonitor:
 
         # Calculate statistics
         update_events = [e for e in history if e.get("event_type") == "dataset_update"]
-        
+
         stats = {
             "dataset_uri": dataset_uri,
             "total_updates": len(update_events),
@@ -325,7 +331,7 @@ class DatasetMonitor:
     def _update_s3_timestamp(self, dataset_uri: str, timestamp: datetime):
         """
         Update metrics with S3 timestamp for consistency.
-        
+
         Args:
             dataset_uri: URI of the dataset
             timestamp: S3 file modification timestamp
@@ -334,13 +340,13 @@ class DatasetMonitor:
             metrics = self._load_metrics()
             if dataset_uri not in metrics:
                 metrics[dataset_uri] = {}
-            
+
             metrics[dataset_uri]["last_update"] = timestamp.isoformat()
             metrics[dataset_uri]["last_s3_check"] = datetime.utcnow().isoformat()
-            
+
             with open(self.metrics_file, "w") as f:
                 json.dump(metrics, f, indent=2)
-                
+
         except Exception as e:
             logger.warning(f"Failed to update S3 timestamp for {dataset_uri}: {e}")
 

@@ -6,6 +6,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 from .nodes import preprocess_data
 from ...utils.gx_profiler_simple import profile_dataset_gx
 
+
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline(
         [
@@ -19,10 +20,10 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=profile_dataset_gx,
                 inputs=[
-                    "preprocessed_bike_data", 
+                    "preprocessed_bike_data",
                     "params:dataset_name",
                     "params:data_docs_dir",
-                    "params:enable_data_docs"
+                    "params:enable_data_docs",
                 ],
                 outputs="data_docs_report",
                 name="profile_dataset_gx_node",

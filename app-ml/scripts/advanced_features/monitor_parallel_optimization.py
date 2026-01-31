@@ -134,12 +134,12 @@ class OptimizationMonitor:
             "pruned": len(pruned),
             "waiting": len(waiting),
             "best_value": self.study.best_value if self.study.best_trial else None,
-            "best_trial_number": self.study.best_trial.number
-            if self.study.best_trial
-            else None,
-            "best_params": self.study.best_trial.params
-            if self.study.best_trial
-            else None,
+            "best_trial_number": (
+                self.study.best_trial.number if self.study.best_trial else None
+            ),
+            "best_params": (
+                self.study.best_trial.params if self.study.best_trial else None
+            ),
         }
 
         # Calculate recent trials per minute
@@ -210,12 +210,16 @@ class OptimizationMonitor:
             f"Trials:    Total: {stats['total']:>4}  |  Completed: {stats['completed']:>4}  |  Running: {stats['running']:>2}",
             f"Status:    Failed: {stats['failed']:>3}  |  Pruned: {stats['pruned']:>4}  |  Waiting: {stats['waiting']:>2}",
             f"",
-            f"Best RMSE: {best_str}  (Trial #{stats['best_trial_number']})"
-            if stats["best_trial_number"]
-            else f"Best RMSE: {best_str}",
-            f"Throughput: {stats['trials_per_minute']:.2f} trials/min"
-            if stats["trials_per_minute"] > 0
-            else "Throughput: Calculating...",
+            (
+                f"Best RMSE: {best_str}  (Trial #{stats['best_trial_number']})"
+                if stats["best_trial_number"]
+                else f"Best RMSE: {best_str}"
+            ),
+            (
+                f"Throughput: {stats['trials_per_minute']:.2f} trials/min"
+                if stats["trials_per_minute"] > 0
+                else "Throughput: Calculating..."
+            ),
         ]
 
         # Add best params (limited to avoid clutter)
@@ -295,12 +299,16 @@ class OptimizationMonitor:
             f"Failed: {stats['failed']}",
             f"Pruned: {stats['pruned']}",
             "",
-            f"Best RMSE: {stats['best_value']:.4f}"
-            if stats["best_value"]
-            else "Best RMSE: N/A",
-            f"Best Trial: #{stats['best_trial_number']}"
-            if stats["best_trial_number"]
-            else "Best Trial: N/A",
+            (
+                f"Best RMSE: {stats['best_value']:.4f}"
+                if stats["best_value"]
+                else "Best RMSE: N/A"
+            ),
+            (
+                f"Best Trial: #{stats['best_trial_number']}"
+                if stats["best_trial_number"]
+                else "Best Trial: N/A"
+            ),
             "",
         ]
 

@@ -63,22 +63,27 @@ MONITORED_DATASETS = {
     },
 }
 
-def _check_prefix_freshness(monitor: DatasetMonitor, prefix_uri: str, max_age_hours: int) -> tuple[bool, float]:
+
+def _check_prefix_freshness(
+    monitor: DatasetMonitor, prefix_uri: str, max_age_hours: int
+) -> tuple[bool, float]:
     """
     Check freshness of datasets matching a prefix (for timestamped models).
-    
+
     Args:
         monitor: DatasetMonitor instance
         prefix_uri: S3 prefix URI (e.g., s3://demand-forecasting/06_models/regressor_)
         max_age_hours: Maximum age in hours
-        
+
     Returns:
         Tuple of (is_fresh, hours_old_of_newest_file)
     """
     if not monitor.fs:
-        logger.warning(f"S3 filesystem not available for prefix monitoring: {prefix_uri}")
-        return False, float('inf')
-    
+        logger.warning(
+            f"S3 filesystem not available for prefix monitoring: {prefix_uri}"
+        )
+        return False, float("inf")
+
     try:
         # Convert S3 URI to S3FS path
         if prefix_uri.startswith("s3://"):
@@ -88,44 +93,50 @@ def _check_prefix_freshness(monitor: DatasetMonitor, prefix_uri: str, max_age_ho
             s3_prefix = f"{bucket}/{path_prefix}"
         else:
             s3_prefix = f"{monitor.s3_bucket}/{prefix_uri.lstrip('/')}"
-        
+
         # List files with the prefix
         files = monitor.fs.glob(f"{s3_prefix}*.pickle")
-        
+
         if not files:
             logger.info(f"No files found for prefix: {prefix_uri}")
-            return False, float('inf')
-        
+            return False, float("inf")
+
         # Find the newest file
         newest_time = None
         newest_file = None
-        
+
         for file_path in files:
             try:
                 file_info = monitor.fs.stat(file_path)
-                file_time = datetime.fromtimestamp(file_info['LastModified'].timestamp())
+                file_time = datetime.fromtimestamp(
+                    file_info["LastModified"].timestamp()
+                )
                 if newest_time is None or file_time > newest_time:
                     newest_time = file_time
                     newest_file = file_path
             except Exception as e:
                 logger.debug(f"Could not stat file {file_path}: {e}")
                 continue
-        
+
         if newest_time is None:
-            logger.warning(f"Could not get timestamps for any files in prefix: {prefix_uri}")
-            return False, float('inf')
-        
+            logger.warning(
+                f"Could not get timestamps for any files in prefix: {prefix_uri}"
+            )
+            return False, float("inf")
+
         # Calculate age
         now = datetime.now()
         hours_old = (now - newest_time).total_seconds() / 3600
         is_fresh = hours_old <= max_age_hours
-        
-        logger.info(f"Prefix {prefix_uri}: newest file {newest_file.split('/')[-1]} is {hours_old:.1f}h old")
+
+        logger.info(
+            f"Prefix {prefix_uri}: newest file {newest_file.split('/')[-1]} is {hours_old:.1f}h old"
+        )
         return is_fresh, hours_old
-        
+
     except Exception as e:
         logger.error(f"Error checking prefix freshness for {prefix_uri}: {e}")
-        return False, float('inf')
+        return False, float("inf")
 
 
 # Get alert emails from environment variable

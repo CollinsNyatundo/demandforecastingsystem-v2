@@ -1,7 +1,9 @@
 import os
 import ast
 
-baseDir = r"D:\Projects\MLOPs\ml-systems\ml-systems\System 1 - demand_forecasting\app-ml"
+baseDir = (
+    r"D:\Projects\MLOPs\ml-systems\ml-systems\System 1 - demand_forecasting\app-ml"
+)
 
 # Check each critical file
 files = {
@@ -14,7 +16,7 @@ for name, rel_path in files.items():
     full_path = os.path.join(baseDir, rel_path.replace("/", "\\"))
     with open(full_path, "r") as f:
         first_line = f.readline()
-    
+
     if first_line.startswith("#"):
         print(f"[OK] {name}: starts with docstring/comment")
     elif first_line.startswith("import"):

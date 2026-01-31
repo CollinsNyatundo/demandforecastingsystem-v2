@@ -11,12 +11,12 @@ import sys
 
 
 class Colors:
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    BOLD = '\033[1m'
-    END = '\033[0m'
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    BOLD = "\033[1m"
+    END = "\033[0m"
 
 
 def print_status(message, status="info"):
@@ -36,15 +36,15 @@ def test_service_health():
     """Test all service health endpoints"""
     print_status("Testing Service Health", "info")
     print("=" * 50)
-    
+
     services = {
         "Airflow": "http://localhost:8081/health",
-        "MLflow": "http://localhost:5000/health", 
-        "Model Server": "http://localhost:8000/health"
+        "MLflow": "http://localhost:5000/health",
+        "Model Server": "http://localhost:8000/health",
     }
-    
+
     results = {}
-    
+
     for service_name, endpoint in services.items():
         try:
             response = requests.get(endpoint, timeout=10)
@@ -57,7 +57,7 @@ def test_service_health():
         except requests.exceptions.RequestException as e:
             print_status(f"{service_name}: Connection failed - {str(e)}", "error")
             results[service_name] = "FAILED"
-    
+
     return results
 
 
@@ -65,12 +65,14 @@ def test_service_functionality():
     """Test basic functionality of services"""
     print_status("\nTesting Service Functionality", "info")
     print("=" * 50)
-    
+
     results = {}
-    
+
     # Test MLflow
     try:
-        response = requests.get("http://localhost:5000/api/2.0/mlflow/experiments/list", timeout=10)
+        response = requests.get(
+            "http://localhost:5000/api/2.0/mlflow/experiments/list", timeout=10
+        )
         if response.status_code == 200:
             print_status("MLflow API: Working", "success")
             results["MLflow_API"] = "WORKING"
@@ -80,7 +82,7 @@ def test_service_functionality():
     except Exception as e:
         print_status(f"MLflow API: Failed - {str(e)}", "error")
         results["MLflow_API"] = "FAILED"
-    
+
     # Test Model Server
     try:
         response = requests.get("http://localhost:8000/docs", timeout=10)
@@ -93,7 +95,7 @@ def test_service_functionality():
     except Exception as e:
         print_status(f"Model Server Docs: Failed - {str(e)}", "error")
         results["Model_Server_Docs"] = "FAILED"
-    
+
     # Test Airflow
     try:
         response = requests.get("http://localhost:8081/api/v1/dags", timeout=10)
@@ -106,7 +108,7 @@ def test_service_functionality():
     except Exception as e:
         print_status(f"Airflow API: Failed - {str(e)}", "error")
         results["Airflow_API"] = "FAILED"
-    
+
     return results
 
 
@@ -114,7 +116,7 @@ def test_minio_connectivity():
     """Test MinIO connectivity"""
     print_status("\nTesting MinIO Connectivity", "info")
     print("=" * 50)
-    
+
     try:
         response = requests.get("http://localhost:9000/minio/health/live", timeout=10)
         if response.status_code == 200:
@@ -132,29 +134,29 @@ def main():
     print("=" * 60)
     print("DEMAND FORECASTING ML SYSTEM - END-TO-END TEST")
     print("=" * 60)
-    
+
     all_results = {}
-    
+
     # Test service health
     health_results = test_service_health()
     all_results.update(health_results)
-    
+
     # Test service functionality
     func_results = test_service_functionality()
     all_results.update(func_results)
-    
+
     # Test MinIO
     minio_result = test_minio_connectivity()
     all_results["MinIO"] = minio_result
-    
+
     # Summary
     print("\n" + "=" * 60)
     print("TEST SUMMARY")
     print("=" * 60)
-    
+
     passed = 0
     failed = 0
-    
+
     for service, status in all_results.items():
         if status in ["HEALTHY", "WORKING"]:
             print_status(f"{service}: {status}", "success")
@@ -162,11 +164,11 @@ def main():
         else:
             print_status(f"{service}: {status}", "error")
             failed += 1
-    
+
     print(f"\nTotal Tests: {passed + failed}")
     print(f"Passed: {passed}")
     print(f"Failed: {failed}")
-    
+
     if failed == 0:
         print_status("\nAll tests passed! System is fully operational.", "success")
         return 0

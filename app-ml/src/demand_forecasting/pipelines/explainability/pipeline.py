@@ -10,13 +10,13 @@ from .nodes import (
     generate_shap_explanations,
     calculate_feature_importance,
     log_model_artifacts,
-    create_explainability_report
+    create_explainability_report,
 )
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     """Create the explainability pipeline.
-    
+
     Returns:
         Pipeline: Kedro pipeline with explainability analysis nodes
     """

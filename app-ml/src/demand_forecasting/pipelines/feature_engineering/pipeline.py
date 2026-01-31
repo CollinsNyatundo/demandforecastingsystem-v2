@@ -8,13 +8,13 @@ from kedro.pipeline import Pipeline, node
 from .nodes import (
     extract_temporal_features,
     validate_features,
-    create_feature_interactions
+    create_feature_interactions,
 )
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     """Create the feature engineering pipeline.
-    
+
     Returns:
         Pipeline: Kedro pipeline with feature engineering nodes
     """

@@ -58,7 +58,7 @@ def get_s3_filesystem(
     s3_endpoint = endpoint or os.environ.get("MINIO_ENDPOINT", DEFAULT_S3_ENDPOINT)
     s3_key = key or os.environ.get("MINIO_ACCESS_KEY")
     s3_secret = secret or os.environ.get("MINIO_SECRET_KEY")
-    
+
     # Validate that credentials are provided
     if not s3_key or not s3_secret:
         raise ValueError(

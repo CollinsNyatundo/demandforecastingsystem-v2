@@ -31,6 +31,7 @@ import requests
 # Optional MLflow import (graceful degradation)
 try:
     import mlflow
+
     MLFLOW_AVAILABLE = True
 except ImportError:
     MLFLOW_AVAILABLE = False
@@ -534,50 +535,52 @@ class RetrainingScheduler:
     def _get_mlflow_production_rmse(self) -> Optional[float]:
         """Query MLflow for production model RMSE."""
         if not MLFLOW_AVAILABLE:
-            logger.warning("MLflow not available. Cannot query production model metrics.")
+            logger.warning(
+                "MLflow not available. Cannot query production model metrics."
+            )
             return None
-            
+
         try:
             # Get MLflow configuration
             mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
             if not mlflow_tracking_uri:
                 logger.warning("MLFLOW_TRACKING_URI not configured.")
                 return None
-            
+
             # Set tracking URI
             mlflow.set_tracking_uri(mlflow_tracking_uri)
-            
+
             # Get experiment name
             experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME", "demand_forecasting")
-            
+
             # Get experiment
             experiment = mlflow.get_experiment_by_name(experiment_name)
             if not experiment:
                 logger.warning(f"MLflow experiment '{experiment_name}' not found.")
                 return None
-            
+
             # Search for runs in the experiment
             runs = mlflow.search_runs(
                 experiment_ids=[experiment.experiment_id],
                 filter_string="tags.model_type = 'CatBoost'",
                 order_by=["attributes.start_time DESC"],
-                max_results=10
+                max_results=10,
             )
-            
+
             if runs.empty:
                 logger.warning("No CatBoost model runs found in MLflow.")
                 return None
-            
+
             # Get the most recent successful run with RMSE metric
             for _, run in runs.iterrows():
-                if 'metrics.rmse' in run:
-                    rmse = run['metrics.rmse']
+                if "metrics.rmse" in run:
+                    rmse = run["metrics.rmse"]
                     logger.info(f"Found production model RMSE from MLflow: {rmse:.4f}")
                     return rmse
-            
+
             logger.warning("No RMSE metric found in recent MLflow runs.")
             return None
-            
+
         except Exception as e:
             logger.error(f"Failed to query MLflow for production model RMSE: {e}")
             return None

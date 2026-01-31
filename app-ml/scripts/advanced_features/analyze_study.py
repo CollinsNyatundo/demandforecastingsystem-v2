@@ -137,12 +137,12 @@ class StudyAnalyzer:
             "failed": len(failed),
             "pruned": len(pruned),
             "best_value": self.study.best_value if self.study.best_trial else None,
-            "best_trial": self.study.best_trial.number
-            if self.study.best_trial
-            else None,
-            "best_params": self.study.best_trial.params
-            if self.study.best_trial
-            else None,
+            "best_trial": (
+                self.study.best_trial.number if self.study.best_trial else None
+            ),
+            "best_params": (
+                self.study.best_trial.params if self.study.best_trial else None
+            ),
         }
 
         if values:

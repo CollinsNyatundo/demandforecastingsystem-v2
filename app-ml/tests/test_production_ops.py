@@ -172,9 +172,9 @@ class TestDriftDetector:
 
         # Most features should not have drift (p-values should be high)
         drift_count = sum(1 for r in results.values() if r["drift_detected"])
-        assert drift_count <= 1, (
-            "Expected at most 1 feature with drift (false positive)"
-        )
+        assert (
+            drift_count <= 1
+        ), "Expected at most 1 feature with drift (false positive)"
 
     def test_detect_with_drift(
         self, drift_detector, reference_data, production_data_with_drift

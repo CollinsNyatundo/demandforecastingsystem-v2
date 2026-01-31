@@ -2,9 +2,11 @@
 Basic test to verify testing framework setup.
 """
 
+
 def test_basic_assertion():
     """Test basic assertion."""
     assert 1 + 1 == 2
+
 
 def test_string_operations():
     """Test string operations."""
@@ -12,6 +14,7 @@ def test_string_operations():
     assert "hello" in s
     assert s.upper() == "HELLO WORLD"
     assert len(s) == 11
+
 
 def test_list_operations():
     """Test list operations."""
@@ -21,6 +24,7 @@ def test_list_operations():
     assert max(lst) == 5
     assert min(lst) == 1
 
+
 def test_dict_operations():
     """Test dictionary operations."""
     d = {"key": "value", "number": 42}
@@ -28,6 +32,7 @@ def test_dict_operations():
     assert d["number"] == 42
     assert "key" in d
     assert len(d) == 2
+
 
 class TestBasicClass:
     """Basic test class."""

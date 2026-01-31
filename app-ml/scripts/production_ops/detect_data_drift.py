@@ -566,7 +566,7 @@ Drift detected in {len(drift_features)} features:
         # Send email alert
         subject = f"[DRIFT ALERT] Data drift detected in {len(drift_features)} features"
         email_sent = send_drift_alert_email(alert_email, subject, message)
-        
+
         if email_sent:
             logger.info("Drift alert email sent successfully")
         else:
@@ -576,35 +576,39 @@ Drift detected in {len(drift_features)} features:
 def send_drift_alert_email(alert_email: str, subject: str, message: str) -> bool:
     """
     Send drift alert email using SMTP configuration.
-    
+
     Args:
         alert_email: Recipient email address
         subject: Email subject
         message: Email message content
-        
+
     Returns:
         True if email sent successfully, False otherwise
     """
     try:
         # Get SMTP configuration from environment
-        smtp_host = os.getenv('AIRFLOW__SMTP__SMTP_HOST', 'smtp.gmail.com')
-        smtp_port = int(os.getenv('AIRFLOW__SMTP__SMTP_PORT', '587'))
-        smtp_user = os.getenv('AIRFLOW__SMTP__SMTP_USER')
-        smtp_password = os.getenv('AIRFLOW__SMTP__SMTP_PASSWORD')
-        smtp_starttls = os.getenv('AIRFLOW__SMTP__SMTP_STARTTLS', 'true').lower() == 'true'
-        smtp_ssl = os.getenv('AIRFLOW__SMTP__SMTP_SSL', 'false').lower() == 'true'
-        from_email = os.getenv('AIRFLOW__SMTP__SMTP_MAIL_FROM', 'airflow@demand-forecasting.local')
-        
+        smtp_host = os.getenv("AIRFLOW__SMTP__SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("AIRFLOW__SMTP__SMTP_PORT", "587"))
+        smtp_user = os.getenv("AIRFLOW__SMTP__SMTP_USER")
+        smtp_password = os.getenv("AIRFLOW__SMTP__SMTP_PASSWORD")
+        smtp_starttls = (
+            os.getenv("AIRFLOW__SMTP__SMTP_STARTTLS", "true").lower() == "true"
+        )
+        smtp_ssl = os.getenv("AIRFLOW__SMTP__SMTP_SSL", "false").lower() == "true"
+        from_email = os.getenv(
+            "AIRFLOW__SMTP__SMTP_MAIL_FROM", "airflow@demand-forecasting.local"
+        )
+
         if not smtp_user or not smtp_password:
             logger.warning("SMTP credentials not configured. Email not sent.")
             return False
-        
+
         # Create message
         msg = MIMEMultipart()
-        msg['From'] = from_email
-        msg['To'] = alert_email
-        msg['Subject'] = subject
-        
+        msg["From"] = from_email
+        msg["To"] = alert_email
+        msg["Subject"] = subject
+
         # Convert plain text message to HTML
         html_message = f"""
         <html>
@@ -613,25 +617,25 @@ def send_drift_alert_email(alert_email: str, subject: str, message: str) -> bool
         </body>
         </html>
         """
-        
-        msg.attach(MIMEText(html_message, 'html'))
-        
+
+        msg.attach(MIMEText(html_message, "html"))
+
         # Send email
         if smtp_ssl:
             server = smtplib.SMTP_SSL(smtp_host, smtp_port)
         else:
             server = smtplib.SMTP(smtp_host, smtp_port)
-            
+
         if smtp_starttls and not smtp_ssl:
             server.starttls()
-            
+
         server.login(smtp_user, smtp_password)
         server.send_message(msg)
         server.quit()
-        
+
         logger.info(f"Drift alert email sent to {alert_email}")
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to send drift alert email: {e}")
         return False
@@ -643,26 +647,28 @@ def load_data(path: str) -> pd.DataFrame:
         # Load data from S3 using s3fs
         try:
             logger.info(f"Loading data from S3: {path}")
-            
+
             # Get S3 configuration from environment
-            s3_endpoint = os.getenv("MINIO_ENDPOINT", "http://host.docker.internal:9000")
+            s3_endpoint = os.getenv(
+                "MINIO_ENDPOINT", "http://host.docker.internal:9000"
+            )
             s3_key = os.getenv("MINIO_ROOT_USER", "minioadmin")
             s3_secret = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
-            
+
             # Create S3 filesystem
             fs = s3fs.S3FileSystem(
-                client_kwargs={'endpoint_url': s3_endpoint},
+                client_kwargs={"endpoint_url": s3_endpoint},
                 key=s3_key,
-                secret=s3_secret
+                secret=s3_secret,
             )
-            
+
             # Load data from S3
-            with fs.open(path, 'r') as f:
+            with fs.open(path, "r") as f:
                 df = pd.read_csv(f)
-            
+
             logger.info(f"Successfully loaded {len(df)} rows from S3")
             return df
-            
+
         except Exception as e:
             logger.error(f"Failed to load data from S3 {path}: {e}")
             raise

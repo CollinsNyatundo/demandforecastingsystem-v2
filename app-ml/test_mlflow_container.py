@@ -22,24 +22,24 @@ mlflow.set_experiment("container_test")
 # Start run
 with mlflow.start_run(run_name="container_test_run") as run:
     print(f"Started run: {run.info.run_id}")
-    
+
     # Simple model
     X = np.random.rand(20, 2)
     y = np.random.rand(20)
-    
+
     model = RandomForestRegressor(n_estimators=3, random_state=42)
     model.fit(X, y)
-    
+
     # Log metrics
     y_pred = model.predict(X)
     mse = mean_squared_error(y, y_pred)
-    
+
     mlflow.log_param("model_type", "RandomForest")
     mlflow.log_metric("mse", float(mse))
-    
+
     # Log model
     mlflow.sklearn.log_model(model, "model")
-    
+
     print("Logged model and metrics")
     print(f"MSE: {mse}")
 

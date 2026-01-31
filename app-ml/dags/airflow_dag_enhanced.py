@@ -91,7 +91,11 @@ MODEL_INPUT_DATASET = Dataset("s3://demand-forecasting/03_primary/model_input.pa
 TRAINED_MODEL_DATASET = Dataset("s3://demand-forecasting/06_models/regressor.pickle")
 
 # Email configuration - MUST come from environment variable, no hardcoded defaults
-EMAIL_RECIPIENTS = os.environ.get("AIRFLOW_ALERT_EMAIL", "").split(",") if os.environ.get("AIRFLOW_ALERT_EMAIL") else []
+EMAIL_RECIPIENTS = (
+    os.environ.get("AIRFLOW_ALERT_EMAIL", "").split(",")
+    if os.environ.get("AIRFLOW_ALERT_EMAIL")
+    else []
+)
 
 default_args = {
     "owner": "kedro",
@@ -385,6 +389,7 @@ def demand_forecasting_dag():
             # Load parameters for feature engineering
             # Parameters must be loaded from configuration (parameters.yml)
             from kedro.config import OmegaConfigLoader
+
             conf_loader = OmegaConfigLoader("conf")
             params = conf_loader["parameters"]
             logger.info("✅ Parameters loaded from configuration")
@@ -392,13 +397,17 @@ def demand_forecasting_dag():
             # Generate features
             logger.info("Creating temporal features...")
             df_with_temporal = extract_temporal_features(df)
-            
+
             logger.info("Creating feature interactions with lag features...")
             # IMPORTANT: Pass feature_lags parameters from config to enable lag features
             derived_df = create_feature_interactions(
                 df_with_temporal,
-                lags=params.get("feature_engineering", {}).get("target_lags", [1, 2, 22, 23]),
-                feature_lags=params.get("feature_engineering", {}).get("feature_lags", {})
+                lags=params.get("feature_engineering", {}).get(
+                    "target_lags", [1, 2, 22, 23]
+                ),
+                feature_lags=params.get("feature_engineering", {}).get(
+                    "feature_lags", {}
+                ),
             )
             logger.info(f"✅ Feature engineering complete. Shape: {derived_df.shape}")
 
@@ -482,15 +491,23 @@ def demand_forecasting_dag():
                 # NEVER hardcode credentials - must come from environment
                 minio_access_key = os.environ.get("MINIO_ACCESS_KEY", "")
                 minio_secret_key = os.environ.get("MINIO_SECRET_KEY", "")
-                
+
                 if not minio_access_key or not minio_secret_key:
-                    logger.warning("MINIO_ACCESS_KEY or MINIO_SECRET_KEY not set. MLflow S3 storage may fail.")
-                    logger.warning("Please set environment variables: MINIO_ACCESS_KEY, MINIO_SECRET_KEY")
-                
+                    logger.warning(
+                        "MINIO_ACCESS_KEY or MINIO_SECRET_KEY not set. MLflow S3 storage may fail."
+                    )
+                    logger.warning(
+                        "Please set environment variables: MINIO_ACCESS_KEY, MINIO_SECRET_KEY"
+                    )
+
                 os.environ["AWS_ACCESS_KEY_ID"] = minio_access_key
                 os.environ["AWS_SECRET_ACCESS_KEY"] = minio_secret_key
-                os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION", "us-east-1")
-                logger.info("✅ AWS credentials set from environment variables for MLflow S3 storage")
+                os.environ["AWS_DEFAULT_REGION"] = os.environ.get(
+                    "AWS_REGION", "us-east-1"
+                )
+                logger.info(
+                    "✅ AWS credentials set from environment variables for MLflow S3 storage"
+                )
 
                 # Start MLflow run
                 mlflow_run = mlflow.start_run()
@@ -508,9 +525,7 @@ def demand_forecasting_dag():
                 )
 
             # Train CatBoost with Optuna optimization
-            logger.info(
-                "🚀 Starting CatBoost training with Optuna optimization..."
-            )
+            logger.info("🚀 Starting CatBoost training with Optuna optimization...")
             logger.info(f"Trials: {params.get('optuna', {}).get('n_trials', 150)}")
             logger.info("Sampler: TPESampler (Bayesian optimization)")
 
@@ -529,25 +544,30 @@ def demand_forecasting_dag():
             # CRITICAL: Split data into train/test sets BEFORE optimization
             # This ensures hyperparameters are tuned on training data and evaluated on unseen test data
             # Matches the notebook strategy: 80% train, 20% test
-            from sklearn.model_selection import train_test_split as sklearn_train_test_split
-            
+            from sklearn.model_selection import (
+                train_test_split as sklearn_train_test_split,
+            )
+
             train_fraction = params.get("train_fraction", 0.8)
             random_state = params.get("data_processing", {}).get("random_state", 42)
-            
-            logger.info(f"Splitting data: {train_fraction*100:.0f}% train, {(1-train_fraction)*100:.0f}% test")
-            
-            # Split the data
-            X_full = derived_df.drop('target', axis=1)
-            y_full = derived_df['target']
-            
-            X_train, X_test, y_train, y_test = sklearn_train_test_split(
-                X_full, y_full,
-                train_size=train_fraction,
-                test_size=1-train_fraction,
-                random_state=random_state,
-                shuffle=True
+
+            logger.info(
+                f"Splitting data: {train_fraction*100:.0f}% train, {(1-train_fraction)*100:.0f}% test"
             )
-            
+
+            # Split the data
+            X_full = derived_df.drop("target", axis=1)
+            y_full = derived_df["target"]
+
+            X_train, X_test, y_train, y_test = sklearn_train_test_split(
+                X_full,
+                y_full,
+                train_size=train_fraction,
+                test_size=1 - train_fraction,
+                random_state=random_state,
+                shuffle=True,
+            )
+
             logger.info(f"✅ Data split complete:")
             logger.info(f"   Training: {len(X_train)} samples")
             logger.info(f"   Testing: {len(X_test)} samples")
@@ -563,26 +583,30 @@ def demand_forecasting_dag():
             # It will create its own 80/20 split for hyperparameter optimization
             logger.info("🚀 Starting Optuna hyperparameter optimization...")
             optimization_result = optimize_catboost_params(
-                X_train, y_train, 
+                X_train,
+                y_train,
                 n_trials=params.get("optimization", {}).get("n_trials", 150),
                 storage=optuna_storage,
-                study_name=OPTUNA_STUDY_NAME
+                study_name=OPTUNA_STUDY_NAME,
             )
             logger.info("✅ Optuna optimization complete")
-            
+
             # Extract parameters and metrics
-            if isinstance(optimization_result, dict) and 'best_params' in optimization_result:
-                optimized_params = optimization_result['best_params']
+            if (
+                isinstance(optimization_result, dict)
+                and "best_params" in optimization_result
+            ):
+                optimized_params = optimization_result["best_params"]
                 optuna_metrics = {
-                    'rmse': optimization_result['best_value'],
-                    'n_trials': optimization_result['n_trials'],
-                    'storage_used': optimization_result['storage_used'],
-                    'study_name': optimization_result['study_name']
+                    "rmse": optimization_result["best_value"],
+                    "n_trials": optimization_result["n_trials"],
+                    "storage_used": optimization_result["storage_used"],
+                    "study_name": optimization_result["study_name"],
                 }
             else:
                 # Backward compatibility
                 optimized_params = optimization_result
-                optuna_metrics = {'rmse': 0.0, 'n_trials': 0, 'storage_used': False}
+                optuna_metrics = {"rmse": 0.0, "n_trials": 0, "storage_used": False}
 
             # Train model with optimized parameters
             # CRITICAL: Now pass both training AND test sets
@@ -590,13 +614,14 @@ def demand_forecasting_dag():
             # Test set: Used to compute final metrics on held-out unseen data
             logger.info("🚀 Starting final CatBoost model training...")
             catboost_model, catboost_metrics = train_catboost_model(
-                X_train, y_train,  # Full training set
+                X_train,
+                y_train,  # Full training set
                 optimized_params,
-                X_test=X_test,     # Held-out test set for evaluation
-                y_test=y_test
+                X_test=X_test,  # Held-out test set for evaluation
+                y_test=y_test,
             )
             logger.info("✅ Final model training complete")
-            
+
             # Merge metrics
             catboost_metrics.update(optuna_metrics)
 

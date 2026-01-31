@@ -2,7 +2,6 @@ import pandas as pd
 from typing import Dict, Any
 
 
-
 class DataManager:
     """
     A utility class responsible for handling all data-related I/O operations
@@ -25,7 +24,6 @@ class DataManager:
         """
         # Placeholder implementation
         return data_to_append
-
 
     @staticmethod
     def load_data(path: str) -> pd.DataFrame:

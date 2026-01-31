@@ -91,14 +91,20 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
 
     @staticmethod
     def get_generated_password_file() -> str:
-        if configured_file := conf.get("core", "simple_auth_manager_passwords_file", fallback=None):
+        if configured_file := conf.get(
+            "core", "simple_auth_manager_passwords_file", fallback=None
+        ):
             return configured_file
 
-        return os.path.join(AIRFLOW_HOME, "simple_auth_manager_passwords.json.generated")
+        return os.path.join(
+            AIRFLOW_HOME, "simple_auth_manager_passwords.json.generated"
+        )
 
     @staticmethod
     def get_users() -> list[dict[str, str]]:
-        users = [u.split(":") for u in conf.getlist("core", "simple_auth_manager_users")]
+        users = [
+            u.split(":") for u in conf.getlist("core", "simple_auth_manager_users")
+        ]
         return [{"username": username, "role": role} for username, role in users]
 
     @staticmethod
@@ -108,7 +114,9 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
             return SimpleAuthManager._get_passwords(users=users, stream=file)[0]
 
     def init(self) -> None:
-        is_simple_auth_manager_all_admins = conf.getboolean("core", "simple_auth_manager_all_admins")
+        is_simple_auth_manager_all_admins = conf.getboolean(
+            "core", "simple_auth_manager_all_admins"
+        )
         if is_simple_auth_manager_all_admins:
             return
         users = self.get_users()
@@ -144,7 +152,9 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
 
     def get_url_login(self, **kwargs) -> str:
         """Return the login page url."""
-        is_simple_auth_manager_all_admins = conf.getboolean("core", "simple_auth_manager_all_admins")
+        is_simple_auth_manager_all_admins = conf.getboolean(
+            "core", "simple_auth_manager_all_admins"
+        )
         if is_simple_auth_manager_all_admins:
             return AUTH_MANAGER_FASTAPI_APP_PREFIX + "/token/login"
 
@@ -177,7 +187,9 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
         user: SimpleAuthManagerUser,
         details: ConnectionDetails | None = None,
     ) -> bool:
-        return self._is_authorized(method=method, allow_role=SimpleAuthManagerRole.OP, user=user)
+        return self._is_authorized(
+            method=method, allow_role=SimpleAuthManagerRole.OP, user=user
+        )
 
     def is_authorized_dag(
         self,
@@ -257,15 +269,27 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
         user: SimpleAuthManagerUser,
         details: VariableDetails | None = None,
     ) -> bool:
-        return self._is_authorized(method=method, allow_role=SimpleAuthManagerRole.OP, user=user)
+        return self._is_authorized(
+            method=method, allow_role=SimpleAuthManagerRole.OP, user=user
+        )
 
-    def is_authorized_view(self, *, access_view: AccessView, user: SimpleAuthManagerUser) -> bool:
-        return self._is_authorized(method="GET", allow_role=SimpleAuthManagerRole.VIEWER, user=user)
+    def is_authorized_view(
+        self, *, access_view: AccessView, user: SimpleAuthManagerUser
+    ) -> bool:
+        return self._is_authorized(
+            method="GET", allow_role=SimpleAuthManagerRole.VIEWER, user=user
+        )
 
     def is_authorized_custom_view(
-        self, *, method: ResourceMethod | str, resource_name: str, user: SimpleAuthManagerUser
+        self,
+        *,
+        method: ResourceMethod | str,
+        resource_name: str,
+        user: SimpleAuthManagerUser,
     ):
-        return self._is_authorized(method="GET", allow_role=SimpleAuthManagerRole.VIEWER, user=user)
+        return self._is_authorized(
+            method="GET", allow_role=SimpleAuthManagerRole.VIEWER, user=user
+        )
 
     def filter_authorized_menu_items(
         self, menu_items: list[MenuItem], *, user: SimpleAuthManagerUser
@@ -304,7 +328,9 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
             name="simple_auth_manager_ui_folder",
         )
 
-        @app.get("/{rest_of_path:path}", response_class=HTMLResponse, include_in_schema=False)
+        @app.get(
+            "/{rest_of_path:path}", response_class=HTMLResponse, include_in_schema=False
+        )
         def webapp(request: Request, rest_of_path: str):
             return templates.TemplateResponse(
                 "/index.html",
@@ -349,7 +375,9 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
         return role.order >= allow_role.order
 
     @staticmethod
-    def _get_passwords(users: list[dict[str, str]], stream: TextIO) -> tuple[dict[str, str], bool]:
+    def _get_passwords(
+        users: list[dict[str, str]], stream: TextIO
+    ) -> tuple[dict[str, str], bool]:
         try:
             # Read passwords from file
             stream.seek(0)
@@ -371,7 +399,9 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
 
     @staticmethod
     def _generate_password() -> str:
-        return "".join(random.choices("abcdefghkmnpqrstuvwxyzABCDEFGHKMNPQRSTUVWXYZ23456789", k=16))
+        return "".join(
+            random.choices("abcdefghkmnpqrstuvwxyzABCDEFGHKMNPQRSTUVWXYZ23456789", k=16)
+        )
 
     @staticmethod
     def _print_output(output: str):

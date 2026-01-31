@@ -11,33 +11,34 @@ import numpy as np
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
     """
     Validate data integrity at each ETL stage.
-    
+
     Args:
         df: DataFrame to validate
         stage_name: Name of the processing stage
-        
+
     Returns:
         True if validation passes, False otherwise
     """
     _LOGGER.info(f"Validating data at {stage_name}...")
-    
+
     try:
         # Check for null values
         null_count = df.isnull().sum().sum()
         if null_count > 0:
             _LOGGER.warning(f"Found {null_count} null values at {stage_name}")
-        
+
         # Check for duplicates
         duplicate_count = df.duplicated().sum()
         if duplicate_count > 0:
             _LOGGER.warning(f"Found {duplicate_count} duplicate rows at {stage_name}")
-        
+
         _LOGGER.info(f"Validation passed for {stage_name}")
         return True
-        
+
     except Exception as e:
         _LOGGER.error(f"Validation failed at {stage_name}: {e}")
         return False
@@ -48,32 +49,32 @@ def extract_temporal_features(
 ) -> pd.DataFrame:
     """
     Extract temporal features from datetime index.
-    
+
     Args:
         df: Input DataFrame with datetime index
-        
+
     Returns:
         DataFrame with extracted temporal features
     """
     _LOGGER.info("Extracting temporal features...")
-    
+
     try:
         df = df.copy()
-        
+
         # Ensure datetime index
         if not isinstance(df.index, pd.DatetimeIndex):
             df.index = pd.to_datetime(df.index)
-        
+
         # Extract temporal features
-        df['hour'] = df.index.hour
-        df['day_of_week'] = df.index.dayofweek
-        df['month'] = df.index.month
-        df['quarter'] = df.index.quarter
-        df['day_of_year'] = df.index.dayofyear
-        
+        df["hour"] = df.index.hour
+        df["day_of_week"] = df.index.dayofweek
+        df["month"] = df.index.month
+        df["quarter"] = df.index.quarter
+        df["day_of_year"] = df.index.dayofyear
+
         _LOGGER.info(f"Extracted temporal features. Shape: {df.shape}")
         return df
-        
+
     except Exception as e:
         _LOGGER.error(f"Failed to extract temporal features: {e}")
         raise
@@ -112,29 +113,33 @@ def create_feature_interactions(
             feature_lags = {}
 
         # Create target lags (if 'demand' or 'cnt' column exists)
-        target_col = 'demand' if 'demand' in df.columns else 'cnt' if 'cnt' in df.columns else None
+        target_col = (
+            "demand"
+            if "demand" in df.columns
+            else "cnt" if "cnt" in df.columns else None
+        )
 
         if target_col:
             # Vectorized lag creation for better performance
             for lag in lags:
-                df[f'{target_col}_lag{lag}'] = df[target_col].shift(lag)
+                df[f"{target_col}_lag{lag}"] = df[target_col].shift(lag)
 
         # Create feature lags with memory optimization
         for feature, lag_values in feature_lags.items():
             if feature in df.columns:
                 for lag in lag_values:
-                    df[f'{feature}_lag{lag}'] = df[feature].shift(lag)
+                    df[f"{feature}_lag{lag}"] = df[feature].shift(lag)
 
         # Optimize memory usage by downcasting numeric columns
-        for col in df.select_dtypes(include=['int64']).columns:
-            df[col] = pd.to_numeric(df[col], downcast='integer')
+        for col in df.select_dtypes(include=["int64"]).columns:
+            df[col] = pd.to_numeric(df[col], downcast="integer")
 
-        for col in df.select_dtypes(include=['float64']).columns:
-            df[col] = pd.to_numeric(df[col], downcast='float')
+        for col in df.select_dtypes(include=["float64"]).columns:
+            df[col] = pd.to_numeric(df[col], downcast="float")
 
         # Create some basic interactions
-        if 'hour' in df.columns and 'day_of_week' in df.columns:
-            df['hour_day_interaction'] = df['hour'] * df['day_of_week']
+        if "hour" in df.columns and "day_of_week" in df.columns:
+            df["hour_day_interaction"] = df["hour"] * df["day_of_week"]
 
         # Handle missing values from lagging using backward fill (bfill)
         # bfill() fills NaN values with the next available value, then forward fill remaining NaN
@@ -165,7 +170,7 @@ def validate_features(df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
 
         # Check for required columns
-        required_base = ['demand', 'hour', 'day_of_week']
+        required_base = ["demand", "hour", "day_of_week"]
         missing = [col for col in required_base if col not in df.columns]
 
         if missing:
@@ -180,7 +185,7 @@ def validate_features(df: pd.DataFrame) -> pd.DataFrame:
             _LOGGER.warning(f"Removed {removed} rows with NaN values during validation")
 
         # Check data types
-        for col in df.select_dtypes(include=['object']).columns:
+        for col in df.select_dtypes(include=["object"]).columns:
             _LOGGER.warning(f"Column '{col}' has object dtype, may need conversion")
 
         _LOGGER.info(f"Feature validation complete. Final shape: {df.shape}")

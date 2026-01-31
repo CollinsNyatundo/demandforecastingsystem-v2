@@ -24,5 +24,6 @@ def read_config(path: Union[str, Path]) -> dict:
     with path.open("r") as f:
         return yaml.safe_load(f)
 
+
 def make_prediction_figures(*args, **kwargs):
     return {}

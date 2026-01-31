@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import requests
 
-auth = ('Cole', 'admin')
-r = requests.get('http://localhost:8081/api/v1/dags', auth=auth, timeout=10)
+auth = ("Cole", "admin")
+r = requests.get("http://localhost:8081/api/v1/dags", auth=auth, timeout=10)
 print(f"Status: {r.status_code}")
 if r.status_code == 200:
     dags = r.json()
