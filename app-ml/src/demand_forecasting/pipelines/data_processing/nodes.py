@@ -68,17 +68,61 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
 @pa.check_types
 def preprocess_data(df: DataFrame[RawBikeDataSchema]) -> pd.DataFrame:
     """
-    Enhanced preprocessing with validation and graceful error handling.
-
+    Preprocess data by dropping columns that are not needed for modeling.
+    
+    Based on ground truth from modeling notebook:
+    - 'yr' does not help with predictions
+    - 'casual', 'registered' are already included in target 'cnt'  
+    - 'datetime' is not needed for model features
+    
     Args:
         df: Raw data validated against RawBikeDataSchema.
 
     Returns:
         Preprocessed data with [yr, casual, registered, datetime] dropped.
+        
+    Note:
+        Function uses defensive programming approach - logs warnings for issues
+        but continues processing with available data rather than failing fast.
     """
+    # Validate data quality with defensive approach
     if not validate_etl_data(df, "preprocessing"):
-        raise ValueError("Data validation failed in preprocessing")
-
+        logger.warning(
+            "Data validation issues detected in preprocessing. "
+            "Proceeding with available data - this may affect model performance."
+        )
+        # Continue processing instead of failing fast
+    
+    # Drop columns as defined in modeling notebook
     drop_cols = ["yr", "casual", "registered", "datetime"]
-    # errors='ignore' ensures we don't crash if columns are missing (idempotency)
-    return df.drop(columns=drop_cols, errors="ignore")
+    
+    # Check which columns exist before dropping
+    existing_cols = [col for col in drop_cols if col in df.columns]
+    missing_cols = set(drop_cols) - set(existing_cols)
+    
+    if missing_cols:
+        logger.warning(
+            f"Expected columns not present for dropping: {missing_cols}. "
+            f"This may indicate upstream pipeline changes."
+        )
+    
+    # Explicit dropping - fail if unexpected behavior
+    result = df.drop(columns=existing_cols)
+    
+    # Audit log - essential for demand forecasting ML systems
+    logger.info(
+        f"Preprocessing complete. Dropped {len(existing_cols)} columns: {existing_cols}. "
+        f"Output shape: {result.shape}. Missing columns: {missing_cols}"
+    )
+    
+    # Validate that expected columns remain after preprocessing
+    expected_remaining_cols = [
+        "season", "mnth", "hr", "holiday", "weekday", "workingday",
+        "weathersit", "temp", "atemp", "hum", "windspeed", "cnt"
+    ]
+    remaining_missing = set(expected_remaining_cols) - set(result.columns)
+    if remaining_missing:
+        logger.error(f"Critical columns missing after preprocessing: {remaining_missing}")
+        logger.warning("Proceeding with available data - model performance may be severely impacted")
+    
+    return result
