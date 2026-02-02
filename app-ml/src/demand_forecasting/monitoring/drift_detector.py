@@ -14,6 +14,10 @@ HIGH_DRIFT_THRESHOLD = 0.8
 MEDIUM_DRIFT_THRESHOLD = 0.6
 LOW_DRIFT_THRESHOLD = 0.4
 
+# PSI interpretation constants
+PSI_NO_CHANGE_THRESHOLD = 0.1
+PSI_MODERATE_CHANGE_THRESHOLD = 0.25
+
 # Trend analysis constants
 MIN_TREND_SAMPLES = 2
 INCREASING_TREND_THRESHOLD = 0.01
@@ -372,9 +376,9 @@ class PopulationStabilityIndex:
             psi_total = sum(psi_components)
 
             # Interpret PSI
-            if psi_total < 0.1:
+            if psi_total < PSI_NO_CHANGE_THRESHOLD:
                 psi_interpretation = "no_significant_change"
-            elif psi_total < 0.25:
+            elif psi_total < PSI_MODERATE_CHANGE_THRESHOLD:
                 psi_interpretation = "moderate_change"
             else:
                 psi_interpretation = "significant_change"

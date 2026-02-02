@@ -11,6 +11,9 @@ from scipy import stats
 
 logger = logging.getLogger(__name__)
 
+# A/B testing constants
+MIN_SAMPLE_SIZE_THRESHOLD = 10
+
 
 class ModelRouter:
     """Route requests between models A and B with configurable traffic split."""
@@ -145,10 +148,10 @@ class ABTestMetrics:
 
     def compute_statistics(self) -> dict[str, Any]:
         """Compute statistical comparison between models."""
-        if len(self.metrics_a) < 10 or len(self.metrics_b) < 10:
+        if len(self.metrics_a) < MIN_SAMPLE_SIZE_THRESHOLD or len(self.metrics_b) < MIN_SAMPLE_SIZE_THRESHOLD:
             return {
                 "status": "insufficient_data",
-                "min_samples_needed": 10,
+                "min_samples_needed": MIN_SAMPLE_SIZE_THRESHOLD,
                 "model_a_samples": len(self.metrics_a),
                 "model_b_samples": len(self.metrics_b),
             }

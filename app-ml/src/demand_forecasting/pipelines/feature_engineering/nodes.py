@@ -9,6 +9,9 @@ import pandas as pd
 
 _LOGGER = logging.getLogger(__name__)
 
+# Feature engineering constants
+MIN_FEATURE_COUNT_THRESHOLD = 50
+
 
 def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
     """Validate data integrity at each ETL stage.
@@ -96,7 +99,7 @@ def create_feature_interactions(
     try:
         # Use inplace operations to reduce memory usage
         # Only copy if we need to preserve original
-        if len(df.columns) > 50:  # Large DataFrame threshold
+        if len(df.columns) > MIN_FEATURE_COUNT_THRESHOLD:  # Large DataFrame threshold
             df = df.copy(deep=False)  # Shallow copy for memory efficiency
         else:
             df = df.copy()
