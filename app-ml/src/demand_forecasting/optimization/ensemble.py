@@ -1,7 +1,7 @@
 """Ensemble methods for demand forecasting using scikit-learn."""
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 from catboost import CatBoostRegressor
@@ -167,7 +167,7 @@ class EnsembleManager:
             raise
 
     def train_ensemble(
-        self, X_train, y_train, X_val=None, y_val=None
+        self, X_train: pd.DataFrame, y_train: pd.Series, X_val: Optional[pd.DataFrame] = None, y_val: Optional[pd.Series] = None
     ) -> dict[str, Any]:
         """Train the ensemble and individual base models.
 

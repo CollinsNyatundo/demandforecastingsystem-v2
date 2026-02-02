@@ -370,8 +370,12 @@ app = FastAPI(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Trusted host middleware - prevent Host header attacks
-allowed_hosts = ["localhost", "127.0.0.1", "0.0.0.0"]
+allowed_hosts = ["localhost", "127.0.0.1"]
 env = os.getenv("ENVIRONMENT", "development")
+
+# Add 0.0.0.0 only in development for local access
+if env == "development":
+    allowed_hosts.append("0.0.0.0")
 if env == "production":
     # Production hosts must be explicitly configured
     production_hosts = os.getenv("ALLOWED_HOSTS", "yourdomain.com,*.yourdomain.com")
@@ -716,5 +720,9 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "model_server:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
+        "model_server:app", 
+        host=os.getenv("HOST", "127.0.0.1"), 
+        port=int(os.getenv("PORT", "8000")), 
+        reload=env == "development", 
+        log_level="info"
     )

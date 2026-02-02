@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ModelExplainer:
     """Generate model explanations using SHAP."""
 
-    def __init__(self, model, data: pd.DataFrame, model_type: str = "tree"):
+    def __init__(self, model: Any, data: pd.DataFrame, model_type: str = "tree"):
         """Initialize SHAP explainer.
 
         Args:

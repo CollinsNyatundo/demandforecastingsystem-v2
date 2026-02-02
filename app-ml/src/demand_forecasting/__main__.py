@@ -11,6 +11,15 @@ from kedro.framework.project import configure_project
 
 
 def main(*args, **kwargs) -> Any:
+    """Entry point for the demand forecasting package.
+    
+    Configures and runs the Kedro project with the package name.
+    Supports both interactive and standalone execution modes.
+    
+    Args:
+        *args: Additional positional arguments passed to Kedro
+        **kwargs: Additional keyword arguments passed to Kedro
+    """
     package_name = Path(__file__).parent.name
     configure_project(package_name)
 
