@@ -173,7 +173,7 @@ class MetricsTracker:
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, "w") as f:
+        with filepath.open("w") as f:
             json.dump(self.metrics, f, indent=2, default=str)
 
         logger.info(f"Metrics saved to {filepath}")
@@ -226,7 +226,8 @@ class MetricsTracker:
         Args:
             filepath: Path to the JSON file
         """
-        with open(filepath) as f:
+        filepath = Path(filepath)
+        with filepath.open() as f:
             self.metrics = json.load(f)
 
         self.run_id = self.metrics.get("run_id", self.run_id)

@@ -201,7 +201,7 @@ def create_gx_data_docs(
         docs_path
         / f"{dataset_name}_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with open(stats_file, "w") as f:
+    with stats_file.open("w") as f:
         json.dump(summary_stats, f, indent=2, default=str)
 
     # Build Data Docs

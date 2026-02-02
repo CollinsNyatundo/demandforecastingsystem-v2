@@ -168,10 +168,10 @@ class MultiObjectiveOptimizer:
 
     def optimize(
         self,
-        X_train,
-        X_test,
-        y_train,
-        y_test,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
         n_trials: int = 100,
         timeout: float | None = None,
     ) -> dict[str, Any]:
@@ -190,7 +190,7 @@ class MultiObjectiveOptimizer:
 
         try:
             # Define objective function with data
-            def objective(trial):
+            def objective(trial: Any) -> tuple[float, ...]:
                 return objective_multi(
                     trial, X_train, X_test, y_train, y_test, self.objectives
                 )

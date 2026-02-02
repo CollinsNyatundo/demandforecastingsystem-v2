@@ -162,7 +162,7 @@ def profile_dataset_gx(
         docs_path
         / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with open(profile_file, "w") as f:
+    with profile_file.open("w") as f:
         json.dump(profile_data, f, indent=2, default=str)
 
     # Generate HTML report
@@ -255,7 +255,7 @@ def profile_dataset_gx(
     </html>
     """
 
-    with open(html_file, "w", encoding="utf-8") as f:
+    with html_file.open("w", encoding="utf-8") as f:
         f.write(html_content)
 
     logger.info(f"Generated data profile report for {dataset_name}")
