@@ -23,6 +23,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
+# Dataset monitoring constants
+MIN_EVENTS_FOR_FREQUENCY = 2
+
 
 class DatasetMonitor:
     """Monitors dataset freshness and logs update events.
@@ -285,7 +288,7 @@ class DatasetMonitor:
         }
 
         # Calculate update frequency
-        if len(update_events) >= 2:
+        if len(update_events) >= MIN_EVENTS_FOR_FREQUENCY:
             timestamps = [datetime.fromisoformat(e["timestamp"]) for e in update_events]
             time_diffs = [
                 (timestamps[i] - timestamps[i + 1]).total_seconds() / 3600

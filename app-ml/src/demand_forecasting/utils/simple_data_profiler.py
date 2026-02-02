@@ -13,6 +13,11 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Data quality threshold constants
+MISSING_VALUES_THRESHOLD = 5
+SMALL_DATASET_THRESHOLD = 1000
+OUTLIER_THRESHOLD = 10
+
 
 class SimpleDataProfiler:
     """Simple data profiling and quality monitoring inspired by EDA notebook.
@@ -103,10 +108,10 @@ class SimpleDataProfiler:
         total_missing = df.isnull().sum().sum()
         missing_percentage = (total_missing / (len(df) * len(df.columns))) * 100
 
-        if missing_percentage > 5:
+        if missing_percentage > MISSING_VALUES_THRESHOLD:
             stats["quality_flags"].append("HIGH_MISSING_VALUES")
 
-        if len(df) < 1000:
+        if len(df) < SMALL_DATASET_THRESHOLD:
             stats["quality_flags"].append("SMALL_DATASET")
 
         # Check for potential target column (cnt)
@@ -120,7 +125,7 @@ class SimpleDataProfiler:
             }
             stats["target_analysis"] = cnt_stats
 
-            if cnt_stats["zero_percentage"] > 10:
+            if cnt_stats["zero_percentage"] > OUTLIER_THRESHOLD:
                 stats["quality_flags"].append("HIGH_ZERO_COUNT")
 
         return stats

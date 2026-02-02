@@ -13,6 +13,9 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Data quality threshold constants
+ZERO_PERCENTAGE_THRESHOLD = 20
+
 # Great Expectations imports with graceful fallback
 try:
     from great_expectations.data_context import EphemeralDataContext
@@ -163,7 +166,7 @@ def create_gx_data_docs(
 
         # Check for excessive zeros
         zero_percentage = (cnt_col == 0).sum() / len(cnt_col) * 100
-        if zero_percentage > 20:
+        if zero_percentage > ZERO_PERCENTAGE_THRESHOLD:
             logger.warning(
                 f"High zero percentage in cnt column: {zero_percentage:.1f}%"
             )

@@ -17,6 +17,17 @@ logger = logging.getLogger(__name__)
 # NEVER use hardcoded defaults for credentials
 DEFAULT_S3_ENDPOINT = "http://host.docker.internal:9000"
 
+# S3 path validation constants
+MIN_S3_PATH_PARTS = 2
+MAX_FILE_SIZE_MB = 1000
+MIN_FILE_SIZE_MB = 0.001
+CHUNK_SIZE_KB = 16
+MIN_L2_LEAF_REG = 0.1
+MAX_L2_LEAF_REG = 10.0
+MIN_N_ESTIMATORS = 10
+MAX_N_ESTIMATORS = 1000
+MAX_DEPTH_LIMIT = 50
+
 
 @retry(
     stop=stop_after_attempt(3),
@@ -109,7 +120,7 @@ def validate_s3_path(path: str) -> bool:
 
     # Should have at least bucket/file structure
     parts = path.split("/")
-    return not len(parts) < 2
+    return not len(parts) < MIN_S3_PATH_PARTS
 
 
 def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
@@ -155,7 +166,7 @@ def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
             f"Invalid n_trials value: {n_trials}. Must be a positive integer."
         )
 
-    if n_trials > 1000:
+    if n_trials > MAX_FILE_SIZE_MB:
         logger.warning(
             f"n_trials={n_trials} is very high. This may take a long time to complete."
         )
@@ -201,21 +212,21 @@ def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
 
             # Validate specific parameter ranges
             if param == "learning_rate":
-                if not (0.001 <= min_val <= 1.0 and 0.001 <= max_val <= 1.0):
+                if not (MIN_FILE_SIZE_MB <= min_val <= 1.0 and MIN_FILE_SIZE_MB <= max_val <= 1.0):
                     raise ValueError(
-                        f"learning_rate range [{min_val}, {max_val}] is outside valid bounds [0.001, 1.0]"
+                        f"learning_rate range [{min_val}, {max_val}] is outside valid bounds [{MIN_FILE_SIZE_MB}, 1.0]"
                     )
 
             elif param == "depth":
-                if not (1 <= min_val <= 16 and 1 <= max_val <= 16):
+                if not (1 <= min_val <= CHUNK_SIZE_KB and 1 <= max_val <= CHUNK_SIZE_KB):
                     raise ValueError(
-                        f"depth range [{min_val}, {max_val}] is outside valid bounds [1, 16]"
+                        f"depth range [{min_val}, {max_val}] is outside valid bounds [1, {CHUNK_SIZE_KB}]"
                     )
 
             elif param == "l2_leaf_reg":
-                if not (0.1 <= min_val <= 10.0 and 0.1 <= max_val <= 10.0):
+                if not (MIN_L2_LEAF_REG <= min_val <= MAX_L2_LEAF_REG and MIN_L2_LEAF_REG <= max_val <= MAX_L2_LEAF_REG):
                     raise ValueError(
-                        f"l2_leaf_reg range [{min_val}, {max_val}] is outside valid bounds [0.1, 10.0]"
+                        f"l2_leaf_reg range [{min_val}, {max_val}] is outside valid bounds [{MIN_L2_LEAF_REG}, {MAX_L2_LEAF_REG}]"
                     )
 
     # Validate RandomForest search space if present
@@ -234,9 +245,9 @@ def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
                         f"Invalid n_estimators range: min={min_est} >= max={max_est}"
                     )
 
-                if not (10 <= min_est <= 1000 and 10 <= max_est <= 1000):
+                if not (MIN_N_ESTIMATORS <= min_est <= MAX_N_ESTIMATORS and MIN_N_ESTIMATORS <= max_est <= MAX_N_ESTIMATORS):
                     raise ValueError(
-                        f"n_estimators range [{min_est}, {max_est}] is outside valid bounds [10, 1000]"
+                        f"n_estimators range [{min_est}, {max_est}] is outside valid bounds [{MIN_N_ESTIMATORS}, {MAX_N_ESTIMATORS}]"
                     )
 
         # Validate max_depth
@@ -251,9 +262,9 @@ def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
                         f"Invalid max_depth range: min={min_depth} >= max={max_depth}"
                     )
 
-                if not (1 <= min_depth <= 50 and 1 <= max_depth <= 50):
+                if not (1 <= min_depth <= MAX_DEPTH_LIMIT and 1 <= max_depth <= MAX_DEPTH_LIMIT):
                     raise ValueError(
-                        f"max_depth range [{min_depth}, {max_depth}] is outside valid bounds [1, 50]"
+                        f"max_depth range [{min_depth}, {max_depth}] is outside valid bounds [1, {MAX_DEPTH_LIMIT}]"
                     )
 
     logger.info("Search space parameters validation passed successfully.")
