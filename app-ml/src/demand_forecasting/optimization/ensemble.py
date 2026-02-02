@@ -1,10 +1,10 @@
 """Ensemble methods for demand forecasting using scikit-learn."""
 
-import joblib
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor
@@ -138,8 +138,8 @@ class EnsembleManager:
             raise
 
     def create_voting_ensemble(
-        self, models: list[tuple[str, Any]], weights: list[float] | None = None
-    ) -> Any:
+        self, models: list[tuple[str, object]], weights: list[float] | None = None
+    ) -> object:
         """Create a voting ensemble (simplified version).
 
         Args:
@@ -168,7 +168,7 @@ class EnsembleManager:
             raise
 
     def train_ensemble(
-        self, X_train: pd.DataFrame, y_train: pd.Series, X_val: Optional[pd.DataFrame] = None, y_val: Optional[pd.Series] = None
+        self, X_train: pd.DataFrame, y_train: pd.Series, X_val: pd.DataFrame | None = None, y_val: pd.Series | None = None
     ) -> dict[str, Any]:
         """Train the ensemble and individual base models.
 

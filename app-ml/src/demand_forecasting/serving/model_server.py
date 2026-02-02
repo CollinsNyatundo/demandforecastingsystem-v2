@@ -1,16 +1,16 @@
 """Production-grade FastAPI model server for demand forecasting."""
 
-import catboost
 import hashlib
 import logging
 import math
-import mlflow
 import os
 import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+import catboost
+import mlflow
 import numpy as np
 from cachetools import TTLCache
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -722,9 +722,9 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "model_server:app", 
-        host=os.getenv("HOST", "127.0.0.1"), 
-        port=int(os.getenv("PORT", "8000")), 
-        reload=env == "development", 
+        "model_server:app",
+        host=os.getenv("HOST", "127.0.0.1"),
+        port=int(os.getenv("PORT", "8000")),
+        reload=env == "development",
         log_level="info"
     )

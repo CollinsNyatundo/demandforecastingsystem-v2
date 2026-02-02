@@ -337,7 +337,7 @@ def optimize_catboost_hyperparameters_enhanced(
         logger.info(f"🆕 Created new study. Will run {n_trials} trials.")
 
     # Define objective function
-    def objective(trial):
+    def objective(trial: object):
         return objective_catboost_enhanced(
             trial,
             X_train,

@@ -51,8 +51,8 @@ def train_single_model(
 
 
 def compare_demand_models(
-    catboost_model,
-    random_forest_model,
+    catboost_model: object,
+    random_forest_model: object,
     X_test: pd.DataFrame,
     y_test: pd.Series,
 ) -> dict[str, Any]:

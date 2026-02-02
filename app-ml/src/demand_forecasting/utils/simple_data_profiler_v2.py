@@ -13,6 +13,11 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Data quality threshold constants
+MISSING_VALUES_THRESHOLD = 5
+SMALL_DATASET_THRESHOLD = 1000
+OUTLIER_THRESHOLD = 10
+
 
 def profile_dataset(
     df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles"
@@ -55,10 +60,10 @@ def profile_dataset(
     total_missing = df.isnull().sum().sum()
     missing_percentage = (total_missing / (len(df) * len(df.columns))) * 100
 
-    if missing_percentage > 5:
+    if missing_percentage > MISSING_VALUES_THRESHOLD:
         stats["quality_flags"].append("HIGH_MISSING_VALUES")
 
-    if len(df) < 1000:
+    if len(df) < SMALL_DATASET_THRESHOLD:
         stats["quality_flags"].append("SMALL_DATASET")
 
     # Check for potential target column (cnt)
@@ -71,7 +76,7 @@ def profile_dataset(
         }
         stats["target_analysis"] = cnt_stats
 
-        if cnt_stats["zero_percentage"] > 10:
+        if cnt_stats["zero_percentage"] > OUTLIER_THRESHOLD:
             stats["quality_flags"].append("HIGH_ZERO_COUNT")
 
     # Save metrics to JSON
@@ -79,7 +84,7 @@ def profile_dataset(
         profile_path
         / f"{dataset_name}_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with open(metrics_file, "w") as f:
+    with metrics_file.open("w") as f:
         json.dump(stats, f, indent=2, default=str)
 
     # Generate simple text report
@@ -88,7 +93,7 @@ def profile_dataset(
         / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     )
 
-    with open(report_file, "w") as f:
+    with report_file.open("w") as f:
         f.write(f"Data Profile Report - {dataset_name}\n")
         f.write(f"Generated: {stats['timestamp']}\n")
         f.write(f"Shape: {stats['shape']}\n")

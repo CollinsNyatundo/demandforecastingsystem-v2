@@ -93,7 +93,7 @@ def _pandas_profiling_report(
                 "memory_usage": int(df.memory_usage(deep=True).sum()),
             }
 
-            with open(json_file, "w") as f:
+            with Path(json_file).open("w") as f:
                 json.dump(summary, f, indent=2, default=str)
 
         return {

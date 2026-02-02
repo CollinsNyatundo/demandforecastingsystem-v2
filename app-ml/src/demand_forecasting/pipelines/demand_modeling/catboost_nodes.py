@@ -26,7 +26,7 @@ def optimize_catboost_params(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     n_trials: int = 50,
-    storage=None,
+    storage: object | None = None,
     study_name: str = "catboost_optimization",
 ) -> dict[str, Any]:
     """Optimize CatBoost hyperparameters using Optuna.

@@ -34,7 +34,7 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def objective_multi(
-    trial: Any, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, objectives: list[str] | None = None
+    trial: object, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, objectives: list[str] | None = None
 ) -> tuple[float, ...]:
     """Multi-objective optimization function.
 
@@ -191,7 +191,7 @@ class MultiObjectiveOptimizer:
 
         try:
             # Define objective function with data
-            def objective(trial: Any) -> tuple[float, ...]:
+            def objective(trial: object) -> tuple[float, ...]:
                 return objective_multi(
                     trial, X_train, X_test, y_train, y_test, self.objectives
                 )

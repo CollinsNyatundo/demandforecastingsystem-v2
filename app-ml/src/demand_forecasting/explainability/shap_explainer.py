@@ -1,7 +1,7 @@
 """Model explainability using SHAP for demand forecasting."""
 
 import logging
-from typing import Any
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ModelExplainer:
     """Generate model explanations using SHAP."""
 
-    def __init__(self, model: Any, data: pd.DataFrame, model_type: str = "tree"):
+    def __init__(self, model: object, data: pd.DataFrame, model_type: str = "tree"):
         """Initialize SHAP explainer.
 
         Args:

@@ -3,13 +3,14 @@
 Uses basic pandas profiling instead of pandas-profiling to avoid dependency issues.
 """
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 MISSING_VALUES_THRESHOLD = 5
 SMALL_DATASET_THRESHOLD = 1000
 OUTLIER_THRESHOLD = 10
+MAX_PROFILES_PER_DATASET = 10
 
 
 class SimpleDataProfiler:
@@ -60,7 +62,7 @@ class SimpleDataProfiler:
         logger.info(f"Generated profile report for {dataset_name}: {report_path}")
         return str(report_path)
 
-    def _generate_summary_stats(self, df: pd.DataFrame, dataset_name: str) -> Dict[str, Any]:
+    def _generate_summary_stats(self, df: pd.DataFrame, dataset_name: str) -> dict[str, Any]:
         """Generate summary statistics similar to EDA notebook analysis.
 
         Args:
@@ -136,7 +138,7 @@ class SimpleDataProfiler:
             return f"{value:.2f}"
         return str(value)
 
-    def _generate_html_report(self, df: pd.DataFrame, stats: Dict[str, Any], dataset_name: str) -> str:
+    def _generate_html_report(self, df: pd.DataFrame, stats: dict[str, Any], dataset_name: str) -> str:
         """Generate a simple HTML report.
 
         Args:
@@ -220,12 +222,12 @@ class SimpleDataProfiler:
         </html>
         """
 
-        with open(report_path, 'w', encoding='utf-8') as f:
+        with report_path.open('w', encoding='utf-8') as f:
             f.write(html_content)
 
         return str(report_path)
 
-    def _save_metrics(self, metrics: Dict[str, Any], dataset_name: str):
+    def _save_metrics(self, metrics: dict[str, Any], dataset_name: str):
         """Save metrics to JSON file for tracking over time.
 
         Args:
@@ -236,7 +238,7 @@ class SimpleDataProfiler:
         existing_metrics = {}
         if self.metrics_file.exists():
             try:
-                with open(self.metrics_file, 'r') as f:
+                with self.metrics_file.open() as f:
                     existing_metrics = json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 logger.warning("Could not load existing metrics file, starting fresh")
@@ -247,15 +249,15 @@ class SimpleDataProfiler:
 
         existing_metrics[dataset_name].append(metrics)
 
-        # Keep only last 10 profiles per dataset
-        if len(existing_metrics[dataset_name]) > 10:
-            existing_metrics[dataset_name] = existing_metrics[dataset_name][-10:]
+        # Keep only last MAX_PROFILES_PER_DATASET profiles per dataset
+        if len(existing_metrics[dataset_name]) > MAX_PROFILES_PER_DATASET:
+            existing_metrics[dataset_name] = existing_metrics[dataset_name][-MAX_PROFILES_PER_DATASET:]
 
         # Save updated metrics
-        with open(self.metrics_file, 'w') as f:
+        with self.metrics_file.open('w') as f:
             json.dump(existing_metrics, f, indent=2, default=str)
 
-    def get_quality_summary(self, dataset_name: str = None) -> Dict[str, Any]:
+    def get_quality_summary(self, dataset_name: str = None) -> dict[str, Any]:
         """Get quality summary for a specific dataset or all datasets.
 
         Args:
@@ -267,7 +269,7 @@ class SimpleDataProfiler:
         if not self.metrics_file.exists():
             return {"error": "No metrics file found"}
 
-        with open(self.metrics_file, 'r') as f:
+        with self.metrics_file.open() as f:
             all_metrics = json.load(f)
 
         if dataset_name:

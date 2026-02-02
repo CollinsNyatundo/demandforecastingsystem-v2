@@ -123,6 +123,118 @@ def validate_s3_path(path: str) -> bool:
     return not len(parts) < MIN_S3_PATH_PARTS
 
 
+def _validate_optuna_config(optuna_params: dict[str, Any]) -> None:
+    """Validate Optuna configuration parameters."""
+    # Validate n_trials
+    if "n_trials" not in optuna_params:
+        raise KeyError("Missing 'n_trials' in optuna configuration.")
+
+    n_trials = optuna_params["n_trials"]
+    if not isinstance(n_trials, int) or n_trials < 1:
+        raise ValueError(
+            f"Invalid n_trials value: {n_trials}. Must be a positive integer."
+        )
+
+    if n_trials > MAX_FILE_SIZE_MB:
+        logger.warning(
+            f"n_trials={n_trials} is very high. This may take a long time to complete."
+        )
+
+    # Validate primary_model if specified
+    if "primary_model" in optuna_params:
+        valid_models = ["catboost", "random_forest", "randomforest"]
+        primary_model = optuna_params["primary_model"].lower()
+        if primary_model not in valid_models:
+            raise ValueError(
+                f"Invalid primary_model: {primary_model}. Must be one of {valid_models}"
+            )
+
+
+def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:
+    """Validate CatBoost search space parameters."""
+    # Validate required CatBoost hyperparameters
+    required_params = ["learning_rate", "depth", "l2_leaf_reg"]
+    for param in required_params:
+        if param not in catboost_space:
+            raise KeyError(
+                f"Missing '{param}' in catboost_search_space configuration."
+            )
+
+        param_config = catboost_space[param]
+
+        # Validate min/max structure
+        if "min" not in param_config or "max" not in param_config:
+            raise KeyError(
+                f"Missing 'min' or 'max' for '{param}' in catboost_search_space."
+            )
+
+        min_val = param_config["min"]
+        max_val = param_config["max"]
+
+        # Validate that min < max
+        if min_val >= max_val:
+            raise ValueError(
+                f"Invalid range for '{param}': min={min_val} >= max={max_val}. "
+                f"Min must be less than max."
+            )
+
+        # Validate specific parameter ranges
+        if param == "learning_rate":
+            if not (MIN_FILE_SIZE_MB <= min_val <= 1.0 and MIN_FILE_SIZE_MB <= max_val <= 1.0):
+                raise ValueError(
+                    f"learning_rate range [{min_val}, {max_val}] is outside valid bounds [{MIN_FILE_SIZE_MB}, 1.0]"
+                )
+
+        elif param == "depth":
+            if not (1 <= min_val <= CHUNK_SIZE_KB and 1 <= max_val <= CHUNK_SIZE_KB):
+                raise ValueError(
+                    f"depth range [{min_val}, {max_val}] is outside valid bounds [1, {CHUNK_SIZE_KB}]"
+                )
+
+        elif param == "l2_leaf_reg":
+            if not (MIN_L2_LEAF_REG <= min_val <= MAX_L2_LEAF_REG and MIN_L2_LEAF_REG <= max_val <= MAX_L2_LEAF_REG):
+                raise ValueError(
+                    f"l2_leaf_reg range [{min_val}, {max_val}] is outside valid bounds [{MIN_L2_LEAF_REG}, {MAX_L2_LEAF_REG}]"
+                )
+
+
+def _validate_random_forest_search_space(rf_space: dict[str, Any]) -> None:
+    """Validate RandomForest search space parameters."""
+    # Validate n_estimators
+    if "n_estimators" in rf_space:
+        n_est_config = rf_space["n_estimators"]
+        if "min" in n_est_config and "max" in n_est_config:
+            min_est = n_est_config["min"]
+            max_est = n_est_config["max"]
+
+            if min_est >= max_est:
+                raise ValueError(
+                    f"Invalid n_estimators range: min={min_est} >= max={max_est}"
+                )
+
+            if not (MIN_N_ESTIMATORS <= min_est <= MAX_N_ESTIMATORS and MIN_N_ESTIMATORS <= max_est <= MAX_N_ESTIMATORS):
+                raise ValueError(
+                    f"n_estimators range [{min_est}, {max_est}] is outside valid bounds [{MIN_N_ESTIMATORS}, {MAX_N_ESTIMATORS}]"
+                )
+
+    # Validate max_depth
+    if "max_depth" in rf_space:
+        depth_config = rf_space["max_depth"]
+        if "min" in depth_config and "max" in depth_config:
+            min_depth = depth_config["min"]
+            max_depth = depth_config["max"]
+
+            if min_depth >= max_depth:
+                raise ValueError(
+                    f"Invalid max_depth range: min={min_depth} >= max={max_depth}"
+                )
+
+            if not (1 <= min_depth <= MAX_DEPTH_LIMIT and 1 <= max_depth <= MAX_DEPTH_LIMIT):
+                raise ValueError(
+                    f"max_depth range [{min_depth}, {max_depth}] is outside valid bounds [1, {MAX_DEPTH_LIMIT}]"
+                )
+
+
 def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
     """Validate hyperparameter search space configuration.
 
@@ -156,116 +268,18 @@ def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
 
     optuna_params = parameters["optuna"]
 
-    # Validate n_trials
-    if "n_trials" not in optuna_params:
-        raise KeyError("Missing 'n_trials' in optuna configuration.")
-
-    n_trials = optuna_params["n_trials"]
-    if not isinstance(n_trials, int) or n_trials < 1:
-        raise ValueError(
-            f"Invalid n_trials value: {n_trials}. Must be a positive integer."
-        )
-
-    if n_trials > MAX_FILE_SIZE_MB:
-        logger.warning(
-            f"n_trials={n_trials} is very high. This may take a long time to complete."
-        )
-
-    # Validate primary_model if specified
-    if "primary_model" in optuna_params:
-        valid_models = ["catboost", "random_forest", "randomforest"]
-        primary_model = optuna_params["primary_model"].lower()
-        if primary_model not in valid_models:
-            raise ValueError(
-                f"Invalid primary_model: {primary_model}. Must be one of {valid_models}"
-            )
+    # Validate Optuna configuration
+    _validate_optuna_config(optuna_params)
 
     # Validate CatBoost search space (recommended primary model)
     if "catboost_search_space" in optuna_params:
         catboost_space = optuna_params["catboost_search_space"]
-
-        # Validate required CatBoost hyperparameters
-        required_params = ["learning_rate", "depth", "l2_leaf_reg"]
-        for param in required_params:
-            if param not in catboost_space:
-                raise KeyError(
-                    f"Missing '{param}' in catboost_search_space configuration."
-                )
-
-            param_config = catboost_space[param]
-
-            # Validate min/max structure
-            if "min" not in param_config or "max" not in param_config:
-                raise KeyError(
-                    f"Missing 'min' or 'max' for '{param}' in catboost_search_space."
-                )
-
-            min_val = param_config["min"]
-            max_val = param_config["max"]
-
-            # Validate that min < max
-            if min_val >= max_val:
-                raise ValueError(
-                    f"Invalid range for '{param}': min={min_val} >= max={max_val}. "
-                    f"Min must be less than max."
-                )
-
-            # Validate specific parameter ranges
-            if param == "learning_rate":
-                if not (MIN_FILE_SIZE_MB <= min_val <= 1.0 and MIN_FILE_SIZE_MB <= max_val <= 1.0):
-                    raise ValueError(
-                        f"learning_rate range [{min_val}, {max_val}] is outside valid bounds [{MIN_FILE_SIZE_MB}, 1.0]"
-                    )
-
-            elif param == "depth":
-                if not (1 <= min_val <= CHUNK_SIZE_KB and 1 <= max_val <= CHUNK_SIZE_KB):
-                    raise ValueError(
-                        f"depth range [{min_val}, {max_val}] is outside valid bounds [1, {CHUNK_SIZE_KB}]"
-                    )
-
-            elif param == "l2_leaf_reg":
-                if not (MIN_L2_LEAF_REG <= min_val <= MAX_L2_LEAF_REG and MIN_L2_LEAF_REG <= max_val <= MAX_L2_LEAF_REG):
-                    raise ValueError(
-                        f"l2_leaf_reg range [{min_val}, {max_val}] is outside valid bounds [{MIN_L2_LEAF_REG}, {MAX_L2_LEAF_REG}]"
-                    )
+        _validate_catboost_search_space(catboost_space)
 
     # Validate RandomForest search space if present
     if "search_space" in optuna_params:
         rf_space = optuna_params["search_space"]
-
-        # Validate n_estimators
-        if "n_estimators" in rf_space:
-            n_est_config = rf_space["n_estimators"]
-            if "min" in n_est_config and "max" in n_est_config:
-                min_est = n_est_config["min"]
-                max_est = n_est_config["max"]
-
-                if min_est >= max_est:
-                    raise ValueError(
-                        f"Invalid n_estimators range: min={min_est} >= max={max_est}"
-                    )
-
-                if not (MIN_N_ESTIMATORS <= min_est <= MAX_N_ESTIMATORS and MIN_N_ESTIMATORS <= max_est <= MAX_N_ESTIMATORS):
-                    raise ValueError(
-                        f"n_estimators range [{min_est}, {max_est}] is outside valid bounds [{MIN_N_ESTIMATORS}, {MAX_N_ESTIMATORS}]"
-                    )
-
-        # Validate max_depth
-        if "max_depth" in rf_space:
-            depth_config = rf_space["max_depth"]
-            if "min" in depth_config and "max" in depth_config:
-                min_depth = depth_config["min"]
-                max_depth = depth_config["max"]
-
-                if min_depth >= max_depth:
-                    raise ValueError(
-                        f"Invalid max_depth range: min={min_depth} >= max={max_depth}"
-                    )
-
-                if not (1 <= min_depth <= MAX_DEPTH_LIMIT and 1 <= max_depth <= MAX_DEPTH_LIMIT):
-                    raise ValueError(
-                        f"max_depth range [{min_depth}, {max_depth}] is outside valid bounds [1, {MAX_DEPTH_LIMIT}]"
-                    )
+        _validate_random_forest_search_space(rf_space)
 
     logger.info("Search space parameters validation passed successfully.")
 
