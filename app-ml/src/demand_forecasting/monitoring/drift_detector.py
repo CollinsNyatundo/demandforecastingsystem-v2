@@ -14,6 +14,15 @@ HIGH_DRIFT_THRESHOLD = 0.8
 MEDIUM_DRIFT_THRESHOLD = 0.6
 LOW_DRIFT_THRESHOLD = 0.4
 
+# Trend analysis constants
+MIN_TREND_SAMPLES = 2
+INCREASING_TREND_THRESHOLD = 0.01
+DECREASING_TREND_THRESHOLD = -0.01
+
+# PSI calculation constants
+MIN_SAMPLES_FOR_TEST = 30
+SMALL_VALUE_REPLACEMENT = 0.0001
+
 
 class DriftDetector:
     """Detect distribution drift in features using statistical tests."""
@@ -103,8 +112,7 @@ class DriftDetector:
         curr_values = current_data[column].dropna()
 
         # Check if we have enough data
-        min_samples = 30
-        if len(ref_values) < min_samples or len(curr_values) < min_samples:
+        if len(ref_values) < MIN_SAMPLES_FOR_TEST or len(curr_values) < MIN_SAMPLES_FOR_TEST:
             return {
                 "drift_score": 0.0,
                 "p_value": 1.0,
@@ -247,11 +255,11 @@ class DriftDetector:
         recent_scores = [h.get("overall_drift_score", 0) for h in recent_history]
 
         # Calculate trend
-        if len(recent_scores) >= 2:
+        if len(recent_scores) >= MIN_TREND_SAMPLES:
             slope = np.polyfit(range(len(recent_scores)), recent_scores, 1)[0]
-            if slope > 0.01:
+            if slope > INCREASING_TREND_THRESHOLD:
                 trend = "increasing"
-            elif slope < -0.01:
+            elif slope < DECREASING_TREND_THRESHOLD:
                 trend = "decreasing"
             else:
                 trend = "stable"
@@ -260,7 +268,7 @@ class DriftDetector:
 
         return {
             "trend": trend,
-            "slope": slope if len(recent_scores) >= 2 else 0,
+            "slope": slope if len(recent_scores) >= MIN_TREND_SAMPLES else 0,
             "recent_scores": recent_scores,
             "avg_score": np.mean(recent_scores),
             "max_score": np.max(recent_scores),
@@ -354,9 +362,9 @@ class PopulationStabilityIndex:
 
                 # Avoid division by zero
                 if exp_pct == 0:
-                    exp_pct = 0.0001
+                    exp_pct = SMALL_VALUE_REPLACEMENT
                 if act_pct == 0:
-                    act_pct = 0.0001
+                    act_pct = SMALL_VALUE_REPLACEMENT
 
                 psi_component = (act_pct - exp_pct) * np.log(act_pct / exp_pct)
                 psi_components.append(psi_component)

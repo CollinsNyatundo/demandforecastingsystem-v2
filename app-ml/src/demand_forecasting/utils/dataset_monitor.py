@@ -335,7 +335,7 @@ class DatasetMonitor:
             metrics[dataset_uri]["last_update"] = timestamp.isoformat()
             metrics[dataset_uri]["last_s3_check"] = datetime.utcnow().isoformat()
 
-            with open(self.metrics_file, "w") as f:
+            with self.metrics_file.open("w") as f:
                 json.dump(metrics, f, indent=2)
 
         except Exception as e:
@@ -412,7 +412,7 @@ class DatasetMonitor:
             return
 
         events = []
-        with open(self.events_file) as f:
+        with self.events_file.open() as f:
             for line in f:
                 try:
                     events.append(json.loads(line.strip()))
@@ -433,7 +433,7 @@ class DatasetMonitor:
             return {}
 
         try:
-            with open(self.metrics_file) as f:
+            with self.metrics_file.open() as f:
                 return json.load(f)
         except json.JSONDecodeError:
             logger.warning("Corrupted metrics file, starting fresh")
@@ -441,7 +441,7 @@ class DatasetMonitor:
 
     def _save_metrics(self, metrics: dict[str, Any]):
         """Save metrics to JSON file."""
-        with open(self.metrics_file, "w") as f:
+        with self.metrics_file.open("w") as f:
             json.dump(metrics, f, indent=2)
 
     def _update_metrics(self, dataset_uri: str, event: dict[str, Any]):
