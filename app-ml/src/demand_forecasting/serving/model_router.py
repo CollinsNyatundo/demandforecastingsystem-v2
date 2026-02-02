@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 # A/B testing constants
 MIN_SAMPLE_SIZE_THRESHOLD = 10
+STATISTICAL_SIGNIFICANCE_THRESHOLD = 0.05
+CONFIDENCE_INTERVAL_PERCENTAGE = 5
+NEGATIVE_IMPROVEMENT_THRESHOLD = -5
 
 
 class ModelRouter:
@@ -187,7 +190,7 @@ class ABTestMetrics:
             "p_value": p_value,
             "t_statistic": t_stat,
             "cohens_d": cohens_d,
-            "is_significant": p_value < 0.05,
+            "is_significant": p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD,
             "recommendation": self._get_recommendation(improvement, p_value),
             "confidence_interval": self._calculate_confidence_interval(),
             "effect_size_interpretation": self._interpret_effect_size(cohens_d),
@@ -195,11 +198,11 @@ class ABTestMetrics:
 
     def _get_recommendation(self, improvement: float, p_value: float) -> str:
         """Generate deployment recommendation based on statistics."""
-        if p_value >= 0.05:
+        if p_value >= STATISTICAL_SIGNIFICANCE_THRESHOLD:
             return "insufficient_evidence"
-        if improvement > 5 and p_value < 0.05:
+        if improvement > CONFIDENCE_INTERVAL_PERCENTAGE and p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD:
             return "deploy_b"
-        if improvement < -5 and p_value < 0.05:
+        if improvement < NEGATIVE_IMPROVEMENT_THRESHOLD and p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD:
             return "deploy_a"
         return "continue_test"
 
