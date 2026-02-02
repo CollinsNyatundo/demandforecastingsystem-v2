@@ -10,12 +10,15 @@ import hashlib
 import hmac
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import mlflow
 import numpy as np
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
 from pydantic import BaseModel, validator
 from cachetools import TTLCache
@@ -136,6 +139,107 @@ async def lifespan(app: FastAPI):
         logger.info("Model server shutdown complete")
 
 
+def get_allowed_origins() -> List[str]:
+    """
+    Environment-based CORS configuration.
+    
+    Follows principle of least privilege - only allow necessary origins.
+    Production domains must be explicitly configured.
+    """
+    env = os.getenv("ENVIRONMENT", "development")
+    
+    origins_map = {
+        "production": [
+            # Production domains - MUST be configured in environment
+            "https://yourdomain.com",
+            "https://api.yourdomain.com"
+        ],
+        "staging": [
+            "https://staging.yourdomain.com"
+        ],
+        "development": [
+            "http://localhost:3000",
+            "http://localhost:8000", 
+            "http://localhost:8080",
+            "http://localhost:8501"  # Streamlit
+        ]
+    }
+    
+    return origins_map.get(env, origins_map["development"])
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Add comprehensive security headers to all responses.
+    
+    Based on OWASP Secure Headers Project:
+    https://owasp.org/www-project-secure-headers/
+    
+    Implements defense-in-depth security headers for production deployment.
+    """
+    
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        
+        # Prevent clickjacking attacks
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # Prevent MIME type sniffing attacks
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        
+        # Enable XSS protection (legacy browsers)
+        # Note: Modern browsers ignore this, CSP is primary defense
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        
+        # Enforce HTTPS in production (HSTS)
+        env = os.getenv("ENVIRONMENT", "development")
+        if env == "production":
+            response.headers["Strict-Transport-Security"] = \
+                "max-age=31536000; includeSubDomains; preload"
+        
+        # Content Security Policy - primary XSS defense
+        csp_directives = [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",  # Required for some UI frameworks
+            "img-src 'self' data: https:",  # Allow data URIs for images
+            "font-src 'self'",
+            "connect-src 'self'",
+            "frame-ancestors 'none'",  # Prevent clickjacking
+            "base-uri 'self'",
+            "form-action 'self'"
+        ]
+        
+        response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
+        
+        # Referrer policy for privacy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Permissions policy - disable unnecessary browser features
+        permissions_directives = [
+            "geolocation=()",
+            "microphone=()", 
+            "camera=()",
+            "payment=()",
+            "usb=()",
+            "magnetometer=()",
+            "gyroscope=()",
+            "accelerometer=()",
+            "ambient-light-sensor=()",
+            "autoplay=()",
+            "encrypted-media=()",
+            "fullscreen=()",
+            "picture-in-picture=()"
+        ]
+        
+        response.headers["Permissions-Policy"] = ", ".join(permissions_directives)
+        
+        # Remove server information
+        response.headers["Server"] = "Demand-Forecasting-API"
+        
+        return response
+
+
 # Create FastAPI application
 app = FastAPI(
     title="Demand Forecasting API",
@@ -146,22 +250,41 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Add CORS middleware with restricted origins
-# Only allow specific origins, not "*" which is a security risk
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "http://localhost:8080",
-    # Add production domain when deployed
-    # "https://yourdomain.com",
-]
+# Apply security headers middleware first (highest priority)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Trusted host middleware - prevent Host header attacks
+allowed_hosts = ["localhost", "127.0.0.1", "0.0.0.0"]
+env = os.getenv("ENVIRONMENT", "development")
+if env == "production":
+    # Production hosts must be explicitly configured
+    production_hosts = os.getenv("ALLOWED_HOSTS", "yourdomain.com,*.yourdomain.com")
+    allowed_hosts.extend([host.strip() for host in production_hosts.split(",")])
 
 app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=allowed_hosts
+)
+
+# CORS middleware with minimal privileges and environment-based configuration
+app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,  # Use specific allowed origins, not "*"
-    allow_credentials=True,
-    allow_methods=["GET", "POST"],  # Only allow necessary methods
-    allow_headers=["Content-Type"],  # Only allow necessary headers
+    allow_origins=get_allowed_origins(),
+    allow_credentials=False,  # Disabled for security - only enable if absolutely necessary
+    allow_methods=["GET", "POST", "OPTIONS"],  # Explicit list, no wildcards
+    allow_headers=[
+        "Content-Type",
+        "X-API-Key",  # Custom API key header
+        "Accept",
+        "Accept-Language",
+        "Accept-Encoding"
+    ],
+    expose_headers=[
+        "X-Request-ID",  # For request tracking
+        "X-Rate-Limit-Remaining",  # Rate limit information
+        "Retry-After"  # Rate limit retry information
+    ],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 
