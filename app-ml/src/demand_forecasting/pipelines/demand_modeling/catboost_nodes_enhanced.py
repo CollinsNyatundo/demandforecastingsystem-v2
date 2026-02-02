@@ -97,7 +97,7 @@ def get_optuna_storage(storage_url: str | None = None) -> RDBStorage | None:
         return None
 
 
-def objective_catboost_enhanced(
+def objective_catboost_enhanced(  # noqa: PLR0913
     trial: "optuna.Trial",
     x_train: pd.DataFrame,
     y_train: pd.Series,
@@ -224,7 +224,7 @@ def objective_catboost_enhanced(
     return avg_rmse
 
 
-def optimize_catboost_hyperparameters_enhanced(
+def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915, PLR0912
     model_input_table: pd.DataFrame,
     parameters: dict[str, Any],
     train_fraction: float = 0.8,

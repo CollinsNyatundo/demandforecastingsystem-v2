@@ -150,7 +150,7 @@ def _validate_optuna_config(optuna_params: dict[str, Any]) -> None:
             )
 
 
-def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:
+def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:  # noqa: C901
     """Validate CatBoost search space parameters."""
     # Validate required CatBoost hyperparameters
     required_params = ["learning_rate", "depth", "l2_leaf_reg"]

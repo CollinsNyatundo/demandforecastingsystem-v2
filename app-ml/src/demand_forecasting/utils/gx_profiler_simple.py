@@ -21,7 +21,7 @@ SMALL_DATASET_THRESHOLD = 1000
 HIGH_VARIANCE_THRESHOLD = 10
 
 
-def profile_dataset_gx(
+def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
     df: pd.DataFrame,
     dataset_name: str,
     docs_dir: str = "/opt/airflow/data/docs",

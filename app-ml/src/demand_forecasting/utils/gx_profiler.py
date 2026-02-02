@@ -37,7 +37,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def create_gx_data_docs(
+def create_gx_data_docs(  # noqa: C901, PLR0915
     df: pd.DataFrame, dataset_name: str, docs_dir: str = "/opt/airflow/data/docs"
 ) -> str:
     """Generate Great Expectations Data Docs for a dataset.

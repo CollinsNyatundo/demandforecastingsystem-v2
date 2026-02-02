@@ -19,7 +19,7 @@ SMALL_DATASET_THRESHOLD = 1000
 OUTLIER_THRESHOLD = 10
 
 
-def profile_dataset(
+def profile_dataset(  # noqa: C901
     df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles"
 ) -> str:
     """Simple profiling function that generates basic statistics.

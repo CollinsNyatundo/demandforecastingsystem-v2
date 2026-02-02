@@ -3,7 +3,7 @@ from pathlib import Path
 import s3fs
 
 ENDPOINT = "http://minio:9000"  # Accessing host MinIO from Docker
-KEY = "minioadmin"  # Development credentials - should use environment variables in production  # noqa: S105
+KEY = "minioadmin"  # Development credentials - should use environment variables in production
 SECRET = "minioadmin"  # Development credentials - should use environment variables in production  # noqa: S105
 BUCKET = "demand-forecasting"
 

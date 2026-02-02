@@ -33,7 +33,7 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
 
 
-def objective_multi(
+def objective_multi(  # noqa: PLR0913
     trial: object, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, objectives: list[str] | None = None
 ) -> tuple[float, ...]:
     """Multi-objective optimization function.
@@ -170,7 +170,7 @@ class MultiObjectiveOptimizer:
             logger.error(f"Failed to create study: {e}")
             raise
 
-    def optimize(
+    def optimize(  # noqa: PLR0913
         self,
         X_train: pd.DataFrame,
         X_test: pd.DataFrame,

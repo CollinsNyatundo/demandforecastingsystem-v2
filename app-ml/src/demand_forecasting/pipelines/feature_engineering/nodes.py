@@ -79,7 +79,7 @@ def extract_temporal_features(
         raise
 
 
-def create_feature_interactions(
+def create_feature_interactions(  # noqa: C901, PLR0912
     df: pd.DataFrame,
     lags: list[int] | None = None,
     feature_lags: dict[str, list[int]] | None = None,
