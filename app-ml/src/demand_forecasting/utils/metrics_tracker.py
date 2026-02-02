@@ -259,6 +259,11 @@ class MetricsTracker:
         return df.sort_values(by=df.columns[0])
 
     def __repr__(self) -> str:
+        """Return string representation of MetricsTracker.
+
+        Returns:
+            String representation with run_id and model counts
+        """
         summary = self.get_metrics_summary()
         return (
             f"MetricsTracker(run_id='{self.run_id}', "

@@ -229,7 +229,7 @@ class ModelExplainer:
             else:  # violin plot
                 fig = Figure()
 
-                for i, feature in enumerate(importance_df["feature"]):
+                for feature in importance_df["feature"]:
                     feature_idx = list(self.data.columns).index(feature)
                     shap_vals = self.shap_values[:, feature_idx]
 

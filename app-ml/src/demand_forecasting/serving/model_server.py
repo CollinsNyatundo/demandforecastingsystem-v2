@@ -296,6 +296,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
+        """Process HTTP request and add security headers.
+
+        Args:
+            request: Incoming HTTP request
+            call_next: Next middleware in the chain
+
+        Returns:
+            HTTP response with security headers added
+        """
         response: Response = await call_next(request)
 
         # Prevent clickjacking attacks
@@ -662,7 +671,7 @@ async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_
         prediction_requests_total.labels(model_id=model_id, status="error").inc()
         prediction_duration.observe(time.time() - start_time)
         logger.error(f"Prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e!s}") from None
 
 
 @app.get("/model/info", response_model=ModelInfo)
