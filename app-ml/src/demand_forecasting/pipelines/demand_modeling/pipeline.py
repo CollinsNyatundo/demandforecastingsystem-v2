@@ -8,7 +8,7 @@ Orchestrates training of demand forecasting models including
 random forest, XGBoost, and CatBoost with hyperparameter optimization.
 """
 from kedro.pipeline import Pipeline, node
-from .nodes import train_single_model, train_final_model, compare_models
+from .nodes import train_single_model, train_final_model, compare_demand_models
 from .catboost_nodes import optimize_catboost_params, train_catboost_model
 
 
@@ -39,10 +39,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="train_random_forest",
             ),
             node(
-                func=compare_models,
+                func=compare_demand_models,
                 inputs=["catboost_model", "random_forest_model", "X_test", "y_test"],
                 outputs="model_comparison",
-                name="compare_models",
+                name="compare_demand_models",
             ),
             node(
                 func=train_final_model,
