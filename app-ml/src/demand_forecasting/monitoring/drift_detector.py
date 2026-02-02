@@ -9,6 +9,11 @@ from scipy.stats import chi2_contingency, ks_2samp
 
 logger = logging.getLogger(__name__)
 
+# Drift detection constants
+HIGH_DRIFT_THRESHOLD = 0.8
+MEDIUM_DRIFT_THRESHOLD = 0.6
+LOW_DRIFT_THRESHOLD = 0.4
+
 
 class DriftDetector:
     """Detect distribution drift in features using statistical tests."""
@@ -219,16 +224,16 @@ class DriftDetector:
 
     def _get_recommendation(self, drift_score: float, threshold: float) -> str:
         """Generate recommendation based on drift score."""
-        if drift_score > 0.8:
+        if drift_score > HIGH_DRIFT_THRESHOLD:
             return "URGENT_RETRAIN"
-        if drift_score > 0.6:
-            return "RETRAIN_SOON"
-        if drift_score > threshold:
+        if drift_score > MEDIUM_DRIFT_THRESHOLD:
+            return "CONSIDER_RETRAIN"
+        if drift_score > LOW_DRIFT_THRESHOLD:
             return "MONITOR_CLOSELY"
-        return "CONTINUE"
+        return "NO_ACTION"
 
     def get_drift_trend(self, window_size: int = 10) -> dict[str, Any]:
-        """Analyze drift trend over time."""
+        """Analyze drift trend over recent runs."""
         if len(self.drift_history) < window_size:
             return {
                 "trend": "insufficient_data",

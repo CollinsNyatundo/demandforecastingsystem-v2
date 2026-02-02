@@ -17,6 +17,12 @@ MIN_PERFORMANCE_THRESHOLD = 0.05
 DEFAULT_PERFORMANCE_THRESHOLD = 0.5
 DEFAULT_DATA_VOLUME_THRESHOLD = 10000
 
+# Priority level constants
+CRITICAL_PRIORITY_THRESHOLD = 4
+HIGH_PRIORITY_THRESHOLD = 3
+MEDIUM_PRIORITY_THRESHOLD = 2
+LOW_PRIORITY_THRESHOLD = 1
+
 
 class RetrainingScheduler:
     """Automated retraining with multiple trigger types."""
@@ -312,11 +318,11 @@ class RetrainingScheduler:
 
         max_score = max([priority_scores.get(trigger, 0) for trigger in triggers])
 
-        if max_score >= 4:
+        if max_score >= CRITICAL_PRIORITY_THRESHOLD:
             return "CRITICAL"
-        if max_score >= 3:
+        if max_score >= HIGH_PRIORITY_THRESHOLD:
             return "HIGH"
-        if max_score >= 2:
+        if max_score >= MEDIUM_PRIORITY_THRESHOLD:
             return "MEDIUM"
         return "LOW"
 
