@@ -295,7 +295,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Implements defense-in-depth security headers for production deployment.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: object) -> Response:
         response: Response = await call_next(request)
 
         # Prevent clickjacking attacks
@@ -421,6 +421,7 @@ class APIKeyManager:
     """
 
     def __init__(self):
+        """Initialize API key manager."""
         # Load hashed keys from environment
         self.valid_key_hashes = self._load_api_key_hashes()
 
@@ -666,7 +667,7 @@ async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_
 
 
 @app.get("/model/info", response_model=ModelInfo)
-async def model_info():
+async def model_info() -> ModelInfo:
     """Return current model information."""
     if "production" not in ml_models:
         raise HTTPException(status_code=503, detail="Model not loaded")
@@ -693,7 +694,7 @@ async def model_info():
 
 
 @app.post("/model/accuracy")
-async def update_model_accuracy(accuracy: float, model_id: str = "production"):
+async def update_model_accuracy(accuracy: float, model_id: str = "production") -> dict[str, str]:
     """Update model accuracy metric."""
     if not 0.0 <= accuracy <= 1.0:
         raise HTTPException(
@@ -707,7 +708,7 @@ async def update_model_accuracy(accuracy: float, model_id: str = "production"):
 
 
 @app.get("/")
-async def root():
+async def root() -> dict[str, str]:
     """Root endpoint with API information."""
     return {
         "message": "Demand Forecasting API",

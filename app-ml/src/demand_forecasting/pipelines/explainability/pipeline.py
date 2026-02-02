@@ -14,7 +14,7 @@ from .nodes import (
 )
 
 
-def create_pipeline(**kwargs) -> Pipeline:
+def create_pipeline(**kwargs: object) -> Pipeline:
     """Create the explainability pipeline.
 
     Returns:

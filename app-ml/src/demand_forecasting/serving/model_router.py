@@ -277,6 +277,7 @@ class ABTestManager:
         model_b_uri: str,
         initial_split: float = 0.7,
     ):
+        """Initialize A/B test manager."""
         self.test_name = test_name
         self.router = ModelRouter(model_a_uri, model_b_uri, initial_split)
         self.metrics = ABTestMetrics(test_name)

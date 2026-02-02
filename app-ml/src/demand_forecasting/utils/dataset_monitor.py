@@ -40,7 +40,8 @@ class DatasetMonitor:
         s3_key: str | None = None,
         s3_secret: str | None = None,
         s3_bucket: str = "demand-forecasting",
-    ):
+    ) -> None:
+        """Initialize dataset monitor."""
         self.metrics_dir = Path(metrics_dir)
         self.metrics_dir.mkdir(parents=True, exist_ok=True)
 

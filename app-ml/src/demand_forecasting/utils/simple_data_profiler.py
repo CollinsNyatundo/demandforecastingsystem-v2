@@ -132,7 +132,7 @@ class SimpleDataProfiler:
 
         return stats
 
-    def _format_number(self, value):
+    def _format_number(self, value: object) -> str:
         """Helper function to format numbers safely."""
         if isinstance(value, (int, float)):
             return f"{value:.2f}"

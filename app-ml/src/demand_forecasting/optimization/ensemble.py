@@ -174,8 +174,10 @@ class EnsembleManager:
         """Train the ensemble and individual base models.
 
         Args:
-            X_train, y_train: Training data
-            X_val, y_val: Validation data (optional)
+            X_train: Training features
+            y_train: Training target values
+            X_val: Validation features (optional)
+            y_val: Validation target values (optional)
 
         Returns:
             Training results
@@ -279,7 +281,8 @@ class EnsembleManager:
         """Evaluate ensemble performance on test set.
 
         Args:
-            X_test, y_test: Test data
+            X_test: Test features
+            y_test: Test target values
 
         Returns:
             Evaluation results
@@ -417,7 +420,8 @@ class EnsembleManager:
         """Perform cross-validation on the ensemble.
 
         Args:
-            X, y: Data for cross-validation
+            X: Features for cross-validation
+            y: Target values for cross-validation
             cv_folds: Number of CV folds
 
         Returns:
