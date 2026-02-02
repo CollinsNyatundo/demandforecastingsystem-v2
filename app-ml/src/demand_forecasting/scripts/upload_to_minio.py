@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import s3fs
 
 ENDPOINT = "http://minio:9000"  # Accessing host MinIO from Docker

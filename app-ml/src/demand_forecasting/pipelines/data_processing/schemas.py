@@ -33,6 +33,12 @@ class RawBikeDataSchema(pa.DataFrameModel):
     cnt: Series[int] = pa.Field(ge=0, description="Total bike rental count")
 
     class Config:
+        """Pydantic configuration for demand data schema.
+
+        Settings:
+        - strict: Reject extra columns, require exact schema match
+        - coerce: Enable type coercion for numeric types
+        """
         # STRICT mode: reject extra columns, require exact schema match
         strict = True
         # Enable type coercion only for numeric types
