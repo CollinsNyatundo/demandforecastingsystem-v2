@@ -176,8 +176,8 @@ class EnsembleManager:
         Args:
             X_train: Training features
             y_train: Training target values
-            X_val: Validation features (optional)
-            y_val: Validation target values (optional)
+            X_val: Validation features
+            y_val: Validation target values
 
         Returns:
             Training results

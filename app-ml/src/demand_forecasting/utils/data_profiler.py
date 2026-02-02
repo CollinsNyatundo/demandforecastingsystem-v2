@@ -196,6 +196,56 @@ class DataProfiler:
 
         return all_metrics
 
+    def _compare_shape_drift(
+        self, current_shape: tuple[int, int], baseline_shape: tuple[int, int], threshold: float
+    ) -> dict[str, float]:
+        """Compare shape drift between current and baseline shapes.
+        
+        Args:
+            current_shape: Current dataframe shape (rows, cols)
+            baseline_shape: Baseline dataframe shape (rows, cols)
+            threshold: Drift detection threshold
+            
+        Returns:
+            Dictionary with drift details for rows and columns
+        """
+        if len(current_shape) != DATAFRAME_DIMENSIONS or len(baseline_shape) != DATAFRAME_DIMENSIONS:
+            return {}
+
+        row_change = abs(current_shape[0] - baseline_shape[0]) / baseline_shape[0]
+        col_change = abs(current_shape[1] - baseline_shape[1]) / baseline_shape[1]
+
+        return {
+            "shape_rows": row_change,
+            "shape_cols": col_change
+        }
+
+    def _compare_missing_values_drift(
+        self, current_missing: dict[str, Any], baseline_missing: dict[str, Any], threshold: float
+    ) -> dict[str, float]:
+        """Compare missing values drift between current and baseline.
+        
+        Args:
+            current_missing: Current missing values dictionary
+            baseline_missing: Baseline missing values dictionary
+            threshold: Drift detection threshold
+            
+        Returns:
+            Dictionary with drift details for missing values
+        """
+        drift_details = {}
+
+        for col in current_missing:
+            if col in baseline_missing:
+                current_val = current_missing[col]
+                baseline_val = baseline_missing[col]
+
+                if isinstance(current_val, (int, float)) and isinstance(baseline_val, (int, float)):
+                    change = abs(current_val - baseline_val) / max(baseline_val, 1)
+                    drift_details[f"missing_{col}"] = change
+
+        return drift_details
+
     def detect_data_drift(
         self,
         current_metrics: dict[str, Any],
@@ -235,46 +285,23 @@ class DataProfiler:
             if metric in current_metrics and metric in baseline:
                 if metric == "shape":
                     # Compare shape (rows, columns)
-                    current_shape = current_metrics[metric]
-                    baseline_shape = baseline[metric]
+                    shape_drift = self._compare_shape_drift(
+                        current_metrics[metric], baseline[metric], threshold
+                    )
+                    drift_results["drift_details"].update(shape_drift)
 
-                    if len(current_shape) == DATAFRAME_DIMENSIONS and len(baseline_shape) == DATAFRAME_DIMENSIONS:
-                        row_change = (
-                            abs(current_shape[0] - baseline_shape[0])
-                            / baseline_shape[0]
-                        )
-                        col_change = (
-                            abs(current_shape[1] - baseline_shape[1])
-                            / baseline_shape[1]
-                        )
+                    if any(change > threshold for change in shape_drift.values()):
+                        drift_results["drift_detected"] = True
 
-                        drift_results["drift_details"][f"{metric}_rows"] = row_change
-                        drift_results["drift_details"][f"{metric}_cols"] = col_change
-
-                        if row_change > threshold or col_change > threshold:
-                            drift_results["drift_detected"] = True
-
-                elif isinstance(current_metrics[metric], dict) and isinstance(
-                    baseline[metric], dict
-                ):
+                elif isinstance(current_metrics[metric], dict) and isinstance(baseline[metric], dict):
                     # Compare missing values percentage
-                    for col in current_metrics[metric]:
-                        if col in baseline[metric]:
-                            current_val = current_metrics[metric][col]
-                            baseline_val = baseline[metric][col]
+                    missing_drift = self._compare_missing_values_drift(
+                        current_metrics[metric], baseline[metric], threshold
+                    )
+                    drift_results["drift_details"].update(missing_drift)
 
-                            if isinstance(current_val, (int, float)) and isinstance(
-                                baseline_val, (int, float)
-                            ):
-                                change = abs(current_val - baseline_val) / max(
-                                    baseline_val, 1
-                                )
-                                drift_results["drift_details"][
-                                    f"missing_{col}"
-                                ] = change
-
-                                if change > threshold:
-                                    drift_results["drift_detected"] = True
+                    if any(change > threshold for change in missing_drift.values()):
+                        drift_results["drift_detected"] = True
 
         # Calculate overall drift score
         if drift_results["drift_details"]:
