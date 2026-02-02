@@ -60,7 +60,7 @@ class ModelRouter:
         """
         self.request_count += 1
         # Use random for A/B testing routing (not cryptographic purposes)
-        use_model_a = random.random() < self.split
+        use_model_a = random.random() < self.split  # noqa: S311
 
         try:
             # Prepare features

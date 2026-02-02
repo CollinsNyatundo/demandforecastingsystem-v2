@@ -385,7 +385,7 @@ env = os.getenv("ENVIRONMENT", "development")
 
 # Add 0.0.0.0 only in development for local access (development environment only)
 if env == "development":
-    allowed_hosts.append("0.0.0.0")  # Development: allows local access only
+    allowed_hosts.append("0.0.0.0")  # Development: allows local access only  # noqa: S104
 if env == "production":
     # Production hosts must be explicitly configured
     production_hosts = os.getenv("ALLOWED_HOSTS", "yourdomain.com,*.yourdomain.com")
