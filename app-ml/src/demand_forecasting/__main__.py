@@ -5,7 +5,6 @@ as `demand-forecasting` and `python -m demand_forecasting`.
 
 import sys
 from pathlib import Path
-from typing import Any
 
 from kedro.framework.cli.utils import find_run_command
 from kedro.framework.project import configure_project

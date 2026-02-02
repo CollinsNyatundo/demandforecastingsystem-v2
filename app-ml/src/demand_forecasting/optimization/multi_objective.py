@@ -40,7 +40,10 @@ def objective_multi(
 
     Args:
         trial: Optuna trial object
-        X_train, X_test, y_train, y_test: Data splits
+        X_train: Training features
+        X_test: Test features
+        y_train: Training target values
+        y_test: Test target values
         objectives: List of objectives to optimize
 
     Returns:
@@ -179,7 +182,10 @@ class MultiObjectiveOptimizer:
         """Run multi-objective optimization.
 
         Args:
-            X_train, X_test, y_train, y_test: Data splits
+            X_train: Training features
+            X_test: Test features
+            y_train: Training target values
+            y_test: Test target values
             n_trials: Number of trials to run
             timeout: Timeout in seconds
 

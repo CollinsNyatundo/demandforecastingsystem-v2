@@ -10,6 +10,11 @@ from .nodes import preprocess_data
 
 
 def create_pipeline(**kwargs: object) -> Pipeline:
+    """Create the data processing pipeline.
+
+    Returns:
+        Pipeline: Kedro pipeline with data processing nodes
+    """
     return pipeline(
         [
             node(

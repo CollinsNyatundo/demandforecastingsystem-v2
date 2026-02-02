@@ -19,6 +19,15 @@ def generate_shap_explanations(
     catboost_model: "CatBoostRegressor",
     model_input_table: pd.DataFrame,
 ) -> dict[str, Any]:
+    """Generate SHAP explanations for model predictions.
+
+    Args:
+        catboost_model: Trained CatBoost model
+        model_input_table: Input data for explanation generation
+
+    Returns:
+        Dictionary containing SHAP explanation results
+    """
     _LOGGER.debug(
         f"Starting SHAP explanation generation for {len(model_input_table)} samples"
     )

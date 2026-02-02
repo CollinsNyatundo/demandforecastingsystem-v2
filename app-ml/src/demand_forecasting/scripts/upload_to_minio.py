@@ -9,6 +9,7 @@ BUCKET = "demand-forecasting"
 
 
 def upload_data():
+    """Upload data to MinIO S3 storage."""
     fs = s3fs.S3FileSystem(
         client_kwargs={"endpoint_url": ENDPOINT}, key=KEY, secret=SECRET
     )

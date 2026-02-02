@@ -257,7 +257,7 @@ class SimpleDataProfiler:
         with self.metrics_file.open('w') as f:
             json.dump(existing_metrics, f, indent=2, default=str)
 
-    def get_quality_summary(self, dataset_name: str = None) -> dict[str, Any]:
+    def get_quality_summary(self, dataset_name: str | None = None) -> dict[str, Any]:
         """Get quality summary for a specific dataset or all datasets.
 
         Args:

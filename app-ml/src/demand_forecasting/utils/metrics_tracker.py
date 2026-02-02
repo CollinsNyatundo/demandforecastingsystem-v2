@@ -1,7 +1,6 @@
 """Metrics Tracker for Model Performance Monitoring
 
-Tracks model training metrics, validation results, and production performance.
-"""
+Tracks model training metrics, validation results, and production performance."""
 
 import json
 import logging
