@@ -426,8 +426,7 @@ class APIKeyManager:
     - OWASP API Security Top 10 2023 - API2:2023 Broken Authentication
     - FastAPI Security Guide: https://fastapi.tiangolo.com/tutorial/security/
     - NIST SP 800-63B: Digital Authentication Guidelines
-    """
-
+    """  # noqa: D205
     def __init__(self):
         """Initialize API key manager."""
         # Load hashed keys from environment

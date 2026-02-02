@@ -130,6 +130,8 @@ ignore = [
     "D100",    # Missing docstring in public module
     "D104",    # Missing docstring in public package
     "S101",    # Use of assert (needed for tests)
+    "RUF100",  # Unused noqa comments (prevents loop)
+    "SIM102",  # Collapsible if statements (prevents loop)
 ]
 
 # Per-file ignores

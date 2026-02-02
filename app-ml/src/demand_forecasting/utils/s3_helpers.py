@@ -192,7 +192,7 @@ def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:  # 
                 )
 
         elif param == "l2_leaf_reg":
-            if not (MIN_L2_LEAF_REG <= min_val <= MAX_L2_LEAF_REG and MIN_L2_LEAF_REG <= max_val <= MAX_L2_LEAF_REG):
+            if not (MIN_L2_LEAF_REG <= min_val <= MAX_L2_LEAF_REG and MIN_L2_LEAF_REG <= max_val <= MAX_L2_LEAF_REG):  # noqa: SIM102
                 raise ValueError(
                     f"l2_leaf_reg range [{min_val}, {max_val}] is outside valid bounds [{MIN_L2_LEAF_REG}, {MAX_L2_LEAF_REG}]"
                 )
