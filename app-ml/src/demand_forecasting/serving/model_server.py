@@ -5,20 +5,27 @@ Production-grade FastAPI model server for demand forecasting.
 import logging
 import time
 import os
+import secrets
+import hashlib
+import hmac
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 import mlflow
 import numpy as np
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
 from pydantic import BaseModel, validator
+from cachetools import TTLCache
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Rate limiting cache (IP -> attempt count)
+rate_limit_cache = TTLCache(maxsize=10000, ttl=3600)  # 1 hour TTL
 
 # Global model storage
 ml_models = {}
@@ -158,19 +165,162 @@ app.add_middleware(
 )
 
 
+class APIKeyManager:
+    """
+    Secure API key management with constant-time comparison
+    and rate limiting based on OWASP API Security Best Practices.
+    
+    References:
+    - OWASP API Security Top 10 2023 - API2:2023 Broken Authentication
+    - FastAPI Security Guide: https://fastapi.tiangolo.com/tutorial/security/
+    - NIST SP 800-63B: Digital Authentication Guidelines
+    """
+    
+    def __init__(self):
+        # Load hashed keys from environment
+        self.valid_key_hashes = self._load_api_key_hashes()
+    
+    def _load_api_key_hashes(self) -> Dict[str, dict]:
+        """
+        Load API keys from environment and hash them for secure storage.
+        
+        In production, load from secure vault (AWS Secrets Manager,
+        HashiCorp Vault, Azure Key Vault, etc.)
+        """
+        keys_str = os.environ.get("VALID_API_KEYS", "")
+        keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+        
+        if not keys:
+            logger.warning("No VALID_API_KEYS configured. API authentication will fail.")
+            return {}
+        
+        hashed_keys = {}
+        for key in keys:
+            # Hash the key for storage using SHA-256
+            key_hash = hashlib.sha256(key.encode()).hexdigest()
+            hashed_keys[key_hash] = {
+                "hash": key_hash,
+                "created_at": datetime.utcnow().isoformat()
+            }
+        
+        logger.info(f"Loaded {len(hashed_keys)} API key hashes")
+        return hashed_keys
+    
+    def _hash_api_key(self, api_key: str) -> str:
+        """Hash provided API key for secure comparison."""
+        return hashlib.sha256(api_key.encode()).hexdigest()
+    
+    def verify_key_constant_time(self, provided_key: str) -> bool:
+        """
+        Verify API key using constant-time comparison to prevent timing attacks.
+        
+        Uses secrets.compare_digest() which takes the same amount of time
+        to compare strings regardless of where differences occur.
+        
+        This is the recommended method per OWASP and FastAPI security guidelines.
+        """
+        provided_hash = self._hash_api_key(provided_key)
+        
+        # Use secrets.compare_digest for constant-time comparison
+        # This prevents timing attacks by ensuring comparison time
+        # is independent of key validity
+        for valid_hash in self.valid_key_hashes.keys():
+            if secrets.compare_digest(provided_hash, valid_hash):
+                return True
+        
+        return False
+
+
+# Global API key manager instance
+api_key_manager = APIKeyManager()
+
+
+async def verify_api_key_secure(
+    request: Request,
+    x_api_key: Optional[str] = Header(None)
+) -> str:
+    """
+    Secure API key verification with rate limiting and constant-time comparison.
+    
+    Implements OWASP API Security Best Practices:
+    - API2:2023 Broken Authentication
+    - API4:2023 Unrestricted Resource Consumption
+    
+    Security Features:
+    - Constant-time comparison prevents timing attacks
+    - Rate limiting prevents brute force attacks
+    - No logging of sensitive key material
+    - IP-based attempt tracking
+    
+    Args:
+        request: FastAPI Request object for IP extraction
+        x_api_key: API key from X-API-Key header
+        
+    Returns:
+        Verified API key string
+        
+    Raises:
+        HTTPException: For authentication failures with appropriate status codes
+    """
+    client_ip = request.client.host
+    
+    # Check for missing API key
+    if not x_api_key:
+        logger.warning(f"Missing API key from {client_ip}")
+        raise HTTPException(
+            status_code=401,
+            detail="Missing API key. Include X-API-Key header."
+        )
+    
+    # Rate limiting - prevent brute force attacks
+    # Maximum 10 failed attempts per hour per IP
+    attempts = rate_limit_cache.get(client_ip, 0)
+    if attempts >= 10:
+        logger.error(f"Rate limit exceeded for {client_ip}")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many authentication attempts. Try again later.",
+            headers={"Retry-After": "3600"}
+        )
+    
+    # Verify key using constant-time comparison
+    is_valid = api_key_manager.verify_key_constant_time(x_api_key)
+    
+    if not is_valid:
+        # Increment failed attempt counter
+        rate_limit_cache[client_ip] = attempts + 1
+        
+        # Log WITHOUT including any part of the invalid key
+        # This prevents sensitive data leakage
+        logger.warning(
+            f"Invalid API key attempt from {client_ip}. "
+            f"Attempt {attempts + 1}/10"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid API key"
+        )
+    
+    # Reset rate limit on successful authentication
+    if client_ip in rate_limit_cache:
+        del rate_limit_cache[client_ip]
+    
+    logger.info(f"Successful authentication from {client_ip}")
+    return x_api_key
+
+
 async def verify_api_key(x_api_key: str = Header(None)) -> str:
     """
-    Verify API key from request headers.
-
-    Args:
-        x_api_key: API key from X-API-Key header
-
-    Returns:
-        Verified API key
-
-    Raises:
-        HTTPException: If API key is missing or invalid
+    Legacy API key verification - DEPRECATED
+    
+    This function is kept for backward compatibility but should
+    be replaced with verify_api_key_secure in all endpoints.
+    
+    SECURITY WARNING: This function is vulnerable to timing attacks.
+    Use verify_api_key_secure instead.
     """
+    logger.warning("Using deprecated verify_api_key function - vulnerable to timing attacks")
+    
     # Load valid API keys from environment variable (comma-separated)
     valid_api_keys = os.environ.get("VALID_API_KEYS", "").split(",")
     valid_api_keys = [key.strip() for key in valid_api_keys if key.strip()]
@@ -181,6 +331,7 @@ async def verify_api_key(x_api_key: str = Header(None)) -> str:
         )
 
     if x_api_key not in valid_api_keys:
+        # SECURITY WARNING: Logging partial API key can leak information
         logger.warning(f"Invalid API key attempt: {x_api_key[:10]}...")
         raise HTTPException(status_code=403, detail="Invalid API key")
 
@@ -198,7 +349,7 @@ async def health_check():
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_key)):
+async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_key_secure)):
     """Main prediction endpoint with metrics tracking."""
     start_time = time.time()
     model_id = "production"
