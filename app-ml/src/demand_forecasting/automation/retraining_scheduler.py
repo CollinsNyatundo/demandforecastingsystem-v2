@@ -28,6 +28,7 @@ class RetrainingScheduler:
     """Automated retraining with multiple trigger types."""
 
     def __init__(self, config: dict[str, Any]):
+        """Initialize retraining scheduler."""
         self.time_interval_days = config.get("time_interval_days", 7)
         self.performance_threshold = config.get("performance_threshold", 5.0)
         self.data_volume_threshold = config.get("data_volume_threshold", 10000)

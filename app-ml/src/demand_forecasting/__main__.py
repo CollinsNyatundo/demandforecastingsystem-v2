@@ -11,7 +11,7 @@ from kedro.framework.cli.utils import find_run_command
 from kedro.framework.project import configure_project
 
 
-def main(*args, **kwargs) -> None:
+def main(*args, **kwargs: object) -> None:
     """Entry point for the demand forecasting package.
 
     Configures and runs the Kedro project with the package name.

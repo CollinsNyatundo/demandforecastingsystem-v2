@@ -150,8 +150,8 @@ def train_final_model(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     model_comparison: dict[str, Any],
-    catboost_model: Any = None,
-) -> Any:
+    catboost_model: object = None,
+) -> object:
     """Train the final model based on validated comparison results.
 
     Follows defensive programming and explicit validation principles.

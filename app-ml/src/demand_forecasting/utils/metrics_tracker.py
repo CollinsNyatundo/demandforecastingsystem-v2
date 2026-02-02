@@ -93,7 +93,7 @@ class MetricsTracker:
         }
         logger.info(f"Logged test metrics for {model_name}: {metrics}")
 
-    def log_metadata(self, key: str, value: Any):
+    def log_metadata(self, key: str, value: object):
         """Log arbitrary metadata.
 
         Args:

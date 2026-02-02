@@ -9,7 +9,7 @@ from ...utils.gx_profiler_simple import profile_dataset_gx
 from .nodes import preprocess_data
 
 
-def create_pipeline(**kwargs) -> Pipeline:
+def create_pipeline(**kwargs: object) -> Pipeline:
     return pipeline(
         [
             node(

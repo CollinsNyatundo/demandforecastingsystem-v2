@@ -14,7 +14,7 @@ from .catboost_nodes import optimize_catboost_params, train_catboost_model
 from .nodes import compare_demand_models, train_final_model, train_single_model
 
 
-def create_pipeline(**kwargs) -> Pipeline:
+def create_pipeline(**kwargs: object) -> Pipeline:
     """Create the demand modeling pipeline.
 
     Returns:

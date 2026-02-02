@@ -295,7 +295,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Implements defense-in-depth security headers for production deployment.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next) -> Response:
         response: Response = await call_next(request)
 
         # Prevent clickjacking attacks
@@ -591,7 +591,7 @@ async def verify_api_key(x_api_key: str = Header(None)) -> str:
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health_check():
+async def health_check() -> HealthResponse:
     """Health check endpoint."""
     return HealthResponse(
         status="healthy",
@@ -601,7 +601,7 @@ async def health_check():
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_key_secure)):
+async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_key_secure)) -> PredictionResponse:
     """Main prediction endpoint with metrics tracking."""
     start_time = time.time()
     model_id = "production"

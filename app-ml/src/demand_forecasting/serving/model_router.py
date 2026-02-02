@@ -136,6 +136,7 @@ class ABTestMetrics:
     """Collect and compare metrics for A/B test."""
 
     def __init__(self, test_name: str):
+        """Initialize A/B test collector."""
         self.test_name = test_name
         self.metrics_a = []
         self.metrics_b = []

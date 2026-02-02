@@ -1,7 +1,7 @@
 """Model explainability using SHAP for demand forecasting."""
 
 import logging
-from typing import Union
+from typing import Any, Union
 
 import numpy as np
 import pandas as pd

@@ -22,6 +22,7 @@ class EnsembleManager:
     """Manage ensemble methods for demand forecasting."""
 
     def __init__(self):
+        """Initialize ensemble manager."""
         self.ensemble = None
         self.base_models = {}
         self.meta_model = None
