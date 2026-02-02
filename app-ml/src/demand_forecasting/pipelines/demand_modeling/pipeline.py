@@ -1,4 +1,4 @@
-"""Demand Modeling Pipeline
+"""Demand Modeling Pipeline.
 
 Orchestrates training of demand forecasting models including
 random forest, XGBoost, and CatBoost with hyperparameter optimization.

@@ -200,12 +200,12 @@ class DataProfiler:
         self, current_shape: tuple[int, int], baseline_shape: tuple[int, int], threshold: float
     ) -> dict[str, float]:
         """Compare shape drift between current and baseline shapes.
-        
+
         Args:
             current_shape: Current dataframe shape (rows, cols)
             baseline_shape: Baseline dataframe shape (rows, cols)
             threshold: Drift detection threshold
-            
+
         Returns:
             Dictionary with drift details for rows and columns
         """
@@ -224,20 +224,19 @@ class DataProfiler:
         self, current_missing: dict[str, Any], baseline_missing: dict[str, Any], threshold: float
     ) -> dict[str, float]:
         """Compare missing values drift between current and baseline.
-        
+
         Args:
             current_missing: Current missing values dictionary
             baseline_missing: Baseline missing values dictionary
             threshold: Drift detection threshold
-            
+
         Returns:
             Dictionary with drift details for missing values
         """
         drift_details = {}
 
-        for col in current_missing:
+        for col, current_val in current_missing.items():
             if col in baseline_missing:
-                current_val = current_missing[col]
                 baseline_val = baseline_missing[col]
 
                 if isinstance(current_val, (int, float)) and isinstance(baseline_val, (int, float)):

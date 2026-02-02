@@ -1,4 +1,4 @@
-"""Demand Forecasting file for ensuring the package is executable
+"""Demand Forecasting file for ensuring the package is executable.
 
 as `demand-forecasting` and `python -m demand_forecasting`.
 """
