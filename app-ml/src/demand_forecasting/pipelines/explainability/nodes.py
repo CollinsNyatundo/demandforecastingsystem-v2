@@ -5,6 +5,8 @@ SHAP-based model interpretation and feature importance analysis.
 
 import logging
 from typing import Any
+import tempfile
+from pathlib import Path
 
 import mlflow
 import numpy as np
@@ -76,9 +78,10 @@ def log_explainability_artifacts(
             feature_importance = shap_explanations["feature_importance"]
 
             # Log feature importance as artifact
-            importance_path = "/tmp/feature_importance.csv"
-            feature_importance.to_csv(importance_path, index=False)
-            mlflow.log_artifact(importance_path, artifact_path="explanations")
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as tmp_file:
+                importance_path = tmp_file.name
+                feature_importance.to_csv(importance_path, index=False)
+                mlflow.log_artifact(importance_path, artifact_path="explanations")
 
             # Log SHAP summary statistics
             shap_summary = {

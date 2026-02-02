@@ -59,6 +59,7 @@ class ModelRouter:
             Dictionary with prediction and routing info
         """
         self.request_count += 1
+        # Use random for A/B testing routing (not cryptographic purposes)
         use_model_a = random.random() < self.split
 
         try:
