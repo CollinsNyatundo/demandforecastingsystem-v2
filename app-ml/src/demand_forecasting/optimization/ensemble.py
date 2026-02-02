@@ -1,6 +1,8 @@
 """Ensemble methods for demand forecasting using scikit-learn."""
 
+import joblib
 import logging
+import time
 from typing import Any, Optional
 
 import numpy as np
@@ -181,8 +183,6 @@ class EnsembleManager:
             raise ValueError("Ensemble not created. Call create_*_ensemble() first.")
 
         try:
-            import time
-
             start_time = time.time()
 
             # Train ensemble
@@ -287,8 +287,6 @@ class EnsembleManager:
             raise ValueError("Ensemble not trained.")
 
         try:
-            import time
-
             start_time = time.time()
 
             # Make predictions
@@ -490,8 +488,6 @@ class EnsembleManager:
             raise ValueError("No ensemble to save.")
 
         try:
-            import joblib
-
             joblib.dump(self.ensemble, filepath)
             logger.info(f"Ensemble saved to {filepath}")
 
@@ -502,8 +498,6 @@ class EnsembleManager:
     def load_ensemble(self, filepath: str):
         """Load a trained ensemble from disk."""
         try:
-            import joblib
-
             self.ensemble = joblib.load(filepath)
             self.ensemble_type = "loaded"
             logger.info(f"Ensemble loaded from {filepath}")

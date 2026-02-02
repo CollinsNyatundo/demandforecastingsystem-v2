@@ -12,7 +12,7 @@ import pandas as pd
 from catboost import CatBoostRegressor
 from optuna.samplers import TPESampler
 from optuna.trial import Trial
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 
 _LOGGER = logging.getLogger(__name__)
@@ -191,8 +191,6 @@ def train_catboost_model(
             y_pred = model.predict(X_test)
 
             # Compute metrics (same as notebook)
-            from sklearn.metrics import mean_absolute_error, mean_squared_error
-
             mae = mean_absolute_error(y_test, y_pred)
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 

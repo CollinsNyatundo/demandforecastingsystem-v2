@@ -1,8 +1,10 @@
 """Production-grade FastAPI model server for demand forecasting."""
 
+import catboost
 import hashlib
 import logging
 import math
+import mlflow
 import os
 import secrets
 import time
@@ -31,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 # Rate limiting cache (IP -> attempt count)
 rate_limit_cache = TTLCache(maxsize=10000, ttl=3600)  # 1 hour TTL
+
+# Rate limiting constants
+MAX_FAILED_ATTEMPTS_PER_HOUR = 10
 
 # Global model storage
 ml_models = {}
@@ -213,8 +218,6 @@ async def lifespan(app: FastAPI):
 
         # Load production model from MLflow with proper error handling
         try:
-            import mlflow
-
             model_uri = "models:/demand_forecasting/Production"
             ml_models["production"] = mlflow.pyfunc.load_model(model_uri)
             logger.info("Production model loaded successfully from MLflow registry")
@@ -223,8 +226,6 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to load production model from MLflow: {mlflow_error}")
             # Try to load from local path as fallback
             try:
-                import catboost
-
                 ml_models["production"] = catboost.CatBoost().load_model(
                     "models/experiments/final_catboost_model.cbm"
                 )
@@ -410,6 +411,7 @@ app.add_middleware(
 
 class APIKeyManager:
     """Secure API key management with constant-time comparison
+
     and rate limiting based on OWASP API Security Best Practices.
 
     References:
@@ -526,7 +528,7 @@ async def verify_api_key_secure(
     # Rate limiting - prevent brute force attacks
     # Maximum 10 failed attempts per hour per IP
     attempts = rate_limit_cache.get(client_ip, 0)
-    if attempts >= 10:
+    if attempts >= MAX_FAILED_ATTEMPTS_PER_HOUR:
         logger.error(f"Rate limit exceeded for {client_ip}")
         raise HTTPException(
             status_code=429,

@@ -12,6 +12,13 @@ from pandas_profiling import ProfileReport
 
 logger = logging.getLogger(__name__)
 
+# Data quality threshold constants
+HIGH_MISSING_VALUES_THRESHOLD = 5
+SMALL_DATASET_THRESHOLD = 1000
+OUTLIER_THRESHOLD = 10
+MAX_PROFILES_PER_DATASET = 10
+DATAFRAME_DIMENSIONS = 2
+
 
 class DataProfiler:
     """Automated data profiling and quality monitoring inspired by EDA notebook.
@@ -115,10 +122,10 @@ class DataProfiler:
         total_missing = df.isnull().sum().sum()
         missing_percentage = (total_missing / (len(df) * len(df.columns))) * 100
 
-        if missing_percentage > 5:
+        if missing_percentage > HIGH_MISSING_VALUES_THRESHOLD:
             stats["quality_flags"].append("HIGH_MISSING_VALUES")
 
-        if len(df) < 1000:
+        if len(df) < SMALL_DATASET_THRESHOLD:
             stats["quality_flags"].append("SMALL_DATASET")
 
         # Check for potential target column (cnt)
@@ -132,7 +139,7 @@ class DataProfiler:
             }
             stats["target_analysis"] = cnt_stats
 
-            if cnt_stats["zero_percentage"] > 10:
+            if cnt_stats["zero_percentage"] > OUTLIER_THRESHOLD:
                 stats["quality_flags"].append("HIGH_ZERO_COUNT")
 
         return stats
@@ -159,9 +166,9 @@ class DataProfiler:
 
         existing_metrics[dataset_name].append(metrics)
 
-        # Keep only last 10 profiles per dataset
-        if len(existing_metrics[dataset_name]) > 10:
-            existing_metrics[dataset_name] = existing_metrics[dataset_name][-10:]
+        # Keep only last MAX_PROFILES_PER_DATASET profiles per dataset
+        if len(existing_metrics[dataset_name]) > MAX_PROFILES_PER_DATASET:
+            existing_metrics[dataset_name] = existing_metrics[dataset_name][-MAX_PROFILES_PER_DATASET:]
 
         # Save updated metrics
         with self.metrics_file.open("w") as f:
@@ -231,7 +238,7 @@ class DataProfiler:
                     current_shape = current_metrics[metric]
                     baseline_shape = baseline[metric]
 
-                    if len(current_shape) == 2 and len(baseline_shape) == 2:
+                    if len(current_shape) == DATAFRAME_DIMENSIONS and len(baseline_shape) == DATAFRAME_DIMENSIONS:
                         row_change = (
                             abs(current_shape[0] - baseline_shape[0])
                             / baseline_shape[0]

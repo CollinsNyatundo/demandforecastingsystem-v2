@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class DatasetMonitor:
     """Monitors dataset freshness and logs update events.
+
     Now supports S3 file timestamp checking for accurate freshness monitoring.
     """
 
@@ -144,6 +145,7 @@ class DatasetMonitor:
         self, dataset_uri: str, max_age_hours: int = 24, alert: bool = True
     ) -> tuple[bool, float | None]:
         """Check if dataset is fresh (updated within max_age_hours).
+
         Now checks actual S3 file timestamps first, falls back to logged metrics.
 
         Args:

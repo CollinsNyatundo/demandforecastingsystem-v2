@@ -1,9 +1,11 @@
 """S3 and validation helper utilities for Demand Forecasting pipeline.
+
 Provides reusable functions for S3 operations and parameter validation.
 """
 
 import logging
 import os
+import re
 from typing import Any
 
 import s3fs
@@ -404,8 +406,6 @@ def parse_s3_timestamp_path(path: str) -> str | None:
         parts = path.split("/")
 
         # Look for YYYY-MM-DD pattern
-        import re
-
         timestamp_pattern = r"\d{4}-\d{2}-\d{2}"
 
         for part in parts:

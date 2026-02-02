@@ -8,6 +8,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostRegressor
+from scipy.spatial.distance import pdist
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import cross_val_score
 
@@ -314,8 +315,6 @@ class MultiObjectiveOptimizer:
         """Calculate diversity metrics for Pareto front."""
         try:
             # Calculate pairwise distances
-            from scipy.spatial.distance import pdist
-
             distances = pdist(objective_values)
 
             return {

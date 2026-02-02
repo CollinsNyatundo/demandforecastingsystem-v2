@@ -1,4 +1,5 @@
 """Great Expectations data profiling and validation utilities.
+
 Production-compatible alternative to pandas-profiling.
 """
 

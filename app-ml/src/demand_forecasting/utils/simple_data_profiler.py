@@ -1,4 +1,5 @@
 """Simplified data profiling and quality monitoring utilities.
+
 Uses basic pandas profiling instead of pandas-profiling to avoid dependency issues.
 """
 

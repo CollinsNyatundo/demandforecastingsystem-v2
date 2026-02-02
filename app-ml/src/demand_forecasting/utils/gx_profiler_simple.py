@@ -1,4 +1,5 @@
 """Great Expectations data profiling and validation utilities.
+
 Production-compatible alternative to pandas-profiling.
 """
 
@@ -11,6 +12,13 @@ import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Data quality threshold constants
+OUTLIER_PERCENTAGE_THRESHOLD = 5
+MISSING_VALUES_THRESHOLD = 20
+ZERO_COUNT_THRESHOLD = 5
+SMALL_DATASET_THRESHOLD = 1000
+HIGH_VARIANCE_THRESHOLD = 10
 
 
 def profile_dataset_gx(
@@ -79,7 +87,7 @@ def profile_dataset_gx(
                     {
                         "column": col,
                         "check": "outliers",
-                        "status": "warning" if outlier_percentage > 5 else "info",
+                        "status": "warning" if outlier_percentage > OUTLIER_PERCENTAGE_THRESHOLD else "info",
                         "message": f"{len(outliers)} outliers detected ({outlier_percentage:.1f}%)",
                     }
                 )
@@ -92,7 +100,7 @@ def profile_dataset_gx(
                     {
                         "column": col,
                         "check": "zero_values",
-                        "status": "warning" if zero_percentage > 20 else "info",
+                        "status": "warning" if zero_percentage > MISSING_VALUES_THRESHOLD else "info",
                         "message": f"{zero_count} zero values ({zero_percentage:.1f}%)",
                     }
                 )
@@ -125,10 +133,10 @@ def profile_dataset_gx(
     total_missing = df.isnull().sum().sum()
     missing_percentage = (total_missing / (len(df) * len(df.columns))) * 100
 
-    if missing_percentage > 5:
+    if missing_percentage > ZERO_COUNT_THRESHOLD:
         profile_data["quality_flags"].append("HIGH_MISSING_VALUES")
 
-    if len(df) < 1000:
+    if len(df) < SMALL_DATASET_THRESHOLD:
         profile_data["quality_flags"].append("SMALL_DATASET")
 
     # Special handling for target column (cnt)
@@ -142,7 +150,7 @@ def profile_dataset_gx(
         }
         profile_data["target_analysis"] = cnt_stats
 
-        if cnt_stats["zero_percentage"] > 10:
+        if cnt_stats["zero_percentage"] > HIGH_VARIANCE_THRESHOLD:
             profile_data["quality_flags"].append("HIGH_ZERO_COUNT")
 
         # Check for negative values (shouldn't exist for bike counts)

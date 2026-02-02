@@ -3,6 +3,7 @@
 Training nodes for random forest and model comparison logic.
 """
 
+import datetime
 import logging
 from typing import Any
 
@@ -120,7 +121,6 @@ def compare_demand_models(
         comparison["best_model"] = best_model
 
         # Add timestamp for audit trail (important for ML systems)
-        import datetime
         comparison["comparison_timestamp"] = datetime.datetime.now().isoformat()
 
         # Comprehensive logging for production monitoring
