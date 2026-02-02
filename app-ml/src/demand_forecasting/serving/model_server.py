@@ -264,6 +264,18 @@ async def verify_api_key_secure(
     """
     client_ip = request.client.host
     
+    # Check for X-Forwarded-For header (common behind proxy/load balancer)
+    # This allows proper rate limiting when behind reverse proxy
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # X-Forwarded-For can contain multiple IPs, take the first one (original client)
+        client_ip = forwarded_for.split(",")[0].strip()
+    
+    # Check for X-Real-IP header (alternative to X-Forwarded-For)
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        client_ip = real_ip.strip()
+    
     # Check for missing API key
     if not x_api_key:
         logger.warning(f"Missing API key from {client_ip}")

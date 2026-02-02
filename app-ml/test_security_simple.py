@@ -134,35 +134,90 @@ def test_fastapi_endpoints():
     print("✅ FastAPI endpoint tests passed!\n")
 
 def test_rate_limiting():
-    """Test rate limiting functionality."""
-    print("🚦 Testing rate limiting...")
+    """Test rate limiting functionality with different client IPs."""
+    print("🚦 Testing rate limiting with multiple client IPs...")
     
     from fastapi.testclient import TestClient
-    from demand_forecasting.serving.model_server import app
+    from demand_forecasting.serving.model_server import app, rate_limit_cache
     
     client = TestClient(app)
     
-    # Make 12 failed attempts to trigger rate limiting
+    # Clear rate limit cache to start fresh
+    rate_limit_cache.clear()
+    
+    # Test with different client IPs using X-Forwarded-For headers
+    client_ips = ['192.168.1.100', '192.168.1.101', '192.168.1.102', '192.168.1.103', '192.168.1.104']
+    
     responses = []
-    for i in range(12):
-        response = client.post('/predict', headers={'X-API-Key': f'invalid_key_{i}'}, json={
-            'features': {'temp': 20.0, 'humidity': 50.0, 'wind_speed': 10.0, 'hour': 12, 'day_of_week': 3}
-        })
+    for i, ip in enumerate(client_ips):
+        # Make failed attempt with different client IP
+        response = client.post('/predict', 
+            headers={
+                'X-API-Key': f'invalid_key_{i}', 
+                'X-Forwarded-For': ip
+            }, 
+            json={'features': {'temp': 20.0, 'humidity': 50.0, 'wind_speed': 10.0, 'hour': 12, 'day_of_week': 3}}
+        )
         responses.append(response)
+        print(f"   Client {i+1} ({ip}): Status {response.status_code}")
+    
+    # Each client should get 403 (invalid key) since they haven't exceeded rate limit yet
+    for i, response in enumerate(responses):
+        assert response.status_code == 403, f"Client {i+1} should get 403, got {response.status_code}"
+    
+    print("✅ Multiple client IPs test passed")
+    
+    # Now test rate limiting with a single IP
+    print("   Testing rate limiting with single IP...")
+    
+    # Clear cache and test with same IP
+    rate_limit_cache.clear()
+    
+    # Make 12 failed attempts with same IP to trigger rate limiting
+    single_ip_responses = []
+    for i in range(12):
+        response = client.post(
+            '/predict',
+            headers={'X-API-Key': f'invalid_key_{i}', 'X-Forwarded-For': '192.168.1.200'},
+            json={'features': {'temp': 20.0, 'humidity': 50.0, 'wind_speed': 10.0, 'hour': 12, 'day_of_week': 3}}
+        )
+        single_ip_responses.append(response)
+        print(f"   Attempt {i+1}: Status {response.status_code}")
     
     # First 10 should return 403 (invalid key)
     for i in range(10):
-        assert responses[i].status_code == 403
+        assert single_ip_responses[i].status_code == 403, f"Attempt {i+1} should get 403, got {single_ip_responses[i].status_code}"
     
     # After 10, should return 429 (rate limited)
     for i in range(10, 12):
-        assert responses[i].status_code == 429
-        assert 'Too many authentication attempts' in responses[i].json()['detail']
-        assert 'Retry-After' in responses[i].headers
-        assert responses[i].headers['Retry-After'] == '3600'
+        assert single_ip_responses[i].status_code == 429, f"Attempt {i+1} should get 429, got {single_ip_responses[i].status_code}"
+        assert 'Too many authentication attempts' in single_ip_responses[i].json()['detail']
+        assert 'Retry-After' in single_ip_responses[i].headers
+        assert single_ip_responses[i].headers['Retry-After'] == '3600'
     
     print("✅ Rate limiting threshold test passed")
     print("✅ Rate limiting headers test passed")
+    
+    # Test rate limit reset with different IP
+    print("   Testing rate limit reset with different IP...")
+    
+    # Use a different IP to bypass rate limit
+    response = client.post(
+        '/predict',
+        headers={'X-API-Key': 'test_key_123', 'X-Forwarded-For': '192.168.1.201'},
+        json={'features': {'temp': 20.0, 'humidity': 50.0, 'wind_speed': 10.0, 'hour': 12, 'day_of_week': 3}}
+    )
+    assert response.status_code == 503  # Model not loaded, but auth passed
+    print("✅ Rate limit reset test passed")
+    
+    # Now test that the original IP is still rate limited
+    response = client.post(
+        '/predict',
+        headers={'X-API-Key': 'another_invalid_key', 'X-Forwarded-For': '192.168.1.200'},
+        json={'features': {'temp': 20.0, 'humidity': 50.0, 'wind_speed': 10.0, 'hour': 12, 'day_of_week': 3}}
+    )
+    assert response.status_code == 429  # Should still be rate limited
+    print("✅ Rate limit persistence test passed")
     
     print("✅ Rate limiting tests passed!\n")
 
