@@ -275,7 +275,7 @@ class EnsembleManager:
             logger.error(f"Ensemble training failed: {e}")
             raise
 
-    def evaluate_ensemble(self, X_test, y_test) -> dict[str, Any]:
+    def evaluate_ensemble(self, X_test: pd.DataFrame, y_test: pd.Series) -> dict[str, Any]:
         """Evaluate ensemble performance on test set.
 
         Args:
@@ -415,7 +415,7 @@ class EnsembleManager:
             logger.error(f"Failed to get feature importance: {e}")
             return {"error": str(e)}
 
-    def cross_validate_ensemble(self, X, y, cv_folds: int = 5) -> dict[str, Any]:
+    def cross_validate_ensemble(self, X: pd.DataFrame, y: pd.Series, cv_folds: int = 5) -> dict[str, Any]:
         """Perform cross-validation on the ensemble.
 
         Args:

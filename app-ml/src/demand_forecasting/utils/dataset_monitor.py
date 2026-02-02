@@ -88,7 +88,7 @@ class DatasetMonitor:
         }
 
         # Append to events log
-        with open(self.events_file, "a") as f:
+        with self.events_file.open("a") as f:
             f.write(json.dumps(event) + "\n")
 
         logger.info(
@@ -221,7 +221,7 @@ class DatasetMonitor:
         }
 
         # Append to events log
-        with open(self.events_file, "a") as f:
+        with self.events_file.open("a") as f:
             f.write(json.dumps(event) + "\n")
 
         logger.info(f"Dataset metrics logged: {dataset_uri} - {metrics}")
@@ -245,7 +245,7 @@ class DatasetMonitor:
             return []
 
         events = []
-        with open(self.events_file) as f:
+        with self.events_file.open() as f:
             for line in f:
                 try:
                     event = json.loads(line.strip())

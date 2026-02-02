@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 import optuna
+import pandas as pd
 from catboost import CatBoostRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import cross_val_score
@@ -32,7 +33,7 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def objective_multi(
-    trial, X_train, X_test, y_train, y_test, objectives: list[str] | None = None
+    trial: Any, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, objectives: list[str] | None = None
 ) -> tuple[float, ...]:
     """Multi-objective optimization function.
 
