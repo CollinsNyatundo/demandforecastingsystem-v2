@@ -8,7 +8,7 @@ SECRET = "minioadmin"  # Development credentials - should use environment variab
 BUCKET = "demand-forecasting"
 
 
-def upload_data():
+def upload_data() -> None:
     """Upload data to MinIO S3 storage."""
     fs = s3fs.S3FileSystem(
         client_kwargs={"endpoint_url": ENDPOINT}, key=KEY, secret=SECRET

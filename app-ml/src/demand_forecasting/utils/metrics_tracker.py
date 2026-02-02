@@ -38,7 +38,7 @@ class MetricsTracker:
         model_name: str,
         metrics: dict[str, float],
         hyperparameters: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         """Log training metrics for a model.
 
         Args:
@@ -58,7 +58,7 @@ class MetricsTracker:
         model_name: str,
         metrics: dict[str, float],
         dataset_info: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         """Log validation metrics for a model.
 
         Args:
@@ -78,7 +78,7 @@ class MetricsTracker:
         model_name: str,
         metrics: dict[str, float],
         predictions_summary: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         """Log test/production metrics for a model.
 
         Args:
@@ -93,7 +93,7 @@ class MetricsTracker:
         }
         logger.info(f"Logged test metrics for {model_name}: {metrics}")
 
-    def log_metadata(self, key: str, value: object):
+    def log_metadata(self, key: str, value: object) -> None:
         """Log arbitrary metadata.
 
         Args:
@@ -165,7 +165,7 @@ class MetricsTracker:
 
         return summary
 
-    def save_to_json(self, filepath: str):
+    def save_to_json(self, filepath: str) -> None:
         """Save metrics to JSON file.
 
         Args:
@@ -179,7 +179,7 @@ class MetricsTracker:
 
         logger.info(f"Metrics saved to {filepath}")
 
-    def save_to_csv(self, filepath: str, metrics_type: str = "validation"):
+    def save_to_csv(self, filepath: str, metrics_type: str = "validation") -> None:
         """Save metrics to CSV file for easy analysis.
 
         Args:
@@ -221,7 +221,7 @@ class MetricsTracker:
 
         logger.info(f"{metrics_type.capitalize()} metrics saved to {filepath}")
 
-    def load_from_json(self, filepath: str):
+    def load_from_json(self, filepath: str) -> None:
         """Load metrics from JSON file.
 
         Args:

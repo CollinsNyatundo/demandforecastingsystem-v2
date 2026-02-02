@@ -73,7 +73,7 @@ class DatasetMonitor:
         dag_id: str,
         run_id: str,
         metadata: dict[str, Any] | None = None,
-    ):
+    ) -> None:
         """Log a dataset update event.
 
         Args:
@@ -209,7 +209,7 @@ class DatasetMonitor:
         metrics: dict[str, Any],
         task_id: str | None = None,
         dag_id: str | None = None,
-    ):
+    ) -> None:
         """Log quality metrics for a dataset.
 
         Args:
@@ -355,7 +355,7 @@ class DatasetMonitor:
             max_age_hours: Maximum acceptable age in hours
 
         Returns:
-            List of dictionaries with dataset info
+            List of stale dataset info
         """
         freshness_results = self.check_all_datasets_freshness(max_age_hours)
         stale = []
@@ -408,7 +408,7 @@ class DatasetMonitor:
 
         return "\n".join(report)
 
-    def export_metrics_to_csv(self, output_path: str):
+    def export_metrics_to_csv(self, output_path: str) -> None:
         """Export dataset metrics to CSV for analysis.
 
         Args:
@@ -446,7 +446,7 @@ class DatasetMonitor:
             logger.warning("Corrupted metrics file, starting fresh")
             return {}
 
-    def _save_metrics(self, metrics: dict[str, Any]):
+    def _save_metrics(self, metrics: dict[str, Any]) -> None:
         """Save metrics to JSON file."""
         with self.metrics_file.open("w") as f:
             json.dump(metrics, f, indent=2)
