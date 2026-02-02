@@ -148,7 +148,7 @@ class DataProfiler:
         existing_metrics = {}
         if self.metrics_file.exists():
             try:
-                with open(self.metrics_file) as f:
+                with self.metrics_file.open() as f:
                     existing_metrics = json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 logger.warning("Could not load existing metrics file, starting fresh")
@@ -164,7 +164,7 @@ class DataProfiler:
             existing_metrics[dataset_name] = existing_metrics[dataset_name][-10:]
 
         # Save updated metrics
-        with open(self.metrics_file, "w") as f:
+        with self.metrics_file.open("w") as f:
             json.dump(existing_metrics, f, indent=2, default=str)
 
     def get_quality_summary(self, dataset_name: str | None = None) -> dict[str, Any]:
@@ -179,7 +179,7 @@ class DataProfiler:
         if not self.metrics_file.exists():
             return {"error": "No metrics file found"}
 
-        with open(self.metrics_file) as f:
+        with self.metrics_file.open() as f:
             all_metrics = json.load(f)
 
         if dataset_name:

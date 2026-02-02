@@ -10,6 +10,13 @@ from scipy import stats
 
 logger = logging.getLogger(__name__)
 
+# Constants for magic values
+DEFAULT_DAYS_INTERVAL = 2
+DEFAULT_HOURS_INTERVAL = 4
+MIN_PERFORMANCE_THRESHOLD = 0.05
+DEFAULT_PERFORMANCE_THRESHOLD = 0.5
+DEFAULT_DATA_VOLUME_THRESHOLD = 10000
+
 
 class RetrainingScheduler:
     """Automated retraining with multiple trigger types."""
@@ -208,7 +215,7 @@ class RetrainingScheduler:
                 order_by=["start_time DESC"],
             )
 
-            if len(recent_runs) < 2:
+            if len(recent_runs) < DEFAULT_DAYS_INTERVAL:
                 logger.info("Insufficient runs for drift analysis")
                 return False
 
@@ -219,7 +226,7 @@ class RetrainingScheduler:
                 if rmse is not None:
                     recent_rmse_values.append(rmse)
 
-            if len(recent_rmse_values) < 2:
+            if len(recent_rmse_values) < DEFAULT_DAYS_INTERVAL:
                 return False
 
             # Statistical test for performance drift
@@ -246,7 +253,7 @@ class RetrainingScheduler:
                 cohens_d = 0
 
             should_trigger = (
-                p_value < 0.05 and cohens_d > 0.5
+                p_value < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
             )  # Significant degradation
 
             if should_trigger:
@@ -298,9 +305,9 @@ class RetrainingScheduler:
         """Calculate retraining priority based on trigger types."""
         priority_scores = {
             "TIME_INTERVAL": 1,
-            "DATA_VOLUME": 2,
+            "DATA_VOLUME": DEFAULT_HOURS_INTERVAL,
             "PERFORMANCE_DEGRADATION": 3,
-            "DATA_DRIFT": 4,
+            "DATA_DRIFT": DEFAULT_DAYS_INTERVAL,
         }
 
         max_score = max([priority_scores.get(trigger, 0) for trigger in triggers])
