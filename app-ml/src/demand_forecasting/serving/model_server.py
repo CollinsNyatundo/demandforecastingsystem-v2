@@ -21,7 +21,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
-from pydantic import BaseModel, validator, Field, model_validator, ValidationError
+from pydantic import BaseModel, field_validator, Field, model_validator, ValidationError, ConfigDict
 from cachetools import TTLCache
 
 # Configure logging
@@ -57,22 +57,15 @@ class PredictionRequest(BaseModel):
     
     features: Dict[str, float] = Field(
         ...,
-        description="Weather and temporal features for demand prediction",
-        example={
-            "temp": 0.5,
-            "humidity": 0.65,
-            "wind_speed": 0.15,
-            "hour": 14,
-            "day_of_week": 3
-        }
+        description="Weather and temporal features for demand prediction"
     )
     
-    class Config:
+    model_config = ConfigDict(
         # Reject extra fields (prevents injection attacks)
-        extra = "forbid"
+        extra="forbid",
         
-        # Example for documentation
-        schema_extra = {
+        # Example for documentation (Pydantic v2 compatible)
+        json_schema_extra={
             "example": {
                 "features": {
                     "temp": 0.5,
@@ -83,8 +76,10 @@ class PredictionRequest(BaseModel):
                 }
             }
         }
+    )
     
-    @validator("features")
+    @field_validator("features")
+    @classmethod
     def validate_feature_structure(cls, v: Dict[str, float]) -> Dict[str, float]:
         """Validate feature keys and basic structure."""
         required_features = [
@@ -110,13 +105,13 @@ class PredictionRequest(BaseModel):
         return v
     
     @model_validator(mode='after')
-    def validate_feature_values(cls, values):
+    def validate_feature_values(self) -> 'PredictionRequest':
         """
         Validate feature value ranges and quality.
         
         Based on domain knowledge and training data statistics.
         """
-        features = values.features
+        features = self.features
         
         # Define validation rules: (min, max, description)
         validations = {
@@ -161,7 +156,7 @@ class PredictionRequest(BaseModel):
                 "Feature validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
             )
         
-        return values
+        return self
 
 
 class PredictionResponse(BaseModel):
@@ -178,8 +173,8 @@ class PredictionResponse(BaseModel):
     timestamp: str = Field(..., description="Prediction timestamp (ISO 8601)")
     model_id: Optional[str] = Field(None, description="Model identifier")
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "prediction": 142.5,
                 "confidence": 0.87,
@@ -188,6 +183,7 @@ class PredictionResponse(BaseModel):
                 "model_id": "production"
             }
         }
+    )
 
 
 class ModelInfo(BaseModel):
