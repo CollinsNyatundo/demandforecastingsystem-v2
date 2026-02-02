@@ -5,11 +5,10 @@ Tests statistical drift detection methods, edge cases, performance scenarios,
 and integration with monitoring infrastructure.
 """
 
-import pytest
+
 import numpy as np
 import pandas as pd
-from unittest.mock import Mock, patch
-from scipy import stats
+import pytest
 
 from demand_forecasting.monitoring.drift_detector import DriftDetector
 
@@ -166,7 +165,7 @@ class TestStatisticalTests:
         """Test Kolmogorov-Smirnov test for numerical features."""
         # Create data with clear distribution shift
         np.random.seed(42)
-        reference_temp = np.random.normal(20, 5, 1000)
+        np.random.normal(20, 5, 1000)
         current_temp = np.random.normal(30, 5, 1000)  # Shifted mean
 
         current_data = pd.DataFrame(
@@ -194,7 +193,7 @@ class TestStatisticalTests:
         """Test Chi-square test for categorical features."""
         # Create data with different categorical distributions
         np.random.seed(42)
-        reference_hour = np.random.choice(
+        np.random.choice(
             [
                 0,
                 1,

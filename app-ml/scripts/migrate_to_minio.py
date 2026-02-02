@@ -1,5 +1,7 @@
-import s3fs
+import contextlib
 import os
+
+import s3fs
 
 
 def migrate_data():
@@ -14,13 +16,12 @@ def migrate_data():
     # Ensure bucket exists
     if not fs.exists("demand-forecasting"):
         fs.mkdir("demand-forecasting")
-        print("Created bucket 'demand-forecasting'")
 
     local_root = "data"
     s3_root = "demand-forecasting"
 
     # Walk through local data directory
-    for root, dirs, files in os.walk(local_root):
+    for root, _dirs, files in os.walk(local_root):
         for file in files:
             local_path = os.path.join(root, file)
             # Create S3 path preserving structure, e.g., data/01_raw/file.parquet -> demand-forecasting/01_raw/file.parquet
@@ -29,11 +30,8 @@ def migrate_data():
             rel_path_s3 = rel_path.replace("\\", "/")
             s3_path = f"{s3_root}/{rel_path_s3}"
 
-            print(f"Uploading {local_path} to s3://{s3_path}")
-            try:
+            with contextlib.suppress(Exception):
                 fs.put(local_path, s3_path)
-            except Exception as e:
-                print(f"Failed to upload {local_path}: {e}")
 
 
 if __name__ == "__main__":

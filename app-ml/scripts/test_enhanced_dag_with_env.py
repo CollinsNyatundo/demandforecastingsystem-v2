@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test script to verify Enhanced DAG functionality with environment variables set
-"""
+"""Test script to verify Enhanced DAG functionality with environment variables set."""
 
 import os
 import sys
@@ -27,22 +25,18 @@ sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "dags"))
 
 
-def test_enhanced_dag_import():
-    """Test that Enhanced DAG can be imported successfully"""
-    print("🧪 Testing Enhanced DAG import...")
+def test_enhanced_dag_import() -> bool | None:
+    """Test that Enhanced DAG can be imported successfully."""
     try:
         from airflow_dag_enhanced import dag
 
-        print("✅ Enhanced DAG imported successfully")
         return True
-    except ImportError as e:
-        print(f"❌ Enhanced DAG import failed: {e}")
+    except ImportError:
         return False
 
 
-def test_mlflow_connection():
-    """Test MLflow connection"""
-    print("🧪 Testing MLflow connection...")
+def test_mlflow_connection() -> bool | None:
+    """Test MLflow connection."""
     try:
         import mlflow
 
@@ -51,21 +45,16 @@ def test_mlflow_connection():
         mlflow.set_tracking_uri(tracking_uri)
         experiment = mlflow.get_experiment_by_name(experiment_name)
         if experiment:
-            print("✅ MLflow connection successful")
+            pass
         else:
-            print("⚠️ MLflow connection successful but no experiment found")
+            pass
         return True
-    except Exception as e:
-        print(f"❌ MLflow connection failed: {e}")
-        print(
-            f"💡 Make sure MLflow server is running: docker-compose -f docker-compose-unified.yml up -d"
-        )
+    except Exception:
         return False
 
 
-def test_optuna_postgresql():
-    """Test Optuna PostgreSQL connection"""
-    print("🧪 Testing Optuna PostgreSQL connection...")
+def test_optuna_postgresql() -> bool | None:
+    """Test Optuna PostgreSQL connection."""
     try:
         import optuna
         from optuna.storages import RDBStorage
@@ -74,39 +63,29 @@ def test_optuna_postgresql():
             "OPTUNA_STORAGE_URL", "postgresql://airflow:airflow@postgres:5432/optuna"
         )
         storage = RDBStorage(storage_url)
-        study = optuna.create_study(
+        optuna.create_study(
             storage=storage,
             study_name="test_study",
             direction="minimize",
             load_if_exists=True,
         )
-        print("✅ Optuna PostgreSQL connection successful")
         return True
-    except Exception as e:
-        print(f"❌ Optuna PostgreSQL connection failed: {e}")
-        print(
-            f"💡 Make sure PostgreSQL is running: docker-compose -f docker-compose-unified.yml up -d"
-        )
+    except Exception:
         return False
 
 
-def test_catboost_import():
-    """Test CatBoost import"""
-    print("🧪 Testing CatBoost import...")
+def test_catboost_import() -> bool | None:
+    """Test CatBoost import."""
     try:
         from catboost import CatBoostRegressor
 
-        print("✅ CatBoost imported successfully")
         return True
-    except ImportError as e:
-        print(f"❌ CatBoost import failed: {e}")
+    except ImportError:
         return False
 
 
-def test_environment_variables():
-    """Test required environment variables"""
-    print("🧪 Testing environment variables...")
-
+def test_environment_variables() -> bool:
+    """Test required environment variables."""
     required_vars = [
         "MLFLOW_TRACKING_URI",
         "MLFLOW_EXPERIMENT_NAME",
@@ -119,19 +98,11 @@ def test_environment_variables():
         if not os.environ.get(var):
             missing_vars.append(var)
 
-    if missing_vars:
-        print(f"❌ Missing environment variables: {missing_vars}")
-        return False
-    else:
-        print("✅ All required environment variables found")
-        return True
+    return not missing_vars
 
 
 def main():
-    """Run all tests"""
-    print("🚀 Enhanced DAG Implementation Test Suite (with env vars set)")
-    print("=" * 60)
-
+    """Run all tests."""
     tests = [
         ("Environment Variables", test_environment_variables),
         ("CatBoost Import", test_catboost_import),
@@ -142,31 +113,22 @@ def main():
 
     results = []
     for test_name, test_func in tests:
-        print(f"\n📋 {test_name}")
-        print("-" * 30)
         result = test_func()
         results.append((test_name, result))
 
-    print("\n" + "=" * 60)
-    print("📊 Test Results Summary")
-    print("=" * 60)
 
     passed = 0
     total = len(results)
 
     for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{test_name}: {status}")
         if result:
             passed += 1
 
-    print(f"\n🎯 Overall: {passed}/{total} tests passed")
 
     if passed == total:
-        print("🎉 All tests passed! Enhanced DAG is ready for deployment.")
+        pass
     else:
-        print("⚠️ Some tests failed. Please resolve issues before deployment.")
-        print("📖 See ENHANCED_DAG_IMPLEMENTATION_GUIDE.md for troubleshooting steps.")
+        pass
 
 
 if __name__ == "__main__":

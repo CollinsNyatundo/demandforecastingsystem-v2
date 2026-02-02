@@ -1,29 +1,26 @@
-"""
-Automated data profiling and quality monitoring utilities.
-"""
+"""Automated data profiling and quality monitoring utilities."""
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+import numpy as np
+import pandas as pd
 from pandas_profiling import ProfileReport
 
 logger = logging.getLogger(__name__)
 
 
 class DataProfiler:
-    """
-    Automated data profiling and quality monitoring inspired by EDA notebook.
+    """Automated data profiling and quality monitoring inspired by EDA notebook.
 
     Generates comprehensive data quality reports and tracks changes over time.
     """
 
     def __init__(self, profile_dir: str = "/opt/airflow/data/profiles"):
-        """
-        Initialize data profiler.
+        """Initialize data profiler.
 
         Args:
             profile_dir: Directory to store profile reports and metrics
@@ -33,8 +30,7 @@ class DataProfiler:
         self.metrics_file = self.profile_dir / "data_quality_metrics.json"
 
     def generate_profile_report(self, df: pd.DataFrame, dataset_name: str) -> str:
-        """
-        Generate comprehensive data profile report similar to EDA notebook.
+        """Generate comprehensive data profile report similar to EDA notebook.
 
         Args:
             df: DataFrame to profile
@@ -69,9 +65,8 @@ class DataProfiler:
 
     def _generate_summary_stats(
         self, df: pd.DataFrame, dataset_name: str
-    ) -> Dict[str, Any]:
-        """
-        Generate summary statistics similar to EDA notebook analysis.
+    ) -> dict[str, Any]:
+        """Generate summary statistics similar to EDA notebook analysis.
 
         Args:
             df: DataFrame to analyze
@@ -142,9 +137,8 @@ class DataProfiler:
 
         return stats
 
-    def _save_metrics(self, metrics: Dict[str, Any], dataset_name: str):
-        """
-        Save metrics to JSON file for tracking over time.
+    def _save_metrics(self, metrics: dict[str, Any], dataset_name: str):
+        """Save metrics to JSON file for tracking over time.
 
         Args:
             metrics: Metrics dictionary
@@ -154,7 +148,7 @@ class DataProfiler:
         existing_metrics = {}
         if self.metrics_file.exists():
             try:
-                with open(self.metrics_file, "r") as f:
+                with open(self.metrics_file) as f:
                     existing_metrics = json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 logger.warning("Could not load existing metrics file, starting fresh")
@@ -173,9 +167,8 @@ class DataProfiler:
         with open(self.metrics_file, "w") as f:
             json.dump(existing_metrics, f, indent=2, default=str)
 
-    def get_quality_summary(self, dataset_name: str = None) -> Dict[str, Any]:
-        """
-        Get quality summary for a specific dataset or all datasets.
+    def get_quality_summary(self, dataset_name: str | None = None) -> dict[str, Any]:
+        """Get quality summary for a specific dataset or all datasets.
 
         Args:
             dataset_name: Specific dataset name, or None for all datasets
@@ -186,7 +179,7 @@ class DataProfiler:
         if not self.metrics_file.exists():
             return {"error": "No metrics file found"}
 
-        with open(self.metrics_file, "r") as f:
+        with open(self.metrics_file) as f:
             all_metrics = json.load(f)
 
         if dataset_name:
@@ -198,12 +191,11 @@ class DataProfiler:
 
     def detect_data_drift(
         self,
-        current_metrics: Dict[str, Any],
-        historical_metrics: List[Dict[str, Any]],
+        current_metrics: dict[str, Any],
+        historical_metrics: list[dict[str, Any]],
         threshold: float = 0.1,
-    ) -> Dict[str, Any]:
-        """
-        Detect data drift between current and historical metrics.
+    ) -> dict[str, Any]:
+        """Detect data drift between current and historical metrics.
 
         Args:
             current_metrics: Current dataset metrics
@@ -292,8 +284,7 @@ class DataProfiler:
 def profile_dataset(
     df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles"
 ) -> str:
-    """
-    Convenience function to profile a dataset.
+    """Convenience function to profile a dataset.
 
     Args:
         df: DataFrame to profile

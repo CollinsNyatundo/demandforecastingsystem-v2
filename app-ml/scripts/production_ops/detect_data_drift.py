@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Data Drift Detection System for Demand Forecasting
+"""Data Drift Detection System for Demand Forecasting.
 
 Detects statistical drift in input features and target variables using
 multiple statistical tests. Stores drift history in PostgreSQL for tracking.
@@ -19,10 +18,9 @@ import os
 import smtplib
 import sys
 from datetime import datetime
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from email.mime.text import MIMEText
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -73,8 +71,7 @@ class DriftRecord(Base):
 
 
 class DriftDetector:
-    """
-    Statistical drift detector with PostgreSQL persistence.
+    """Statistical drift detector with PostgreSQL persistence.
 
     Implements multiple drift detection methods:
     - Kolmogorov-Smirnov test (continuous features)
@@ -91,13 +88,12 @@ class DriftDetector:
 
     def __init__(
         self,
-        storage_url: Optional[str] = None,
+        storage_url: str | None = None,
         alpha: float = 0.05,
         psi_threshold: float = 0.2,
         wasserstein_threshold: float = 0.1,
     ):
-        """
-        Initialize drift detector with PostgreSQL backend.
+        """Initialize drift detector with PostgreSQL backend.
 
         Args:
             storage_url: PostgreSQL URL (default: from env)
@@ -140,11 +136,10 @@ class DriftDetector:
         self,
         reference_data: pd.DataFrame,
         production_data: pd.DataFrame,
-        feature_cols: Optional[List[str]] = None,
-        categorical_cols: Optional[List[str]] = None,
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Detect drift between reference and production data.
+        feature_cols: list[str] | None = None,
+        categorical_cols: list[str] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Detect drift between reference and production data.
 
         Args:
             reference_data: Reference dataset (training data)
@@ -155,7 +150,7 @@ class DriftDetector:
         Returns:
             Dictionary mapping feature names to drift results
         """
-        logger.info(f"Starting drift detection...")
+        logger.info("Starting drift detection...")
         logger.info(f"Reference data: {len(reference_data)} rows")
         logger.info(f"Production data: {len(production_data)} rows")
 
@@ -226,9 +221,8 @@ class DriftDetector:
 
     def _test_continuous_drift(
         self, reference: pd.Series, production: pd.Series, feature_name: str
-    ) -> Dict[str, Any]:
-        """
-        Test drift for continuous features using multiple methods.
+    ) -> dict[str, Any]:
+        """Test drift for continuous features using multiple methods.
 
         Methods:
         1. Kolmogorov-Smirnov test (distribution comparison)
@@ -298,9 +292,8 @@ class DriftDetector:
 
     def _test_categorical_drift(
         self, reference: pd.Series, production: pd.Series, feature_name: str
-    ) -> Dict[str, Any]:
-        """
-        Test drift for categorical features using chi-square test.
+    ) -> dict[str, Any]:
+        """Test drift for categorical features using chi-square test.
 
         Args:
             reference: Reference feature values
@@ -364,8 +357,7 @@ class DriftDetector:
     def _calculate_psi(
         self, reference: pd.Series, production: pd.Series, n_bins: int = 10
     ) -> float:
-        """
-        Calculate Population Stability Index (PSI).
+        """Calculate Population Stability Index (PSI).
 
         PSI measures the shift in distributions:
         - PSI < 0.1: No significant change
@@ -418,7 +410,7 @@ class DriftDetector:
         psi = np.sum((prod_prop - ref_prop) * np.log(prod_prop / ref_prop))
         return float(psi)
 
-    def _store_drift_record(self, session, feature_name: str, result: Dict[str, Any]):
+    def _store_drift_record(self, session, feature_name: str, result: dict[str, Any]):
         """Store drift detection result in PostgreSQL."""
         # Determine primary test method and statistics
         if "chi_square" in result["tests"]:
@@ -450,12 +442,11 @@ class DriftDetector:
 
     def get_drift_history(
         self,
-        feature_name: Optional[str] = None,
+        feature_name: str | None = None,
         days: int = 30,
         drift_only: bool = False,
     ) -> pd.DataFrame:
-        """
-        Retrieve drift detection history from PostgreSQL.
+        """Retrieve drift detection history from PostgreSQL.
 
         Args:
             feature_name: Filter by feature name (None for all)
@@ -479,7 +470,7 @@ class DriftDetector:
 
             # Filter by drift detected
             if drift_only:
-                query = query.filter(DriftRecord.drift_detected == True)
+                query = query.filter(DriftRecord.drift_detected)
 
             # Order by timestamp
             query = query.order_by(DriftRecord.check_timestamp.desc())
@@ -517,10 +508,9 @@ class DriftDetector:
             session.close()
 
     def send_alert(
-        self, results: Dict[str, Dict[str, Any]], alert_email: Optional[str] = None
+        self, results: dict[str, dict[str, Any]], alert_email: str | None = None
     ):
-        """
-        Send email alert if drift detected.
+        """Send email alert if drift detected.
 
         Args:
             results: Drift detection results
@@ -574,8 +564,7 @@ Drift detected in {len(drift_features)} features:
 
 
 def send_drift_alert_email(alert_email: str, subject: str, message: str) -> bool:
-    """
-    Send drift alert email using SMTP configuration.
+    """Send drift alert email using SMTP configuration.
 
     Args:
         alert_email: Recipient email address
@@ -741,17 +730,11 @@ def main():
     if args.history:
         history = detector.get_drift_history(days=args.days, drift_only=False)
         if not history.empty:
-            print("\n📊 Drift Detection History:")
-            print(history.to_string(index=False))
 
             # Summary
-            drift_count = history["drift_detected"].sum()
-            print(f"\n✅ Total checks: {len(history)}")
-            print(
-                f"⚠️  Drift detected: {drift_count} ({drift_count / len(history) * 100:.1f}%)"
-            )
+            history["drift_detected"].sum()
         else:
-            print("No drift history found")
+            pass
         return
 
     # Run drift detection
@@ -773,41 +756,22 @@ def main():
     )
 
     # Print summary
-    print("\n" + "=" * 80)
-    print("📊 DRIFT DETECTION SUMMARY")
-    print("=" * 80)
 
     drift_detected = [f for f, r in results.items() if r["drift_detected"]]
     no_drift = [f for f, r in results.items() if not r["drift_detected"]]
 
-    print(f"\n✅ No drift: {len(no_drift)} features")
     for feature in no_drift:
-        score = results[feature]["drift_score"]
-        print(f"   • {feature}: drift_score={score:.4f}")
+        results[feature]["drift_score"]
 
     if drift_detected:
-        print(f"\n⚠️  DRIFT DETECTED: {len(drift_detected)} features")
         for feature in drift_detected:
             result = results[feature]
-            print(f"\n   • {feature}:")
-            print(f"     - Drift Score: {result['drift_score']:.4f}")
 
-            for test_name, test_result in result["tests"].items():
-                drift_marker = "⚠️ " if test_result.get("drift", False) else "✅"
-                if "p_value" in test_result:
-                    print(
-                        f"     - {test_name}: {drift_marker} p={test_result['p_value']:.4f}"
-                    )
-                elif "score" in test_result:
-                    print(
-                        f"     - {test_name}: {drift_marker} score={test_result['score']:.4f}"
-                    )
-                elif "distance" in test_result:
-                    print(
-                        f"     - {test_name}: {drift_marker} distance={test_result['distance']:.4f}"
-                    )
+            for _test_name, test_result in result["tests"].items():
+                "⚠️ " if test_result.get("drift", False) else "✅"
+                if "p_value" in test_result or "score" in test_result or "distance" in test_result:
+                    pass
 
-    print("\n" + "=" * 80)
 
     # Send alert if requested
     if args.alert:

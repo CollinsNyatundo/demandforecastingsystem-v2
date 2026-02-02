@@ -5,12 +5,10 @@ Tests automated retraining triggers, scheduling logic, MLflow integration,
 and performance-based retraining decisions.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
-import mlflow
+from unittest.mock import Mock, patch
+
+import pytest
 
 from demand_forecasting.automation.retraining_scheduler import RetrainingScheduler
 
@@ -243,25 +241,22 @@ class TestTriggerDetails:
         """Test trigger details when all triggers are inactive."""
         with patch.object(
             retraining_scheduler, "_check_time_trigger", return_value=False
+        ), patch.object(
+            retraining_scheduler, "_check_performance_trigger", return_value=False
+        ), patch.object(
+            retraining_scheduler, "_check_data_trigger", return_value=False
+        ), patch.object(
+            retraining_scheduler, "_check_drift_trigger", return_value=False
         ):
-            with patch.object(
-                retraining_scheduler, "_check_performance_trigger", return_value=False
-            ):
-                with patch.object(
-                    retraining_scheduler, "_check_data_trigger", return_value=False
-                ):
-                    with patch.object(
-                        retraining_scheduler, "_check_drift_trigger", return_value=False
-                    ):
-                        details = retraining_scheduler._get_trigger_details()
+            details = retraining_scheduler._get_trigger_details()
 
-                        assert all(
-                            detail["active"] is False for detail in details.values()
-                        )
-                        assert "time_since_last_training" in details["TIME_INTERVAL"]
-                        assert (
-                            "current_performance" in details["PERFORMANCE_DEGRADATION"]
-                        )
+            assert all(
+                detail["active"] is False for detail in details.values()
+            )
+            assert "time_since_last_training" in details["TIME_INTERVAL"]
+            assert (
+                "current_performance" in details["PERFORMANCE_DEGRADATION"]
+            )
 
     def test_get_trigger_details_mixed_active(
         self, retraining_scheduler: RetrainingScheduler
@@ -269,22 +264,19 @@ class TestTriggerDetails:
         """Test trigger details with mixed active/inactive triggers."""
         with patch.object(
             retraining_scheduler, "_check_time_trigger", return_value=True
+        ), patch.object(
+            retraining_scheduler, "_check_performance_trigger", return_value=False
+        ), patch.object(
+            retraining_scheduler, "_check_data_trigger", return_value=True
+        ), patch.object(
+            retraining_scheduler, "_check_drift_trigger", return_value=False
         ):
-            with patch.object(
-                retraining_scheduler, "_check_performance_trigger", return_value=False
-            ):
-                with patch.object(
-                    retraining_scheduler, "_check_data_trigger", return_value=True
-                ):
-                    with patch.object(
-                        retraining_scheduler, "_check_drift_trigger", return_value=False
-                    ):
-                        details = retraining_scheduler._get_trigger_details()
+            details = retraining_scheduler._get_trigger_details()
 
-                        assert details["TIME_INTERVAL"]["active"] is True
-                        assert details["PERFORMANCE_DEGRADATION"]["active"] is False
-                        assert details["DATA_VOLUME"]["active"] is True
-                        assert details["DATA_DRIFT"]["active"] is False
+            assert details["TIME_INTERVAL"]["active"] is True
+            assert details["PERFORMANCE_DEGRADATION"]["active"] is False
+            assert details["DATA_VOLUME"]["active"] is True
+            assert details["DATA_DRIFT"]["active"] is False
 
     def test_calculate_priority_no_triggers(
         self, retraining_scheduler: RetrainingScheduler
@@ -456,7 +448,6 @@ class TestEdgeCases:
     ):
         """Test thread safety of scheduler calls."""
         import threading
-        import time
 
         results = []
         errors = []
@@ -493,7 +484,7 @@ class TestEdgeCases:
         """Test that scheduler maintains history of retraining decisions."""
         # Make multiple calls
         for _ in range(5):
-            result = retraining_scheduler.should_retrain()
+            retraining_scheduler.should_retrain()
 
         # Check that history is maintained (if implemented)
         if hasattr(retraining_scheduler, "decision_history"):
@@ -506,7 +497,7 @@ class TestEdgeCases:
         scheduler = RetrainingScheduler(config)
 
         with patch("mlflow.tracking.MlflowClient", return_value=mock_mlflow_client):
-            result = scheduler.should_retrain()
+            scheduler.should_retrain()
 
             # Should use custom registry name
             mock_mlflow_client.get_latest_versions.assert_called_with(

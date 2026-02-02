@@ -1,11 +1,10 @@
-"""
-S3 and validation helper utilities for Demand Forecasting pipeline.
+"""S3 and validation helper utilities for Demand Forecasting pipeline.
 Provides reusable functions for S3 operations and parameter validation.
 """
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import s3fs
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -23,13 +22,12 @@ DEFAULT_S3_ENDPOINT = "http://host.docker.internal:9000"
     reraise=True,
 )
 def get_s3_filesystem(
-    endpoint: Optional[str] = None,
-    key: Optional[str] = None,
-    secret: Optional[str] = None,
+    endpoint: str | None = None,
+    key: str | None = None,
+    secret: str | None = None,
     use_ssl: bool = False,
 ) -> s3fs.S3FileSystem:
-    """
-    Create and return an S3FileSystem instance with retry logic.
+    """Create and return an S3FileSystem instance with retry logic.
 
     Loads credentials ONLY from environment variables. Falls back to None if not set.
     Credentials MUST be provided via environment variables:
@@ -81,13 +79,12 @@ def get_s3_filesystem(
         return fs
 
     except Exception as e:
-        logger.error(f"Failed to connect to S3 at {s3_endpoint}: {str(e)}")
+        logger.error(f"Failed to connect to S3 at {s3_endpoint}: {e!s}")
         raise
 
 
 def validate_s3_path(path: str) -> bool:
-    """
-    Validate S3 path format.
+    """Validate S3 path format.
 
     Args:
         path: S3 path to validate (e.g., "bucket/path/to/file.json")
@@ -110,15 +107,11 @@ def validate_s3_path(path: str) -> bool:
 
     # Should have at least bucket/file structure
     parts = path.split("/")
-    if len(parts) < 2:
-        return False
-
-    return True
+    return not len(parts) < 2
 
 
-def validate_search_space_parameters(parameters: Dict[str, Any]) -> None:
-    """
-    Validate hyperparameter search space configuration.
+def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
+    """Validate hyperparameter search space configuration.
 
     Ensures that the parameters dictionary contains all required fields
     for hyperparameter optimization and that values are within valid ranges.
@@ -265,8 +258,7 @@ def validate_search_space_parameters(parameters: Dict[str, Any]) -> None:
 
 
 def validate_trial_files_list(trial_files: list) -> None:
-    """
-    Validate that trial files list is not empty and contains valid paths.
+    """Validate that trial files list is not empty and contains valid paths.
 
     Args:
         trial_files: List of S3 paths to trial files
@@ -304,8 +296,7 @@ def validate_trial_files_list(trial_files: list) -> None:
 def validate_model_save(
     fs: s3fs.S3FileSystem, model_path: str, min_size_bytes: int = 1024
 ) -> bool:
-    """
-    Validate that a model was successfully saved to S3.
+    """Validate that a model was successfully saved to S3.
 
     Args:
         fs: S3 filesystem instance
@@ -348,9 +339,8 @@ def validate_model_save(
     return True
 
 
-def get_email_config() -> Dict[str, str]:
-    """
-    Get email configuration from environment variables.
+def get_email_config() -> dict[str, str]:
+    """Get email configuration from environment variables.
 
     Returns:
         Dictionary with email configuration or None if not configured
@@ -387,9 +377,8 @@ def get_email_config() -> Dict[str, str]:
     return config
 
 
-def parse_s3_timestamp_path(path: str) -> Optional[str]:
-    """
-    Safely parse timestamp from S3 path with error handling.
+def parse_s3_timestamp_path(path: str) -> str | None:
+    """Safely parse timestamp from S3 path with error handling.
 
     Args:
         path: S3 path that may contain timestamp

@@ -1,32 +1,27 @@
 #!/usr/bin/env python3
-"""
-Simple MLflow test without Unicode issues
-"""
+"""Simple MLflow test without Unicode issues."""
+
+import contextlib
+import sys
 
 import mlflow
 import mlflow.sklearn
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
-import sys
+from sklearn.model_selection import train_test_split
 
 
-def test_mlflow_simple():
-    """Simple MLflow test"""
-    print("Testing MLflow functionality...")
-
+def test_mlflow_simple() -> bool | None:
+    """Simple MLflow test."""
     try:
         # Set tracking URI
         mlflow.set_tracking_uri("http://localhost:5000")
 
         # Create experiment
         experiment_name = "simple_test"
-        try:
+        with contextlib.suppress(Exception):
             mlflow.create_experiment(experiment_name)
-            print(f"Created experiment: {experiment_name}")
-        except Exception:
-            print(f"Experiment {experiment_name} already exists")
 
         mlflow.set_experiment(experiment_name)
 
@@ -40,7 +35,7 @@ def test_mlflow_simple():
         )
 
         # Start run
-        with mlflow.start_run(run_name="simple_rf_test") as run:
+        with mlflow.start_run(run_name="simple_rf_test"):
             # Train model
             model = RandomForestRegressor(n_estimators=5, random_state=42)
             model.fit(X_train, y_train)
@@ -61,28 +56,21 @@ def test_mlflow_simple():
             # Log model
             mlflow.sklearn.log_model(model, "model")
 
-            print(f"Run completed: {run.info.run_id}")
-            print(f"MSE: {mse:.4f}")
-            print(f"R2: {r2:.4f}")
 
             return True
 
-    except Exception as e:
-        print(f"Error: {str(e)}")
+    except Exception:
         return False
 
 
-def test_model_registry():
-    """Test model registry"""
-    print("\nTesting model registry...")
-
+def test_model_registry() -> bool | None:
+    """Test model registry."""
     try:
         # List registered models
         models = mlflow.search_registered_models()
-        print(f"Found {len(models)} registered models")
 
         # Register a model
-        with mlflow.start_run() as run:
+        with mlflow.start_run():
             # Simple model
             X = np.random.rand(20, 2)
             y = np.random.rand(20)
@@ -95,26 +83,20 @@ def test_model_registry():
                 model, "model", registered_model_name="test_demand_model"
             )
 
-        print("Model registered successfully")
 
         # Check registry again
         models = mlflow.search_registered_models()
-        print(f"Now found {len(models)} registered models")
 
         for model in models:
-            print(f"  - {model.name}")
+            pass
 
         return True
 
-    except Exception as e:
-        print(f"Registry error: {str(e)}")
+    except Exception:
         return False
 
 
-def main():
-    print("=" * 50)
-    print("SIMPLE MLFLOW TEST")
-    print("=" * 50)
+def main() -> int:
 
     # Test basic functionality
     result1 = test_mlflow_simple()
@@ -122,17 +104,10 @@ def main():
     # Test registry
     result2 = test_model_registry()
 
-    print("\n" + "=" * 50)
-    print("RESULTS:")
-    print(f"Basic MLflow: {'PASS' if result1 else 'FAIL'}")
-    print(f"Model Registry: {'PASS' if result2 else 'FAIL'}")
 
     if result1 and result2:
-        print("\nAll MLflow tests PASSED!")
         return 0
-    else:
-        print("\nSome MLflow tests FAILED!")
-        return 1
+    return 1
 
 
 if __name__ == "__main__":

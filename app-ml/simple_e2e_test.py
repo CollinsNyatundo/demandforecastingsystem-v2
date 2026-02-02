@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""
-Simple End-to-End System Test Runner
-Tests all Docker services without requiring pytest
+"""Simple End-to-End System Test Runner
+Tests all Docker services without requiring pytest.
 """
 
-import requests
-import json
-import time
 import sys
+import time
+
+import requests
 
 
 class Colors:
@@ -20,22 +19,15 @@ class Colors:
 
 
 def print_status(message, status="info"):
-    if status == "success":
-        print(f"{Colors.GREEN}✅ {message}{Colors.END}")
-    elif status == "error":
-        print(f"{Colors.RED}❌ {message}{Colors.END}")
-    elif status == "warning":
-        print(f"{Colors.YELLOW}⚠️  {message}{Colors.END}")
-    elif status == "info":
-        print(f"{Colors.BLUE}ℹ️  {message}{Colors.END}")
+    if status in {"success", "error"} or status in {"warning", "info"}:
+        pass
     else:
-        print(message)
+        pass
 
 
 def test_service_health():
-    """Test all service health endpoints"""
+    """Test all service health endpoints."""
     print_status("Testing Service Health", "info")
-    print("=" * 50)
 
     services = {
         "Airflow": "http://localhost:8081/health",
@@ -52,12 +44,11 @@ def test_service_health():
                 print_status(f"{service_name}: Healthy", "success")
                 results[service_name] = True
                 if service_name == "Model Server":
-                    data = response.json()
-                    print(f"   Models loaded: {data.get('models_loaded', 0)}")
+                    response.json()
             else:
                 print_status(f"{service_name}: HTTP {response.status_code}", "error")
                 results[service_name] = False
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             print_status(f"{service_name}: Connection failed", "error")
             results[service_name] = False
 
@@ -65,9 +56,8 @@ def test_service_health():
 
 
 def test_service_accessibility():
-    """Test service UI accessibility"""
+    """Test service UI accessibility."""
     print_status("\nTesting Service Accessibility", "info")
-    print("=" * 50)
 
     services = {
         "Airflow UI": "http://localhost:8081",
@@ -89,17 +79,16 @@ def test_service_accessibility():
             else:
                 print_status(f"{service_name}: HTTP {response.status_code}", "warning")
                 results[service_name] = False
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             print_status(f"{service_name}: Connection failed", "error")
             results[service_name] = False
 
     return results
 
 
-def test_airflow_api():
-    """Test Airflow API functionality"""
+def test_airflow_api() -> bool | None:
+    """Test Airflow API functionality."""
     print_status("\nTesting Airflow API", "info")
-    print("=" * 50)
 
     try:
         # Test API v1 (correct version)
@@ -110,26 +99,24 @@ def test_airflow_api():
         if response.status_code == 200:
             data = response.json()
             dags = data.get("dags", [])
-            print_status(f"Airflow API v1: Working", "success")
+            print_status("Airflow API v1: Working", "success")
             print_status(f"Found {len(dags)} DAGs", "info")
 
-            for dag in dags[:3]:  # Show first 3 DAGs
-                print(f"   - {dag['dag_id']}")
+            for _dag in dags[:3]:  # Show first 3 DAGs
+                pass
 
             return True
-        else:
-            print_status(f"Airflow API: HTTP {response.status_code}", "error")
-            return False
+        print_status(f"Airflow API: HTTP {response.status_code}", "error")
+        return False
 
-    except requests.exceptions.RequestException as e:
-        print_status(f"Airflow API: Connection failed", "error")
+    except requests.exceptions.RequestException:
+        print_status("Airflow API: Connection failed", "error")
         return False
 
 
-def test_model_server_functionality():
-    """Test model server prediction endpoint"""
+def test_model_server_functionality() -> bool | None:
+    """Test model server prediction endpoint."""
     print_status("\nTesting Model Server Functionality", "info")
-    print("=" * 50)
 
     try:
         # Test prediction endpoint with sample data
@@ -149,25 +136,22 @@ def test_model_server_functionality():
 
         if response.status_code == 200:
             print_status("Prediction endpoint: Working", "success")
-            result = response.json()
-            print(f"   Response: {result}")
+            response.json()
             return True
-        elif response.status_code == 503:
+        if response.status_code == 503:
             print_status("Prediction endpoint: No model loaded (expected)", "warning")
             return True
-        else:
-            print_status(f"Prediction endpoint: HTTP {response.status_code}", "error")
-            return False
+        print_status(f"Prediction endpoint: HTTP {response.status_code}", "error")
+        return False
 
-    except requests.exceptions.RequestException as e:
-        print_status(f"Prediction endpoint: Connection failed", "error")
+    except requests.exceptions.RequestException:
+        print_status("Prediction endpoint: Connection failed", "error")
         return False
 
 
 def test_docker_containers():
-    """Test Docker container status"""
+    """Test Docker container status."""
     print_status("\nTesting Docker Containers", "info")
-    print("=" * 50)
 
     try:
         import subprocess
@@ -215,22 +199,16 @@ def test_docker_containers():
                 "info",
             )
             return success_rate >= 0.8  # 80% of containers should be healthy
-        else:
-            print_status("Failed to get container status", "error")
-            return False
+        print_status("Failed to get container status", "error")
+        return False
 
     except Exception as e:
         print_status(f"Docker check failed: {e}", "error")
         return False
 
 
-def main():
-    """Main test runner"""
-    print(f"{Colors.BOLD}{Colors.BLUE}")
-    print("🚀 DEMAND FORECASTING ML SYSTEM - END-TO-END TEST")
-    print("=" * 60)
-    print(f"{Colors.END}")
-
+def main() -> int:
+    """Main test runner."""
     start_time = time.time()
 
     # Run all tests
@@ -253,8 +231,6 @@ def main():
     )
 
     # Print summary
-    print(f"\n{Colors.BOLD}TEST SUMMARY{Colors.END}")
-    print("=" * 50)
 
     print_status(
         f"Services Health: {sum(health_results.values())}/{len(health_results)} passed",
@@ -278,19 +254,15 @@ def main():
     )
 
     # Final result
-    elapsed_time = time.time() - start_time
-    success_rate = (passed_tests / total_tests) * 100
+    time.time() - start_time
+    (passed_tests / total_tests) * 100
 
-    print(f"\n{Colors.BOLD}OVERALL RESULT: {success_rate:.0f}% SUCCESS{Colors.END}")
-    print(f"Tests passed: {passed_tests}/{total_tests}")
-    print(f"Time elapsed: {elapsed_time:.2f} seconds")
 
     if passed_tests >= 4:
         print_status("\n🎉 SYSTEM IS READY FOR PRODUCTION!", "success")
         return 0
-    else:
-        print_status("\n⚠️  SYSTEM NEEDS ATTENTION BEFORE PRODUCTION", "error")
-        return 1
+    print_status("\n⚠️  SYSTEM NEEDS ATTENTION BEFORE PRODUCTION", "error")
+    return 1
 
 
 if __name__ == "__main__":

@@ -1,27 +1,23 @@
 #!/usr/bin/env python3
+import contextlib
+
 import mlflow
 import mlflow.sklearn
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 
-print("Testing MLflow inside container...")
-
 # Set tracking URI
 mlflow.set_tracking_uri("http://localhost:5000")
 
 # Create experiment
-try:
+with contextlib.suppress(BaseException):
     mlflow.create_experiment("container_test")
-    print("Created experiment")
-except:
-    print("Experiment already exists")
 
 mlflow.set_experiment("container_test")
 
 # Start run
 with mlflow.start_run(run_name="container_test_run") as run:
-    print(f"Started run: {run.info.run_id}")
 
     # Simple model
     X = np.random.rand(20, 2)
@@ -40,7 +36,4 @@ with mlflow.start_run(run_name="container_test_run") as run:
     # Log model
     mlflow.sklearn.log_model(model, "model")
 
-    print("Logged model and metrics")
-    print(f"MSE: {mse}")
 
-print("MLflow test completed successfully!")

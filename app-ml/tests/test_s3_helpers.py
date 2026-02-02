@@ -3,14 +3,10 @@ Unit tests for S3 helper utilities.
 Tests the core functionality of s3_helpers.py module.
 """
 
-import pytest
 import os
-import pandas as pd
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock, mock_open
-from pathlib import Path
-import tempfile
-import json
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestS3Helpers:
@@ -277,7 +273,7 @@ class TestS3Helpers:
             "AIRFLOW_ALERT_EMAIL",
         ]
 
-        with patch.dict(os.environ, {var: "" for var in env_vars_to_clear}, clear=True):
+        with patch.dict(os.environ, dict.fromkeys(env_vars_to_clear, ""), clear=True):
             config = get_email_config()
 
             # Should return defaults or None
@@ -372,18 +368,16 @@ class TestS3Helpers:
             },
         ):
             # Should use default values
-            fs = get_s3_filesystem()
+            get_s3_filesystem()
             # Function should handle missing env vars gracefully or use defaults
 
     def test_error_handling_comprehensive(self):
         """Test comprehensive error handling."""
         from src.demand_forecasting.utils.s3_helpers import (
-            get_s3_filesystem,
-            validate_search_space_parameters,
-            validate_trial_files_list,
-            validate_model_save,
             get_email_config,
             parse_s3_timestamp_path,
+            validate_search_space_parameters,
+            validate_trial_files_list,
         )
 
         # Test that all functions handle None/empty inputs gracefully

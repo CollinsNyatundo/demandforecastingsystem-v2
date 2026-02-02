@@ -11,8 +11,10 @@ Tests for:
 import os
 import sys
 import unittest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
 
 # Add src to path for imports
 project_root = Path(__file__).parent.parent
@@ -64,10 +66,10 @@ class TestSearchSpaceValidation(unittest.TestCase):
         """Test validation fails when optuna key is missing."""
         invalid_params = {"other_key": "value"}
 
-        with self.assertRaises(KeyError) as context:
+        with pytest.raises(KeyError) as context:
             validate_search_space_parameters(invalid_params)
 
-        self.assertIn("optuna", str(context.exception))
+        assert "optuna" in str(context.value)
 
     def test_missing_search_space(self):
         """Test validation fails when search_space is missing."""
@@ -78,10 +80,10 @@ class TestSearchSpaceValidation(unittest.TestCase):
             }
         }
 
-        with self.assertRaises(KeyError) as context:
+        with pytest.raises(KeyError) as context:
             validate_search_space_parameters(invalid_params)
 
-        self.assertIn("search_space", str(context.exception))
+        assert "search_space" in str(context.value)
 
     def test_invalid_parameter_ranges(self):
         """Test validation fails with invalid parameter ranges."""
@@ -95,14 +97,14 @@ class TestSearchSpaceValidation(unittest.TestCase):
             }
         }
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             validate_search_space_parameters(invalid_params)
 
     def test_empty_search_space(self):
         """Test validation fails with empty search space."""
         invalid_params = {"optuna": {"n_trials": 50, "search_space": {}}}
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             validate_search_space_parameters(invalid_params)
 
 
@@ -133,10 +135,10 @@ class TestDatasetMonitorInit(unittest.TestCase):
             secret="test_secret",
         )
 
-        self.assertEqual(monitor.s3_endpoint, "http://test:9000")
-        self.assertEqual(monitor.s3_key, "test_key")
-        self.assertEqual(monitor.s3_secret, "test_secret")
-        self.assertEqual(monitor.s3_bucket, "test-bucket")
+        assert monitor.s3_endpoint == "http://test:9000"
+        assert monitor.s3_key == "test_key"
+        assert monitor.s3_secret == "test_secret"
+        assert monitor.s3_bucket == "test-bucket"
 
     @patch("demand_forecasting.utils.dataset_monitor.s3fs.S3FileSystem")
     @patch.dict(
@@ -161,8 +163,8 @@ class TestDatasetMonitorInit(unittest.TestCase):
             secret="env_pass",
         )
 
-        self.assertEqual(monitor.s3_key, "env_user")
-        self.assertEqual(monitor.s3_secret, "env_pass")
+        assert monitor.s3_key == "env_user"
+        assert monitor.s3_secret == "env_pass"
 
     @patch("demand_forecasting.utils.dataset_monitor.s3fs.S3FileSystem")
     @patch.dict(os.environ, {}, clear=True)
@@ -185,8 +187,8 @@ class TestDatasetMonitorInit(unittest.TestCase):
             secret="minioadmin",
         )
 
-        self.assertEqual(monitor.s3_key, "minioadmin")
-        self.assertEqual(monitor.s3_secret, "minioadmin")
+        assert monitor.s3_key == "minioadmin"
+        assert monitor.s3_secret == "minioadmin"
 
     @patch("demand_forecasting.utils.dataset_monitor.s3fs.S3FileSystem")
     def test_init_s3_failure_handling(self, mock_s3fs):
@@ -198,7 +200,7 @@ class TestDatasetMonitorInit(unittest.TestCase):
         )
 
         # Should handle S3 failure gracefully
-        self.assertIsNone(monitor.fs)
+        assert monitor.fs is None
 
 
 class TestDAGImport(unittest.TestCase):
@@ -211,16 +213,16 @@ class TestDAGImport(unittest.TestCase):
             from airflow_dag_enhanced import demand_forecasting_dag
 
             # Verify DAG function exists and is callable
-            self.assertTrue(callable(demand_forecasting_dag))
+            assert callable(demand_forecasting_dag)
 
             # Test DAG creation (without Airflow context)
             try:
                 dag = demand_forecasting_dag()
-                self.assertIsNotNone(dag)
-                self.assertEqual(dag.dag_id, "demand_forecasting_enhanced")
+                assert dag is not None
+                assert dag.dag_id == "demand_forecasting_enhanced"
             except Exception as e:
                 # DAG creation might fail due to Airflow context, but import should work
-                self.assertIn("airflow", str(e).lower())
+                assert "airflow" in str(e).lower()
 
         except ImportError as e:
             self.fail(f"Enhanced DAG import failed: {e}")
@@ -231,7 +233,7 @@ class TestDAGImport(unittest.TestCase):
             from dataset_monitoring_dag import demand_forecasting_dag
 
             # Verify DAG function exists and is callable
-            self.assertTrue(callable(demand_forecasting_dag))
+            assert callable(demand_forecasting_dag)
 
         except ImportError as e:
             self.fail(f"Dataset monitoring DAG import failed: {e}")
@@ -289,9 +291,9 @@ class TestIntegrationSmoke(unittest.TestCase):
         monitor = DatasetMonitor()
 
         # Should use environment variables
-        self.assertEqual(monitor.s3_key, "test_user")
-        self.assertEqual(monitor.s3_secret, "test_pass")
-        self.assertEqual(monitor.s3_endpoint, "http://test:9000")
+        assert monitor.s3_key == "test_user"
+        assert monitor.s3_secret == "test_pass"
+        assert monitor.s3_endpoint == "http://test:9000"
 
 
 if __name__ == "__main__":

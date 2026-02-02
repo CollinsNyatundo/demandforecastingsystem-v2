@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from kedro.pipeline import Pipeline
 
-from demand_forecasting.pipelines import demand_modeling as dm
 from demand_forecasting.pipelines import data_processing as dp
+from demand_forecasting.pipelines import demand_modeling as dm
 from demand_forecasting.pipelines import explainability as ex
 
 

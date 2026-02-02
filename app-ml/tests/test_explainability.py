@@ -5,13 +5,12 @@ Tests SHAP explainer initialization, global and local explanations,
 visualizations, edge cases, and integration with different model types.
 """
 
-import pytest
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-from unittest.mock import Mock, patch, MagicMock
-import shap
+import pytest
 
 from demand_forecasting.explainability.shap_explainer import ModelExplainer
 
@@ -452,8 +451,9 @@ class TestEdgeCases:
 
     def test_memory_usage(self):
         """Test memory usage with large SHAP values."""
-        import psutil
         import os
+
+        import psutil
 
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss
@@ -471,7 +471,7 @@ class TestEdgeCases:
                 return np.random.normal(0, 1, len(X)).reshape(-1, 1)
 
         model = SimpleModel()
-        explainer = ModelExplainer(model, data)
+        ModelExplainer(model, data)
 
         final_memory = process.memory_info().rss
         memory_increase = final_memory - initial_memory

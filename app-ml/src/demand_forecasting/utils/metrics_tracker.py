@@ -1,13 +1,12 @@
-"""
-Metrics Tracker for Model Performance Monitoring
-Tracks model training metrics, validation results, and production performance
+"""Metrics Tracker for Model Performance Monitoring
+Tracks model training metrics, validation results, and production performance.
 """
 
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -15,17 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class MetricsTracker:
-    """Track and log model performance metrics"""
+    """Track and log model performance metrics."""
 
-    def __init__(self, run_id: Optional[str] = None):
-        """
-        Initialize metrics tracker
+    def __init__(self, run_id: str | None = None):
+        """Initialize metrics tracker.
 
         Args:
             run_id: Unique identifier for this run (defaults to timestamp)
         """
         self.run_id = run_id or datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        self.metrics: Dict[str, Any] = {
+        self.metrics: dict[str, Any] = {
             "run_id": self.run_id,
             "timestamp": datetime.utcnow().isoformat(),
             "training_metrics": {},
@@ -37,11 +35,10 @@ class MetricsTracker:
     def log_training_metrics(
         self,
         model_name: str,
-        metrics: Dict[str, float],
-        hyperparameters: Optional[Dict[str, Any]] = None,
+        metrics: dict[str, float],
+        hyperparameters: dict[str, Any] | None = None,
     ):
-        """
-        Log training metrics for a model
+        """Log training metrics for a model.
 
         Args:
             model_name: Name of the model
@@ -58,11 +55,10 @@ class MetricsTracker:
     def log_validation_metrics(
         self,
         model_name: str,
-        metrics: Dict[str, float],
-        dataset_info: Optional[Dict[str, Any]] = None,
+        metrics: dict[str, float],
+        dataset_info: dict[str, Any] | None = None,
     ):
-        """
-        Log validation metrics for a model
+        """Log validation metrics for a model.
 
         Args:
             model_name: Name of the model
@@ -79,11 +75,10 @@ class MetricsTracker:
     def log_test_metrics(
         self,
         model_name: str,
-        metrics: Dict[str, float],
-        predictions_summary: Optional[Dict[str, Any]] = None,
+        metrics: dict[str, float],
+        predictions_summary: dict[str, Any] | None = None,
     ):
-        """
-        Log test/production metrics for a model
+        """Log test/production metrics for a model.
 
         Args:
             model_name: Name of the model
@@ -98,8 +93,7 @@ class MetricsTracker:
         logger.info(f"Logged test metrics for {model_name}: {metrics}")
 
     def log_metadata(self, key: str, value: Any):
-        """
-        Log arbitrary metadata
+        """Log arbitrary metadata.
 
         Args:
             key: Metadata key
@@ -110,9 +104,8 @@ class MetricsTracker:
 
     def get_best_model(
         self, metric_name: str = "rmse", higher_is_better: bool = False
-    ) -> Optional[str]:
-        """
-        Get the best performing model based on validation metrics
+    ) -> str | None:
+        """Get the best performing model based on validation metrics.
 
         Args:
             metric_name: Metric to compare (e.g., 'rmse', 'mae', 'r2')
@@ -137,17 +130,15 @@ class MetricsTracker:
                 if value > best_value:
                     best_value = value
                     best_model = model_name
-            else:
-                if value < best_value:
-                    best_value = value
-                    best_model = model_name
+            elif value < best_value:
+                best_value = value
+                best_model = model_name
 
         logger.info(f"Best model: {best_model} with {metric_name}={best_value:.4f}")
         return best_model
 
-    def get_metrics_summary(self) -> Dict[str, Any]:
-        """
-        Get a summary of all tracked metrics
+    def get_metrics_summary(self) -> dict[str, Any]:
+        """Get a summary of all tracked metrics.
 
         Returns:
             Dictionary with metrics summary
@@ -174,8 +165,7 @@ class MetricsTracker:
         return summary
 
     def save_to_json(self, filepath: str):
-        """
-        Save metrics to JSON file
+        """Save metrics to JSON file.
 
         Args:
             filepath: Path to save the JSON file
@@ -189,8 +179,7 @@ class MetricsTracker:
         logger.info(f"Metrics saved to {filepath}")
 
     def save_to_csv(self, filepath: str, metrics_type: str = "validation"):
-        """
-        Save metrics to CSV file for easy analysis
+        """Save metrics to CSV file for easy analysis.
 
         Args:
             filepath: Path to save the CSV file
@@ -232,21 +221,19 @@ class MetricsTracker:
         logger.info(f"{metrics_type.capitalize()} metrics saved to {filepath}")
 
     def load_from_json(self, filepath: str):
-        """
-        Load metrics from JSON file
+        """Load metrics from JSON file.
 
         Args:
             filepath: Path to the JSON file
         """
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             self.metrics = json.load(f)
 
         self.run_id = self.metrics.get("run_id", self.run_id)
         logger.info(f"Metrics loaded from {filepath}")
 
-    def compare_models(self, metric_names: Optional[List[str]] = None) -> pd.DataFrame:
-        """
-        Compare all models across multiple metrics
+    def compare_models(self, metric_names: list[str] | None = None) -> pd.DataFrame:
+        """Compare all models across multiple metrics.
 
         Args:
             metric_names: List of metrics to compare (None = all metrics)
@@ -278,9 +265,8 @@ class MetricsTracker:
         )
 
 
-def create_tracker(run_id: Optional[str] = None) -> MetricsTracker:
-    """
-    Factory function to create a MetricsTracker
+def create_tracker(run_id: str | None = None) -> MetricsTracker:
+    """Factory function to create a MetricsTracker.
 
     Args:
         run_id: Optional run identifier

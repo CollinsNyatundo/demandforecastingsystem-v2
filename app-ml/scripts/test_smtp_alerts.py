@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-SMTP Alerting Verification Script
+"""SMTP Alerting Verification Script.
 
 This script tests SMTP email configuration for Airflow alerts.
 It sends a test email to verify the SMTP setup is working correctly.
@@ -13,9 +12,10 @@ import argparse
 import logging
 import os
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import sys
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 # Configure logging
 logging.basicConfig(
@@ -55,7 +55,7 @@ def get_smtp_config():
     return config
 
 
-def test_smtp_connection(config):
+def test_smtp_connection(config) -> bool | None:
     """Test SMTP server connection."""
     logger.info(f"🔍 Testing SMTP connection to {config['host']}:{config['port']}")
 
@@ -88,7 +88,7 @@ def test_smtp_connection(config):
         return False
 
 
-def send_test_email(config, to_email):
+def send_test_email(config, to_email) -> bool | None:
     """Send a test email."""
     logger.info(f"📧 Sending test email to {to_email}")
 
@@ -104,9 +104,9 @@ def send_test_email(config, to_email):
         <html>
         <body>
             <h2>🎉 SMTP Alert Test Successful!</h2>
-            
+
             <p>This is a test email from the Demand Forecasting ML system.</p>
-            
+
             <h3>Test Details:</h3>
             <ul>
                 <li><strong>Timestamp:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</li>
@@ -115,7 +115,7 @@ def send_test_email(config, to_email):
                 <li><strong>TLS:</strong> {'Enabled' if config['starttls'] else 'Disabled'}</li>
                 <li><strong>SSL:</strong> {'Enabled' if config['ssl'] else 'Disabled'}</li>
             </ul>
-            
+
             <h3>Next Steps:</h3>
             <p>If you received this email, your SMTP configuration is working correctly!</p>
             <p>The system can now send alerts for:</p>
@@ -125,7 +125,7 @@ def send_test_email(config, to_email):
                 <li>Data drift detection</li>
                 <li>Automated retraining notifications</li>
             </ul>
-            
+
             <hr>
             <p><small>This is an automated test from the Demand Forecasting ML System.</small></p>
         </body>
@@ -157,7 +157,7 @@ def send_test_email(config, to_email):
         return False
 
 
-def test_airflow_email_function():
+def test_airflow_email_function() -> bool | None:
     """Test Airflow's email sending function."""
     logger.info("🔍 Testing Airflow email function...")
 
@@ -191,7 +191,7 @@ def test_airflow_email_function():
         return False
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Test SMTP alerting configuration")
     parser.add_argument("--to", help="Override recipient email for testing")
     args = parser.parse_args()
@@ -261,15 +261,14 @@ def main():
             "📧 The system can now send email alerts for monitoring and failures."
         )
         return 0
-    else:
-        logger.error("💥 Some SMTP tests failed. Please check the configuration.")
-        logger.info("📖 Common issues:")
-        logger.info("   - Incorrect SMTP username/password")
-        logger.info("   - Firewall blocking SMTP ports")
-        logger.info("   - SMTP server requiring app-specific passwords")
-        logger.info("   - TLS/SSL configuration mismatch")
-        return 1
+    logger.error("💥 Some SMTP tests failed. Please check the configuration.")
+    logger.info("📖 Common issues:")
+    logger.info("   - Incorrect SMTP username/password")
+    logger.info("   - Firewall blocking SMTP ports")
+    logger.info("   - SMTP server requiring app-specific passwords")
+    logger.info("   - TLS/SSL configuration mismatch")
+    return 1
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

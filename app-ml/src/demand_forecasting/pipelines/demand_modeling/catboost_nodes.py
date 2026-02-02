@@ -1,17 +1,17 @@
-"""
-CatBoost Training Nodes
+"""CatBoost Training Nodes.
 
 Hyperparameter optimization and model training using CatBoost and Optuna.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Any
+
 import numpy as np
-import pandas as pd
 import optuna
-from optuna.trial import Trial
-from optuna.samplers import TPESampler
+import pandas as pd
 from catboost import CatBoostRegressor
+from optuna.samplers import TPESampler
+from optuna.trial import Trial
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 
@@ -28,9 +28,8 @@ def optimize_catboost_params(
     n_trials: int = 50,
     storage=None,
     study_name: str = "catboost_optimization",
-) -> Dict[str, Any]:
-    """
-    Optimize CatBoost hyperparameters using Optuna.
+) -> dict[str, Any]:
+    """Optimize CatBoost hyperparameters using Optuna.
 
     Args:
         X_train: Training features
@@ -72,9 +71,8 @@ def optimize_catboost_params(
         model.fit(X_opt_train, y_opt_train)
         # Evaluate on validation set (prevents data leakage)
         pred = model.predict(X_opt_val)
-        rmse = np.sqrt(mean_squared_error(y_opt_val, pred))
+        return np.sqrt(mean_squared_error(y_opt_val, pred))
 
-        return rmse
 
     try:
         # Create study with or without persistence
@@ -130,12 +128,11 @@ def optimize_catboost_params(
 def train_catboost_model(
     X_train: pd.DataFrame,
     y_train: pd.Series,
-    optimized_params: Dict[str, Any],
+    optimized_params: dict[str, Any],
     X_test: pd.DataFrame = None,
     y_test: pd.Series = None,
 ) -> tuple:
-    """
-    Train CatBoost model with optimized parameters on FULL training data.
+    """Train CatBoost model with optimized parameters on FULL training data.
 
     This trains on 100% of provided training data for maximum model capacity.
     The optimized_params come from Optuna which already did its own 80/20 split,
@@ -176,7 +173,7 @@ def train_catboost_model(
         # Optimization already did hyperparameter tuning with its own validation set
         model.fit(X_train, y_train, verbose=False)
 
-        _LOGGER.info(f"CatBoost model trained successfully on full dataset")
+        _LOGGER.info("CatBoost model trained successfully on full dataset")
 
         # Evaluate on test set if provided (matches notebook strategy)
         metrics = {
@@ -221,7 +218,7 @@ def train_catboost_model(
                 "test_samples": len(X_test),
             }
 
-            _LOGGER.info(f"✅ CatBoost evaluation on test set:")
+            _LOGGER.info("✅ CatBoost evaluation on test set:")
             _LOGGER.info(f"   RMSE: {metrics['rmse']:.4f}")
             _LOGGER.info(f"   MAE: {metrics['mae']:.4f}")
             _LOGGER.info(f"   MAPE: {metrics['mape']:.4f}%")

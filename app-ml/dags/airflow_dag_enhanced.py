@@ -1,5 +1,4 @@
-"""
-Enhanced Demand Forecasting DAG with MLflow & Optuna Persistence
+"""Enhanced Demand Forecasting DAG with MLflow & Optuna Persistence.
 
 This DAG extends the refactored version with:
 - Optuna study persistence to PostgreSQL
@@ -11,15 +10,11 @@ This DAG extends the refactored version with:
 Version: 2.1.0
 """
 
-import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
 
-import pandas as pd
 import pendulum
-from airflow import DAG
 from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 from airflow.utils.email import send_email
@@ -32,13 +27,9 @@ from kedro.io import DataCatalog
 
 # Project Imports
 from demand_forecasting.pipelines.data_processing.nodes import preprocess_data
-from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
-    optimize_catboost_params,
-    train_catboost_model,
-)
 from demand_forecasting.pipelines.feature_engineering.nodes import (
-    extract_temporal_features,
     create_feature_interactions,
+    extract_temporal_features,
 )
 from demand_forecasting.utils import (
     get_email_config,
@@ -111,7 +102,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_catalog():
-    """Bootstrap Kedro Context and return DataCatalog and config loader"""
+    """Bootstrap Kedro Context and return DataCatalog and config loader."""
     configure_project(PACKAGE_NAME)
     project_path = PROJECT_PATH
     bootstrap_project(project_path)
@@ -129,9 +120,8 @@ def get_catalog():
     return catalog, conf_loader
 
 
-def setup_mlflow() -> Optional[str]:
-    """
-    Set up MLflow experiment tracking.
+def setup_mlflow() -> str | None:
+    """Set up MLflow experiment tracking.
 
     Returns:
         Run ID if MLflow is available, None otherwise
@@ -148,10 +138,10 @@ def setup_mlflow() -> Optional[str]:
         try:
             experiment = mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
             if experiment is None:
-                experiment_id = mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
+                mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
                 logger.info(f"Created MLflow experiment: {MLFLOW_EXPERIMENT_NAME}")
             else:
-                experiment_id = experiment.experiment_id
+                pass
         except Exception as e:
             logger.warning(f"Could not set up MLflow experiment: {e}")
             return None
@@ -177,8 +167,7 @@ def setup_mlflow() -> Optional[str]:
 
 
 def get_optuna_storage():
-    """
-    Get Optuna storage backend for study persistence.
+    """Get Optuna storage backend for study persistence.
 
     Returns:
         RDBStorage instance or None if not available
@@ -277,8 +266,7 @@ def send_failure_notification(context: dict, error_message: str):
 def demand_forecasting_dag():
     @task()
     def t_validate_raw_data() -> dict:
-        """
-        Validate raw data quality before processing.
+        """Validate raw data quality before processing.
 
         Returns:
             Dictionary with data statistics
@@ -326,15 +314,14 @@ def demand_forecasting_dag():
             return stats
 
         except Exception as e:
-            logger.error(f"❌ Data validation failed: {str(e)}")
+            logger.error(f"❌ Data validation failed: {e!s}")
             if MLFLOW_AVAILABLE and mlflow_run_id:
                 mlflow.log_param("validation_status", "failed")
             raise
 
     @task(outlets=[PREPROCESSED_DATA_DATASET])
-    def t_preprocess():
-        """
-        Preprocess and clean raw bike demand data.
+    def t_preprocess() -> str | None:
+        """Preprocess and clean raw bike demand data.
 
         Produces: PREPROCESSED_DATA_DATASET
         """
@@ -369,13 +356,12 @@ def demand_forecasting_dag():
             return "Success"
 
         except Exception as e:
-            logger.error(f"❌ Preprocessing failed: {str(e)}")
+            logger.error(f"❌ Preprocessing failed: {e!s}")
             raise
 
     @task(outlets=[MODEL_INPUT_DATASET])
-    def t_feature_eng():
-        """
-        Generate ML-ready features from preprocessed data.
+    def t_feature_eng() -> str | None:
+        """Generate ML-ready features from preprocessed data.
 
         Produces: MODEL_INPUT_DATASET
         """
@@ -439,13 +425,12 @@ def demand_forecasting_dag():
             return "Success"
 
         except Exception as e:
-            logger.error(f"❌ Feature engineering failed: {str(e)}")
+            logger.error(f"❌ Feature engineering failed: {e!s}")
             raise
 
     @task(outlets=[TRAINED_MODEL_DATASET])
     def t_train_optimized_model():
-        """
-        Train CatBoost model with persistent Optuna optimization and MLflow tracking.
+        """Train CatBoost model with persistent Optuna optimization and MLflow tracking.
 
         This task implements:
         - Real Optuna TPESampler Bayesian optimization
@@ -530,22 +515,22 @@ def demand_forecasting_dag():
             logger.info("Sampler: TPESampler (Bayesian optimization)")
 
             if optuna_storage:
-                logger.info(f"Storage: PostgreSQL (study will persist)")
+                logger.info("Storage: PostgreSQL (study will persist)")
                 logger.info(f"Study name: {OPTUNA_STUDY_NAME}")
             else:
                 logger.info("Storage: In-memory (study will not persist)")
 
             # Import and use catboost optimization
-            from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
-                optimize_catboost_params,
-                train_catboost_model,
-            )
-
             # CRITICAL: Split data into train/test sets BEFORE optimization
             # This ensures hyperparameters are tuned on training data and evaluated on unseen test data
             # Matches the notebook strategy: 80% train, 20% test
             from sklearn.model_selection import (
                 train_test_split as sklearn_train_test_split,
+            )
+
+            from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
+                optimize_catboost_params,
+                train_catboost_model,
             )
 
             train_fraction = params.get("train_fraction", 0.8)
@@ -568,7 +553,7 @@ def demand_forecasting_dag():
                 shuffle=True,
             )
 
-            logger.info(f"✅ Data split complete:")
+            logger.info("✅ Data split complete:")
             logger.info(f"   Training: {len(X_train)} samples")
             logger.info(f"   Testing: {len(X_test)} samples")
             logger.info(f"   Total: {len(X_full)} samples")
@@ -716,7 +701,7 @@ def demand_forecasting_dag():
             }
 
         except Exception as e:
-            logger.error(f"❌ Model training failed: {str(e)}")
+            logger.error(f"❌ Model training failed: {e!s}")
             if MLFLOW_AVAILABLE:
                 mlflow.log_param("training_status", "failed")
                 mlflow.end_run(status="FAILED")

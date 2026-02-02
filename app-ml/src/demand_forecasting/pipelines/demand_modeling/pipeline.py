@@ -1,6 +1,7 @@
 """demand modeling pipeline definition.
 
-This module defines the Kedro pipeline for demand modeling."""
+This module defines the Kedro pipeline for demand modeling.
+"""
 
 """Demand Modeling Pipeline
 
@@ -8,8 +9,9 @@ Orchestrates training of demand forecasting models including
 random forest, XGBoost, and CatBoost with hyperparameter optimization.
 """
 from kedro.pipeline import Pipeline, node
-from .nodes import train_single_model, train_final_model, compare_demand_models
+
 from .catboost_nodes import optimize_catboost_params, train_catboost_model
+from .nodes import compare_demand_models, train_final_model, train_single_model
 
 
 def create_pipeline(**kwargs) -> Pipeline:

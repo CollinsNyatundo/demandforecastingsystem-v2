@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Verification script for Enhanced DAG MLflow + Optuna integration
+"""Verification script for Enhanced DAG MLflow + Optuna integration.
 
 This script tests:
 1. MLflow connectivity and experiment creation
@@ -17,7 +16,6 @@ import json
 import logging
 import os
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -31,7 +29,6 @@ try:
     MLFLOW_AVAILABLE = True
 except ImportError:
     MLFLOW_AVAILABLE = False
-    print("❌ MLflow not installed")
 
 try:
     import optuna
@@ -40,7 +37,6 @@ try:
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
-    print("❌ Optuna not installed")
 
 try:
     import psycopg2
@@ -48,7 +44,6 @@ try:
     PSYCOPG2_AVAILABLE = True
 except ImportError:
     PSYCOPG2_AVAILABLE = False
-    print("❌ psycopg2 not installed")
 
 # Configure logging
 logging.basicConfig(
@@ -65,7 +60,7 @@ OPTUNA_STORAGE_URL = os.environ.get(
 OPTUNA_STUDY_NAME = os.environ.get("OPTUNA_STUDY_NAME", "demand_forecasting_study")
 
 
-def test_mlflow_connectivity():
+def test_mlflow_connectivity() -> bool | None:
     """Test MLflow server connectivity and experiment setup."""
     logger.info("🔍 Testing MLflow connectivity...")
 
@@ -118,7 +113,7 @@ def test_mlflow_connectivity():
         return False
 
 
-def test_optuna_persistence():
+def test_optuna_persistence() -> bool | None:
     """Test Optuna PostgreSQL storage persistence."""
     logger.info("🔍 Testing Optuna PostgreSQL persistence...")
 
@@ -165,7 +160,7 @@ def test_optuna_persistence():
 
         # Check if study exists
         try:
-            study_id = storage.get_study_id_from_name(study_name)
+            storage.get_study_id_from_name(study_name)
             study = optuna.load_study(study_name=study_name, storage=storage)
             logger.info(f"✅ Found existing Optuna study: {study_name}")
         except KeyError:
@@ -203,7 +198,7 @@ def test_optuna_persistence():
         return False
 
 
-def test_dag_import():
+def test_dag_import() -> bool | None:
     """Test that the enhanced DAG can be imported without errors."""
     logger.info("🔍 Testing Enhanced DAG import...")
 
@@ -228,7 +223,7 @@ def test_dag_import():
         return False
 
 
-def test_end_to_end_simulation():
+def test_end_to_end_simulation() -> bool | None:
     """Simulate key parts of the DAG workflow."""
     logger.info("🔍 Running end-to-end simulation...")
 
@@ -239,10 +234,7 @@ def test_end_to_end_simulation():
             mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
         # Set up Optuna
-        if OPTUNA_AVAILABLE:
-            storage = RDBStorage(url=OPTUNA_STORAGE_URL)
-        else:
-            storage = None
+        storage = RDBStorage(url=OPTUNA_STORAGE_URL) if OPTUNA_AVAILABLE else None
 
         # Simulate the optimization process
         with mlflow.start_run(
@@ -346,7 +338,7 @@ def generate_verification_report(results):
     return report
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Verify MLflow + Optuna integration")
     parser.add_argument(
         "--test-dag", action="store_true", help="Include DAG import test"
@@ -384,10 +376,9 @@ def main():
     if report["overall_status"] == "PASS":
         logger.info("🎉 All tests passed! Enhanced DAG is ready for production.")
         return 0
-    else:
-        logger.error("💥 Some tests failed. Check logs for details.")
-        return 1
+    logger.error("💥 Some tests failed. Check logs for details.")
+    return 1
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

@@ -1,10 +1,8 @@
-"""
-Automated retraining scheduler with multiple trigger types.
-"""
+"""Automated retraining scheduler with multiple trigger types."""
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Any
 
 import mlflow
 import pandas as pd
@@ -16,7 +14,7 @@ logger = logging.getLogger(__name__)
 class RetrainingScheduler:
     """Automated retraining with multiple trigger types."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.time_interval_days = config.get("time_interval_days", 7)
         self.performance_threshold = config.get("performance_threshold", 5.0)
         self.data_volume_threshold = config.get("data_volume_threshold", 10000)
@@ -25,7 +23,7 @@ class RetrainingScheduler:
             "model_registry_name", "demand_forecasting"
         )
 
-    def should_retrain(self) -> Dict[str, Any]:
+    def should_retrain(self) -> dict[str, Any]:
         """Check all triggers and decide if retraining needed."""
         triggers = []
 
@@ -232,7 +230,7 @@ class RetrainingScheduler:
                 return False
 
             # Perform t-test
-            t_stat, p_value = stats.ttest_ind(older_rmse, newer_rmse)
+            _t_stat, p_value = stats.ttest_ind(older_rmse, newer_rmse)
 
             # Calculate effect size (Cohen's d)
             pooled_std = (
@@ -296,7 +294,7 @@ class RetrainingScheduler:
             logger.error(f"Error getting baseline RMSE: {e}")
             return None
 
-    def _calculate_priority(self, triggers: List[str]) -> str:
+    def _calculate_priority(self, triggers: list[str]) -> str:
         """Calculate retraining priority based on trigger types."""
         priority_scores = {
             "TIME_INTERVAL": 1,
@@ -309,14 +307,13 @@ class RetrainingScheduler:
 
         if max_score >= 4:
             return "CRITICAL"
-        elif max_score >= 3:
+        if max_score >= 3:
             return "HIGH"
-        elif max_score >= 2:
+        if max_score >= 2:
             return "MEDIUM"
-        else:
-            return "LOW"
+        return "LOW"
 
-    def _get_trigger_details(self) -> Dict[str, Any]:
+    def _get_trigger_details(self) -> dict[str, Any]:
         """Get detailed information about each trigger."""
         return {
             "time_interval": {
@@ -338,10 +335,10 @@ class RetrainingScheduler:
             },
         }
 
-    def log_retraining_decision(self, decision: Dict[str, Any]):
+    def log_retraining_decision(self, decision: dict[str, Any]):
         """Log retraining decision to MLflow."""
         try:
-            client = mlflow.tracking.MlflowClient()
+            mlflow.tracking.MlflowClient()
 
             with mlflow.start_run(
                 run_name=f"retraining_decision_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -363,7 +360,7 @@ class RetrainingScheduler:
         except Exception as e:
             logger.error(f"Failed to log retraining decision to MLflow: {e}")
 
-    def get_retraining_recommendations(self, decision: Dict[str, Any]) -> List[str]:
+    def get_retraining_recommendations(self, decision: dict[str, Any]) -> list[str]:
         """Get recommendations based on retraining decision."""
         recommendations = []
 

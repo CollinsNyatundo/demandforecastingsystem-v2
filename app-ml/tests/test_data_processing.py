@@ -3,13 +3,13 @@ Unit tests for data processing utilities.
 Tests core data processing functions and pipelines.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timedelta
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 
 class TestDataProcessing:
@@ -129,9 +129,7 @@ class TestDataProcessing:
         for col in categorical_cols:
             assert col in df.columns
             # Check that values are in expected ranges
-            if col == "season":
-                assert df[col].between(1, 4).all()
-            elif col == "weathersit":
+            if col in {"season", "weathersit"}:
                 assert df[col].between(1, 4).all()
             elif col == "mnth":
                 assert df[col].between(1, 12).all()
@@ -177,7 +175,7 @@ class TestDataProcessing:
         assert correlations.shape[0] == correlations.shape[1]
 
         # Test target correlation with key features
-        target_corr = correlations["cnt"].abs()
+        correlations["cnt"].abs()
 
         # Temperature should have positive correlation with bike rentals
         assert correlations.loc["temp", "cnt"] > 0

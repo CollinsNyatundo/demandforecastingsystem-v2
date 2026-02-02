@@ -1,15 +1,14 @@
-"""
-Simplified data profiling and quality monitoring utilities.
+"""Simplified data profiling and quality monitoring utilities.
 Uses basic pandas profiling instead of pandas-profiling to avoid dependency issues.
 """
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +16,7 @@ logger = logging.getLogger(__name__)
 def profile_dataset(
     df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles"
 ) -> str:
-    """
-    Simple profiling function that generates basic statistics.
+    """Simple profiling function that generates basic statistics.
 
     Args:
         df: DataFrame to profile

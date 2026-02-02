@@ -1,6 +1,6 @@
+
 import boto3
 from botocore.client import Config
-import sys
 
 s3 = boto3.client(
     "s3",
@@ -14,13 +14,12 @@ s3 = boto3.client(
 BUCKET = "demand-forecasting"
 
 try:
-    print("Listing objects in demand-forecasting bucket:")
     objects = s3.list_objects_v2(Bucket=BUCKET)
     if "Contents" in objects:
-        for obj in objects["Contents"]:
-            print(f"- {obj['Key']}")
+        for _obj in objects["Contents"]:
+            pass
     else:
-        print("Bucket is empty.")
+        pass
 
-except Exception as e:
-    print(f"Error reading bucket: {e}")
+except Exception:
+    pass

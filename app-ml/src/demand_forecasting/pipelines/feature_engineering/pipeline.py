@@ -1,14 +1,15 @@
-"""Feature Engineering Pipeline
+"""Feature Engineering Pipeline.
 
 Transforms raw preprocessed data into engineered features
 including temporal features, interactions, and normalization.
 """
 
 from kedro.pipeline import Pipeline, node
+
 from .nodes import (
+    create_feature_interactions,
     extract_temporal_features,
     validate_features,
-    create_feature_interactions,
 )
 
 

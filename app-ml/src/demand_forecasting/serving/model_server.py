@@ -1,28 +1,29 @@
-"""
-Production-grade FastAPI model server for demand forecasting.
-"""
+"""Production-grade FastAPI model server for demand forecasting."""
 
+import hashlib
 import logging
-import time
+import math
 import os
 import secrets
-import hashlib
-import hmac
-import math
+import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+from datetime import datetime
 
-import mlflow
 import numpy as np
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from cachetools import TTLCache
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
-from pydantic import BaseModel, field_validator, Field, model_validator, ValidationError, ConfigDict
-from cachetools import TTLCache
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -45,25 +46,24 @@ model_accuracy = Gauge("model_accuracy", "Current model accuracy", ["model_id"])
 
 
 class PredictionRequest(BaseModel):
-    """
-    Prediction request with comprehensive validation.
-    
+    """Prediction request with comprehensive validation.
+
     Implements defense-in-depth:
     1. Type validation (Pydantic)
     2. Range validation (domain constraints)
     3. Anomaly detection (statistical bounds)
     4. Injection protection (extra field validation)
     """
-    
-    features: Dict[str, float] = Field(
+
+    features: dict[str, float] = Field(
         ...,
         description="Weather and temporal features for demand prediction"
     )
-    
+
     model_config = ConfigDict(
         # Reject extra fields (prevents injection attacks)
         extra="forbid",
-        
+
         # Example for documentation (Pydantic v2 compatible)
         json_schema_extra={
             "example": {
@@ -77,15 +77,15 @@ class PredictionRequest(BaseModel):
             }
         }
     )
-    
+
     @field_validator("features")
     @classmethod
-    def validate_feature_structure(cls, v: Dict[str, float]) -> Dict[str, float]:
+    def validate_feature_structure(cls, v: dict[str, float]) -> dict[str, float]:
         """Validate feature keys and basic structure."""
         required_features = [
             "temp", "humidity", "wind_speed", "hour", "day_of_week"
         ]
-        
+
         # Check for missing features
         missing = set(required_features) - set(v.keys())
         if missing:
@@ -93,7 +93,7 @@ class PredictionRequest(BaseModel):
                 f"Missing required features: {sorted(missing)}. "
                 f"Required: {sorted(required_features)}"
             )
-        
+
         # Check for unexpected features (potential injection)
         extra = set(v.keys()) - set(required_features)
         if extra:
@@ -101,18 +101,17 @@ class PredictionRequest(BaseModel):
                 f"Unexpected features detected: {sorted(extra)}. "
                 f"Only these features are accepted: {sorted(required_features)}"
             )
-        
+
         return v
-    
+
     @model_validator(mode='after')
     def validate_feature_values(self) -> 'PredictionRequest':
-        """
-        Validate feature value ranges and quality.
-        
+        """Validate feature value ranges and quality.
+
         Based on domain knowledge and training data statistics.
         """
         features = self.features
-        
+
         # Define validation rules: (min, max, description)
         validations = {
             "temp": (0.0, 1.0, "Normalized temperature (0-1)"),
@@ -121,49 +120,49 @@ class PredictionRequest(BaseModel):
             "hour": (0, 23, "Hour of day (0-23)"),
             "day_of_week": (0, 6, "Day of week (0=Mon, 6=Sun)")
         }
-        
+
         errors = []
-        
+
         for feature, (min_val, max_val, description) in validations.items():
             if feature not in features:
                 continue
-            
+
             value = features[feature]
-            
+
             # Type validation (should be caught by Pydantic, but double-check)
             if not isinstance(value, (int, float)):
                 errors.append(
                     f"{feature}: must be numeric, got {type(value).__name__}"
                 )
                 continue
-            
+
             # NaN/Inf check
             if math.isnan(value) or math.isinf(value):
                 errors.append(
                     f"{feature}: contains invalid value (NaN or Inf)"
                 )
                 continue
-            
+
             # Range validation
             if not (min_val <= value <= max_val):
                 errors.append(
                     f"{feature}: value {value} out of range. "
                     f"{description}. Valid range: [{min_val}, {max_val}]"
                 )
-        
+
         if errors:
             raise ValueError(
                 "Feature validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
             )
-        
+
         return self
 
 
 class PredictionResponse(BaseModel):
     """Prediction response with metadata for transparency."""
-    
+
     prediction: float = Field(..., description="Predicted demand value")
-    confidence: Optional[float] = Field(
+    confidence: float | None = Field(
         None,
         description="Model confidence score (0-1)",
         ge=0.0,
@@ -171,8 +170,8 @@ class PredictionResponse(BaseModel):
     )
     model_version: str = Field(..., description="Model version used")
     timestamp: str = Field(..., description="Prediction timestamp (ISO 8601)")
-    model_id: Optional[str] = Field(None, description="Model identifier")
-    
+    model_id: str | None = Field(None, description="Model identifier")
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -258,15 +257,14 @@ async def lifespan(app: FastAPI):
         logger.info("Model server shutdown complete")
 
 
-def get_allowed_origins() -> List[str]:
-    """
-    Environment-based CORS configuration.
-    
+def get_allowed_origins() -> list[str]:
+    """Environment-based CORS configuration.
+
     Follows principle of least privilege - only allow necessary origins.
     Production domains must be explicitly configured.
     """
     env = os.getenv("ENVIRONMENT", "development")
-    
+
     origins_map = {
         "production": [
             # Production domains - MUST be configured in environment
@@ -278,44 +276,43 @@ def get_allowed_origins() -> List[str]:
         ],
         "development": [
             "http://localhost:3000",
-            "http://localhost:8000", 
+            "http://localhost:8000",
             "http://localhost:8080",
             "http://localhost:8501"  # Streamlit
         ]
     }
-    
+
     return origins_map.get(env, origins_map["development"])
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """
-    Add comprehensive security headers to all responses.
-    
+    """Add comprehensive security headers to all responses.
+
     Based on OWASP Secure Headers Project:
     https://owasp.org/www-project-secure-headers/
-    
+
     Implements defense-in-depth security headers for production deployment.
     """
-    
+
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
-        
+
         # Prevent clickjacking attacks
         response.headers["X-Frame-Options"] = "DENY"
-        
+
         # Prevent MIME type sniffing attacks
         response.headers["X-Content-Type-Options"] = "nosniff"
-        
+
         # Enable XSS protection (legacy browsers)
         # Note: Modern browsers ignore this, CSP is primary defense
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        
+
         # Enforce HTTPS in production (HSTS)
         env = os.getenv("ENVIRONMENT", "development")
         if env == "production":
             response.headers["Strict-Transport-Security"] = \
                 "max-age=31536000; includeSubDomains; preload"
-        
+
         # Content Security Policy - primary XSS defense
         csp_directives = [
             "default-src 'self'",
@@ -328,16 +325,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "base-uri 'self'",
             "form-action 'self'"
         ]
-        
+
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
-        
+
         # Referrer policy for privacy
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        
+
         # Permissions policy - disable unnecessary browser features
         permissions_directives = [
             "geolocation=()",
-            "microphone=()", 
+            "microphone=()",
             "camera=()",
             "payment=()",
             "usb=()",
@@ -350,12 +347,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "fullscreen=()",
             "picture-in-picture=()"
         ]
-        
+
         response.headers["Permissions-Policy"] = ", ".join(permissions_directives)
-        
+
         # Remove server information
         response.headers["Server"] = "Demand-Forecasting-API"
-        
+
         return response
 
 
@@ -408,34 +405,32 @@ app.add_middleware(
 
 
 class APIKeyManager:
-    """
-    Secure API key management with constant-time comparison
+    """Secure API key management with constant-time comparison
     and rate limiting based on OWASP API Security Best Practices.
-    
+
     References:
     - OWASP API Security Top 10 2023 - API2:2023 Broken Authentication
     - FastAPI Security Guide: https://fastapi.tiangolo.com/tutorial/security/
     - NIST SP 800-63B: Digital Authentication Guidelines
     """
-    
+
     def __init__(self):
         # Load hashed keys from environment
         self.valid_key_hashes = self._load_api_key_hashes()
-    
-    def _load_api_key_hashes(self) -> Dict[str, dict]:
-        """
-        Load API keys from environment and hash them for secure storage.
-        
+
+    def _load_api_key_hashes(self) -> dict[str, dict]:
+        """Load API keys from environment and hash them for secure storage.
+
         In production, load from secure vault (AWS Secrets Manager,
         HashiCorp Vault, Azure Key Vault, etc.)
         """
         keys_str = os.environ.get("VALID_API_KEYS", "")
         keys = [k.strip() for k in keys_str.split(",") if k.strip()]
-        
+
         if not keys:
             logger.warning("No VALID_API_KEYS configured. API authentication will fail.")
             return {}
-        
+
         hashed_keys = {}
         for key in keys:
             # Hash the key for storage using SHA-256
@@ -444,32 +439,31 @@ class APIKeyManager:
                 "hash": key_hash,
                 "created_at": datetime.utcnow().isoformat()
             }
-        
+
         logger.info(f"Loaded {len(hashed_keys)} API key hashes")
         return hashed_keys
-    
+
     def _hash_api_key(self, api_key: str) -> str:
         """Hash provided API key for secure comparison."""
         return hashlib.sha256(api_key.encode()).hexdigest()
-    
+
     def verify_key_constant_time(self, provided_key: str) -> bool:
-        """
-        Verify API key using constant-time comparison to prevent timing attacks.
-        
+        """Verify API key using constant-time comparison to prevent timing attacks.
+
         Uses secrets.compare_digest() which takes the same amount of time
         to compare strings regardless of where differences occur.
-        
+
         This is the recommended method per OWASP and FastAPI security guidelines.
         """
         provided_hash = self._hash_api_key(provided_key)
-        
+
         # Use secrets.compare_digest for constant-time comparison
         # This prevents timing attacks by ensuring comparison time
         # is independent of key validity
-        for valid_hash in self.valid_key_hashes.keys():
+        for valid_hash in self.valid_key_hashes:
             if secrets.compare_digest(provided_hash, valid_hash):
                 return True
-        
+
         return False
 
 
@@ -479,45 +473,44 @@ api_key_manager = APIKeyManager()
 
 async def verify_api_key_secure(
     request: Request,
-    x_api_key: Optional[str] = Header(None)
+    x_api_key: str | None = Header(None)
 ) -> str:
-    """
-    Secure API key verification with rate limiting and constant-time comparison.
-    
+    """Secure API key verification with rate limiting and constant-time comparison.
+
     Implements OWASP API Security Best Practices:
     - API2:2023 Broken Authentication
     - API4:2023 Unrestricted Resource Consumption
-    
+
     Security Features:
     - Constant-time comparison prevents timing attacks
     - Rate limiting prevents brute force attacks
     - No logging of sensitive key material
     - IP-based attempt tracking
-    
+
     Args:
         request: FastAPI Request object for IP extraction
         x_api_key: API key from X-API-Key header
-        
+
     Returns:
         Verified API key string
-        
+
     Raises:
         HTTPException: For authentication failures with appropriate status codes
     """
     client_ip = request.client.host
-    
+
     # Check for X-Forwarded-For header (common behind proxy/load balancer)
     # This allows proper rate limiting when behind reverse proxy
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         # X-Forwarded-For can contain multiple IPs, take the first one (original client)
         client_ip = forwarded_for.split(",")[0].strip()
-    
+
     # Check for X-Real-IP header (alternative to X-Forwarded-For)
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
         client_ip = real_ip.strip()
-    
+
     # Check for missing API key
     if not x_api_key:
         logger.warning(f"Missing API key from {client_ip}")
@@ -525,7 +518,7 @@ async def verify_api_key_secure(
             status_code=401,
             detail="Missing API key. Include X-API-Key header."
         )
-    
+
     # Rate limiting - prevent brute force attacks
     # Maximum 10 failed attempts per hour per IP
     attempts = rate_limit_cache.get(client_ip, 0)
@@ -536,14 +529,14 @@ async def verify_api_key_secure(
             detail="Too many authentication attempts. Try again later.",
             headers={"Retry-After": "3600"}
         )
-    
+
     # Verify key using constant-time comparison
     is_valid = api_key_manager.verify_key_constant_time(x_api_key)
-    
+
     if not is_valid:
         # Increment failed attempt counter
         rate_limit_cache[client_ip] = attempts + 1
-        
+
         # Log WITHOUT including any part of the invalid key
         # This prevents sensitive data leakage
         logger.warning(
@@ -554,27 +547,26 @@ async def verify_api_key_secure(
             status_code=403,
             detail="Invalid API key"
         )
-    
+
     # Reset rate limit on successful authentication
     if client_ip in rate_limit_cache:
         del rate_limit_cache[client_ip]
-    
+
     logger.info(f"Successful authentication from {client_ip}")
     return x_api_key
 
 
 async def verify_api_key(x_api_key: str = Header(None)) -> str:
-    """
-    Legacy API key verification - DEPRECATED
-    
+    """Legacy API key verification - DEPRECATED.
+
     This function is kept for backward compatibility but should
     be replaced with verify_api_key_secure in all endpoints.
-    
+
     SECURITY WARNING: This function is vulnerable to timing attacks.
     Use verify_api_key_secure instead.
     """
     logger.warning("Using deprecated verify_api_key function - vulnerable to timing attacks")
-    
+
     # Load valid API keys from environment variable (comma-separated)
     valid_api_keys = os.environ.get("VALID_API_KEYS", "").split(",")
     valid_api_keys = [key.strip() for key in valid_api_keys if key.strip()]
@@ -629,7 +621,7 @@ async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_
             # Get model's prediction probabilities or leaf indices for uncertainty estimation
             # For regression, use model.get_leaf_indexes() if available
             if hasattr(model, "get_leaf_indexes"):
-                leaf_indices = model.get_leaf_indexes(features.reshape(1, -1))
+                model.get_leaf_indexes(features.reshape(1, -1))
                 # Confidence inversely related to leaf variance
                 confidence = 0.75  # Base confidence for regression
             else:
@@ -664,7 +656,7 @@ async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_
         prediction_requests_total.labels(model_id=model_id, status="error").inc()
         prediction_duration.observe(time.time() - start_time)
         logger.error(f"Prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e!s}")
 
 
 @app.get("/model/info", response_model=ModelInfo)

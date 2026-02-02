@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Comprehensive End-to-End Test for Demand Forecasting ML System
+"""Comprehensive End-to-End Test for Demand Forecasting ML System.
 
 Tests all capabilities:
 - Service health checks
@@ -15,15 +13,14 @@ Tests all capabilities:
 Handles Windows Unicode issues with proper encoding.
 """
 
+import json
+import logging
 import os
 import sys
-import json
 import time
-import requests
-import logging
 from datetime import datetime
-from typing import Dict, List, Tuple
-from pathlib import Path
+
+import requests
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -64,14 +61,13 @@ class E2ETestRunner:
             msg = f"[{status_emoji}] {test_name}"
             if message:
                 msg += f": {message}"
-            print(msg, flush=True)
 
             if status == "passed":
                 self.passed_tests.append(test_name)
             else:
                 self.failed_tests.append((test_name, message))
-        except Exception as e:
-            print(f"Error logging test: {e}", flush=True)
+        except Exception:
+            pass
 
     def test_service_health(self) -> bool:
         """Test all service health endpoints."""
@@ -158,7 +154,7 @@ class E2ETestRunner:
                     self.log_test(
                         "MLflow API: List Experiments",
                         "passed",
-                        f"Using /list endpoint",
+                        "Using /list endpoint",
                     )
                 else:
                     self.log_test(
@@ -228,8 +224,8 @@ class E2ETestRunner:
         logger.info("=" * 80)
 
         try:
-            import pandas as pd
             import numpy as np
+            import pandas as pd
 
             # Create sample data
             df = pd.DataFrame(
@@ -288,7 +284,7 @@ class E2ETestRunner:
         try:
             import pandas as pd
             import pandera as pa
-            from pandera import Column, DataFrameSchema, Check
+            from pandera import Check, Column, DataFrameSchema
 
             # Define schema matching the actual data
             # Note: pandera 0.27+ uses Check() instead of checks module
@@ -475,7 +471,6 @@ class E2ETestRunner:
         try:
             import optuna
             from optuna.samplers import TPESampler
-            import numpy as np
 
             def objective(trial):
                 # Simple optimization function
@@ -520,18 +515,10 @@ class E2ETestRunner:
         passed = len(self.passed_tests)
         failed = len(self.failed_tests)
 
-        print(f"\nTotal Tests: {total_tests}")
-        print(
-            f"PASSED: {passed} ({100*passed/total_tests if total_tests > 0 else 0:.1f}%)"
-        )
-        print(
-            f"FAILED: {failed} ({100*failed/total_tests if total_tests > 0 else 0:.1f}%)"
-        )
 
         if self.failed_tests:
-            print("\nFailed Tests:")
-            for test_name, message in self.failed_tests:
-                print(f"  - {test_name}: {message}")
+            for _test_name, _message in self.failed_tests:
+                pass
 
         # Save detailed report
         self.results["summary"] = {
@@ -544,7 +531,6 @@ class E2ETestRunner:
         report_path = "e2e_test_report.json"
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(self.results, f, indent=2, ensure_ascii=False)
-        print(f"\nDetailed report saved to: {report_path}")
 
         return failed == 0
 

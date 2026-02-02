@@ -1,6 +1,5 @@
-"""
-This is a boilerplate pipeline 'data_science'
-generated using Kedro 0.19.15
+"""This is a boilerplate pipeline 'data_science'
+generated using Kedro 0.19.15.
 """
 
 from .pipeline import create_pipeline

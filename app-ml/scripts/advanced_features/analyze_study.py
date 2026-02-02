@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Optuna Study Analyzer and Cleanup Utility
+"""Optuna Study Analyzer and Cleanup Utility.
 
 Analyzes Optuna study performance, creates visualizations, and provides
 cleanup utilities for failed trials and old studies.
@@ -34,23 +33,17 @@ Date: January 3, 2025
 import argparse
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
 try:
     import optuna
     from optuna.storages import RDBStorage
 except ImportError:
-    print(
-        "Error: Optuna not installed. Install with: pip install optuna psycopg2-binary"
-    )
     sys.exit(1)
 
 try:
     import pandas as pd
 except ImportError:
-    print("Error: Pandas not installed. Install with: pip install pandas")
     sys.exit(1)
 
 try:
@@ -60,16 +53,13 @@ try:
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
-    print("Warning: Plotly not installed. Visualizations disabled.")
-    print("Install with: pip install plotly")
 
 
 class StudyAnalyzer:
     """Analyze and manage Optuna studies."""
 
     def __init__(self, study_name: str, storage_url: str):
-        """
-        Initialize study analyzer.
+        """Initialize study analyzer.
 
         Args:
             study_name: Name of the Optuna study
@@ -81,8 +71,7 @@ class StudyAnalyzer:
         self.study = None
 
     def connect(self) -> bool:
-        """
-        Connect to Optuna storage and load study.
+        """Connect to Optuna storage and load study.
 
         Returns:
             True if connection successful, False otherwise
@@ -102,19 +91,14 @@ class StudyAnalyzer:
                 study_name=self.study_name, storage=self.storage
             )
 
-            print(f"✅ Connected to study: {self.study_name}")
-            print(f"   Total trials: {len(self.study.trials)}")
-            print()
 
             return True
 
-        except Exception as e:
-            print(f"❌ Failed to connect: {e}")
+        except Exception:
             return False
 
-    def get_statistics(self) -> Dict:
-        """
-        Calculate study statistics.
+    def get_statistics(self) -> dict:
+        """Calculate study statistics.
 
         Returns:
             Dictionary with statistics
@@ -182,61 +166,28 @@ class StudyAnalyzer:
         """Print study summary."""
         stats = self.get_statistics()
 
-        print("=" * 80)
-        print("STUDY SUMMARY")
-        print("=" * 80)
-        print()
-        print(f"Study Name: {self.study_name}")
-        print(f"Direction: {self.study.direction.name}")
-        print(f"Sampler: {self.study.sampler.__class__.__name__}")
-        print()
-        print("Trial Statistics:")
-        print(f"  Total Trials: {stats['total_trials']}")
-        print(f"  Completed: {stats['completed']}")
-        print(f"  Running: {stats['running']}")
-        print(f"  Failed: {stats['failed']}")
-        print(f"  Pruned: {stats['pruned']}")
-        print()
 
         if stats["best_value"] is not None:
-            print("Best Trial:")
-            print(f"  Trial #{stats['best_trial']}")
-            print(f"  Value (RMSE): {stats['best_value']:.6f}")
-            print(f"  Parameters:")
-            for key, value in stats["best_params"].items():
+            for _key, value in stats["best_params"].items():
                 if isinstance(value, float):
-                    print(f"    {key}: {value:.6f}")
+                    pass
                 else:
-                    print(f"    {key}: {value}")
-            print()
+                    pass
 
         if "mean_value" in stats:
-            print("Value Statistics:")
-            print(f"  Mean: {stats['mean_value']:.6f}")
-            print(f"  Std: {stats['std_value']:.6f}")
-            print(f"  Min: {stats['min_value']:.6f}")
-            print(f"  Max: {stats['max_value']:.6f}")
-            print(f"  Median: {stats['median_value']:.6f}")
-            print()
+            pass
 
         if "mean_duration" in stats:
-            print("Duration Statistics:")
-            print(f"  Mean: {stats['mean_duration']:.2f} seconds")
-            print(f"  Min: {stats['min_duration']:.2f} seconds")
-            print(f"  Max: {stats['max_duration']:.2f} seconds")
-            print()
+            pass
 
-        print("=" * 80)
 
     def create_visualizations(self, output_dir: str = "."):
-        """
-        Create study visualizations.
+        """Create study visualizations.
 
         Args:
             output_dir: Directory to save visualizations
         """
         if not PLOTLY_AVAILABLE:
-            print("⚠️  Plotly not available. Skipping visualizations.")
             return
 
         output_path = Path(output_dir)
@@ -247,7 +198,6 @@ class StudyAnalyzer:
         ]
 
         if not completed_trials:
-            print("⚠️  No completed trials. Cannot create visualizations.")
             return
 
         # 1. Optimization History
@@ -262,9 +212,8 @@ class StudyAnalyzer:
         # 4. Trial Duration Analysis
         self._create_duration_analysis(completed_trials, output_path)
 
-        print(f"✅ Visualizations saved to {output_path}/")
 
-    def _create_optimization_history(self, trials: List, output_path: Path):
+    def _create_optimization_history(self, trials: list, output_path: Path):
         """Create optimization history plot."""
         trial_numbers = [t.number for t in trials]
         values = [t.value for t in trials]
@@ -285,13 +234,13 @@ class StudyAnalyzer:
                 y=values,
                 mode="markers",
                 name="Trial RMSE",
-                marker=dict(
-                    size=8,
-                    color=values,
-                    colorscale="Viridis",
-                    showscale=True,
-                    colorbar=dict(title="RMSE"),
-                ),
+                marker={
+                    "size": 8,
+                    "color": values,
+                    "colorscale": "Viridis",
+                    "showscale": True,
+                    "colorbar": {"title": "RMSE"},
+                },
                 hovertemplate="Trial %{x}<br>RMSE: %{y:.4f}<extra></extra>",
             )
         )
@@ -303,7 +252,7 @@ class StudyAnalyzer:
                 y=cummin,
                 mode="lines",
                 name="Best RMSE",
-                line=dict(color="red", width=3),
+                line={"color": "red", "width": 3},
                 hovertemplate="Trial %{x}<br>Best RMSE: %{y:.4f}<extra></extra>",
             )
         )
@@ -318,7 +267,6 @@ class StudyAnalyzer:
 
         output_file = output_path / "optimization_history.html"
         fig.write_html(str(output_file))
-        print(f"  📊 Created: {output_file}")
 
     def _create_param_importance(self, output_path: Path):
         """Create parameter importance plot."""
@@ -328,12 +276,11 @@ class StudyAnalyzer:
             fig = plot_param_importances(self.study)
             output_file = output_path / "param_importance.html"
             fig.write_html(str(output_file))
-            print(f"  📊 Created: {output_file}")
 
-        except Exception as e:
-            print(f"  ⚠️  Could not create parameter importance plot: {e}")
+        except Exception:
+            pass
 
-    def _create_parallel_coordinate(self, trials: List, output_path: Path):
+    def _create_parallel_coordinate(self, trials: list, output_path: Path):
         """Create parallel coordinate plot."""
         try:
             from optuna.visualization import plot_parallel_coordinate
@@ -341,12 +288,11 @@ class StudyAnalyzer:
             fig = plot_parallel_coordinate(self.study)
             output_file = output_path / "parallel_coordinate.html"
             fig.write_html(str(output_file))
-            print(f"  📊 Created: {output_file}")
 
-        except Exception as e:
-            print(f"  ⚠️  Could not create parallel coordinate plot: {e}")
+        except Exception:
+            pass
 
-    def _create_duration_analysis(self, trials: List, output_path: Path):
+    def _create_duration_analysis(self, trials: list, output_path: Path):
         """Create trial duration analysis plot."""
         durations = []
         trial_numbers = []
@@ -368,7 +314,7 @@ class StudyAnalyzer:
                 y=durations,
                 mode="markers",
                 name="Duration",
-                marker=dict(size=8, color="blue"),
+                marker={"size": 8, "color": "blue"},
                 hovertemplate="Trial %{x}<br>Duration: %{y:.2f}s<extra></extra>",
             )
         )
@@ -387,7 +333,7 @@ class StudyAnalyzer:
                     y=moving_avg,
                     mode="lines",
                     name=f"{window}-trial Moving Avg",
-                    line=dict(color="red", width=2),
+                    line={"color": "red", "width": 2},
                 )
             )
 
@@ -400,11 +346,9 @@ class StudyAnalyzer:
 
         output_file = output_path / "duration_analysis.html"
         fig.write_html(str(output_file))
-        print(f"  📊 Created: {output_file}")
 
     def export_to_csv(self, output_file: str):
-        """
-        Export study data to CSV.
+        """Export study data to CSV.
 
         Args:
             output_file: Path to output CSV file
@@ -440,11 +384,9 @@ class StudyAnalyzer:
         df = pd.DataFrame(data)
         df.to_csv(output_file, index=False)
 
-        print(f"✅ Exported {len(df)} trials to {output_file}")
 
     def cleanup_failed_trials(self, dry_run: bool = False) -> int:
-        """
-        Clean up failed trials.
+        """Clean up failed trials.
 
         Args:
             dry_run: If True, don't actually delete
@@ -457,54 +399,39 @@ class StudyAnalyzer:
         ]
 
         if not failed:
-            print("✅ No failed trials to clean up")
             return 0
 
-        print(f"Found {len(failed)} failed trials")
 
         if dry_run:
-            print("🔍 DRY RUN: Would delete these trials")
-            for t in failed[:5]:  # Show first 5
-                print(f"  Trial #{t.number}: {t.state.name}")
+            for _t in failed[:5]:  # Show first 5
+                pass
             if len(failed) > 5:
-                print(f"  ... and {len(failed) - 5} more")
+                pass
             return len(failed)
 
         # Note: Optuna doesn't support individual trial deletion
         # Best practice is to create a new study with only successful trials
-        print("⚠️  Individual trial deletion not supported by Optuna")
-        print("    Recommendation: Create a new study with successful trials only")
-        print("    Use --export to save data, then recreate study")
 
         return len(failed)
 
-    def list_all_studies(self) -> List[str]:
-        """
-        List all studies in storage.
+    def list_all_studies(self) -> list[str]:
+        """List all studies in storage.
 
         Returns:
             List of study names
         """
         summaries = self.storage.get_all_study_summaries()
 
-        print("\n" + "=" * 80)
-        print("ALL STUDIES IN STORAGE")
-        print("=" * 80)
 
-        for summary in summaries:
-            print(f"\n📚 {summary.study_name}")
-            print(f"   Direction: {summary.direction.name}")
-            print(f"   Trials: {summary.n_trials}")
-            print(f"   Created: {summary.datetime_start}")
+        for _summary in summaries:
+            pass
 
-        print("\n" + "=" * 80)
 
         return [s.study_name for s in summaries]
 
 
-def compare_studies(study_names: List[str], storage_url: str, output_dir: str = "."):
-    """
-    Compare multiple studies.
+def compare_studies(study_names: list[str], storage_url: str, output_dir: str = "."):
+    """Compare multiple studies.
 
     Args:
         study_names: List of study names to compare
@@ -512,7 +439,6 @@ def compare_studies(study_names: List[str], storage_url: str, output_dir: str = 
         output_dir: Directory to save comparison plots
     """
     if not PLOTLY_AVAILABLE:
-        print("⚠️  Plotly not available. Cannot create comparison.")
         return
 
     storage = RDBStorage(url=storage_url)
@@ -528,7 +454,6 @@ def compare_studies(study_names: List[str], storage_url: str, output_dir: str = 
             ]
 
             if not completed:
-                print(f"⚠️  No completed trials in {study_name}")
                 continue
 
             # Calculate cumulative minimum
@@ -545,12 +470,12 @@ def compare_studies(study_names: List[str], storage_url: str, output_dir: str = 
                     y=cummin,
                     mode="lines",
                     name=study_name,
-                    line=dict(width=2),
+                    line={"width": 2},
                 )
             )
 
-        except Exception as e:
-            print(f"⚠️  Could not load {study_name}: {e}")
+        except Exception:
+            pass
 
     fig.update_layout(
         title="Study Comparison: Best RMSE Over Trials",
@@ -565,7 +490,6 @@ def compare_studies(study_names: List[str], storage_url: str, output_dir: str = 
     output_file = output_path / "study_comparison.html"
     fig.write_html(str(output_file))
 
-    print(f"✅ Comparison saved to {output_file}")
 
 
 def main():
@@ -665,20 +589,17 @@ Examples:
 
     # Create visualizations
     if args.visualize:
-        print("\n📊 Creating visualizations...")
         analyzer.create_visualizations(args.output_dir)
 
     # Export to CSV
     if args.export:
-        print(f"\n💾 Exporting to CSV...")
         analyzer.export_to_csv(args.export)
 
     # Cleanup failed trials
     if args.cleanup_failed:
-        print(f"\n🧹 Cleaning up failed trials...")
         count = analyzer.cleanup_failed_trials(dry_run=args.dry_run)
         if count > 0 and not args.dry_run:
-            print(f"   Use --export and recreate study to remove failed trials")
+            pass
 
 
 if __name__ == "__main__":

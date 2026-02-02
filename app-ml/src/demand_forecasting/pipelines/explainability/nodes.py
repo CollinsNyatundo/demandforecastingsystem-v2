@@ -1,13 +1,13 @@
-"""
-Explainability Pipeline Nodes
-SHAP-based model interpretation and feature importance analysis
+"""Explainability Pipeline Nodes
+SHAP-based model interpretation and feature importance analysis.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Any
+
+import mlflow
 import numpy as np
 import pandas as pd
-import mlflow
 import shap
 from catboost import CatBoostRegressor
 
@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 def generate_shap_explanations(
     catboost_model: "CatBoostRegressor",
     model_input_table: pd.DataFrame,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     _LOGGER.debug(
         f"Starting SHAP explanation generation for {len(model_input_table)} samples"
     )
@@ -56,9 +56,9 @@ def generate_shap_explanations(
 
 def log_explainability_artifacts(
     catboost_model: "CatBoostRegressor",
-    shap_explanations: Dict[str, Any],
-) -> Dict[str, str]:
-    """Log explainability artifacts to MLflow"""
+    shap_explanations: dict[str, Any],
+) -> dict[str, str]:
+    """Log explainability artifacts to MLflow."""
     _LOGGER.info("Logging explainability artifacts to MLflow...")
 
     try:
@@ -99,11 +99,10 @@ def log_explainability_artifacts(
 
 
 def create_explainability_report(
-    shap_explanations: Dict[str, Any],
+    shap_explanations: dict[str, Any],
     feature_importance: pd.DataFrame,
 ) -> str:
-    """
-    Create a summary report of model explainability
+    """Create a summary report of model explainability.
 
     Args:
         shap_explanations: SHAP explanation values
@@ -124,7 +123,7 @@ def create_explainability_report(
         <p>Samples analyzed: {shap_explanations['num_samples']}</p>
         <p>Features: {len(shap_explanations['feature_names'])}</p>
         <p>Base value: {shap_explanations['base_value']:.4f}</p>
-        
+
         <h2>Feature Importance (Top 10)</h2>
         <table border="1">
         <tr><th>Feature</th><th>Importance</th></tr>

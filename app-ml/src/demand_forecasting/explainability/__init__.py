@@ -1,3 +1,1 @@
-"""
-Model explainability module for demand forecasting system.
-"""
+"""Model explainability module for demand forecasting system."""

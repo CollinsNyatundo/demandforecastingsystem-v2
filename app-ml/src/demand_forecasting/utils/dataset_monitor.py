@@ -1,5 +1,4 @@
-"""
-Dataset Monitoring and Alerting Utility
+"""Dataset Monitoring and Alerting Utility.
 
 This module provides tools for monitoring dataset updates, freshness,
 and quality metrics in Airflow pipelines.
@@ -14,9 +13,10 @@ Best Practices Implemented:
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Any
+
 import s3fs
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -24,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class DatasetMonitor:
-    """
-    Monitors dataset freshness and logs update events.
+    """Monitors dataset freshness and logs update events.
     Now supports S3 file timestamp checking for accurate freshness monitoring.
     """
 
@@ -33,8 +32,8 @@ class DatasetMonitor:
         self,
         metrics_dir: str = "/opt/airflow/data/dataset_metrics",
         s3_endpoint: str = "http://host.docker.internal:9000",
-        s3_key: str = None,
-        s3_secret: str = None,
+        s3_key: str | None = None,
+        s3_secret: str | None = None,
         s3_bucket: str = "demand-forecasting",
     ):
         self.metrics_dir = Path(metrics_dir)
@@ -67,10 +66,9 @@ class DatasetMonitor:
         task_id: str,
         dag_id: str,
         run_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
-        """
-        Log a dataset update event.
+        """Log a dataset update event.
 
         Args:
             dataset_uri: URI of the dataset
@@ -103,9 +101,8 @@ class DatasetMonitor:
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10)
     )
-    def _get_s3_file_timestamp(self, dataset_uri: str) -> Optional[datetime]:
-        """
-        Get actual file modification timestamp from S3.
+    def _get_s3_file_timestamp(self, dataset_uri: str) -> datetime | None:
+        """Get actual file modification timestamp from S3.
 
         Args:
             dataset_uri: S3 URI (e.g., s3://demand-forecasting/01_raw/raw_data_full.parquet)
@@ -144,9 +141,8 @@ class DatasetMonitor:
 
     def check_dataset_freshness(
         self, dataset_uri: str, max_age_hours: int = 24, alert: bool = True
-    ) -> Tuple[bool, Optional[float]]:
-        """
-        Check if dataset is fresh (updated within max_age_hours).
+    ) -> tuple[bool, float | None]:
+        """Check if dataset is fresh (updated within max_age_hours).
         Now checks actual S3 file timestamps first, falls back to logged metrics.
 
         Args:
@@ -203,12 +199,11 @@ class DatasetMonitor:
     def log_dataset_metrics(
         self,
         dataset_uri: str,
-        metrics: Dict[str, Any],
-        task_id: Optional[str] = None,
-        dag_id: Optional[str] = None,
+        metrics: dict[str, Any],
+        task_id: str | None = None,
+        dag_id: str | None = None,
     ):
-        """
-        Log quality metrics for a dataset.
+        """Log quality metrics for a dataset.
 
         Args:
             dataset_uri: URI of the dataset
@@ -236,9 +231,8 @@ class DatasetMonitor:
 
     def get_dataset_history(
         self, dataset_uri: str, limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """
-        Get update history for a dataset.
+    ) -> list[dict[str, Any]]:
+        """Get update history for a dataset.
 
         Args:
             dataset_uri: URI of the dataset
@@ -251,7 +245,7 @@ class DatasetMonitor:
             return []
 
         events = []
-        with open(self.events_file, "r") as f:
+        with open(self.events_file) as f:
             for line in f:
                 try:
                     event = json.loads(line.strip())
@@ -263,9 +257,8 @@ class DatasetMonitor:
         # Return newest first, limited
         return sorted(events, key=lambda x: x["timestamp"], reverse=True)[:limit]
 
-    def get_dataset_statistics(self, dataset_uri: str) -> Dict[str, Any]:
-        """
-        Get statistics for a dataset (update frequency, avg size, etc.).
+    def get_dataset_statistics(self, dataset_uri: str) -> dict[str, Any]:
+        """Get statistics for a dataset (update frequency, avg size, etc.).
 
         Args:
             dataset_uri: URI of the dataset
@@ -308,9 +301,8 @@ class DatasetMonitor:
 
     def check_all_datasets_freshness(
         self, max_age_hours: int = 24
-    ) -> Dict[str, Tuple[bool, Optional[float]]]:
-        """
-        Check freshness for all tracked datasets.
+    ) -> dict[str, tuple[bool, float | None]]:
+        """Check freshness for all tracked datasets.
 
         Args:
             max_age_hours: Maximum acceptable age in hours
@@ -321,7 +313,7 @@ class DatasetMonitor:
         metrics = self._load_metrics()
         results = {}
 
-        for dataset_uri in metrics.keys():
+        for dataset_uri in metrics:
             results[dataset_uri] = self.check_dataset_freshness(
                 dataset_uri, max_age_hours, alert=False
             )
@@ -329,8 +321,7 @@ class DatasetMonitor:
         return results
 
     def _update_s3_timestamp(self, dataset_uri: str, timestamp: datetime):
-        """
-        Update metrics with S3 timestamp for consistency.
+        """Update metrics with S3 timestamp for consistency.
 
         Args:
             dataset_uri: URI of the dataset
@@ -350,9 +341,8 @@ class DatasetMonitor:
         except Exception as e:
             logger.warning(f"Failed to update S3 timestamp for {dataset_uri}: {e}")
 
-    def get_stale_datasets(self, max_age_hours: int = 24) -> List[Dict[str, Any]]:
-        """
-        Get list of stale datasets (older than max_age_hours).
+    def get_stale_datasets(self, max_age_hours: int = 24) -> list[dict[str, Any]]:
+        """Get list of stale datasets (older than max_age_hours).
 
         Args:
             max_age_hours: Maximum acceptable age in hours
@@ -376,8 +366,7 @@ class DatasetMonitor:
         return sorted(stale, key=lambda x: x["hours_since_update"], reverse=True)
 
     def generate_freshness_report(self, max_age_hours: int = 24) -> str:
-        """
-        Generate a human-readable freshness report for all datasets.
+        """Generate a human-readable freshness report for all datasets.
 
         Args:
             max_age_hours: Maximum acceptable age in hours
@@ -413,8 +402,7 @@ class DatasetMonitor:
         return "\n".join(report)
 
     def export_metrics_to_csv(self, output_path: str):
-        """
-        Export dataset metrics to CSV for analysis.
+        """Export dataset metrics to CSV for analysis.
 
         Args:
             output_path: Path to save CSV file
@@ -424,7 +412,7 @@ class DatasetMonitor:
             return
 
         events = []
-        with open(self.events_file, "r") as f:
+        with open(self.events_file) as f:
             for line in f:
                 try:
                     events.append(json.loads(line.strip()))
@@ -439,24 +427,24 @@ class DatasetMonitor:
         df.to_csv(output_path, index=False)
         logger.info(f"Exported {len(events)} events to {output_path}")
 
-    def _load_metrics(self) -> Dict[str, Any]:
+    def _load_metrics(self) -> dict[str, Any]:
         """Load metrics from JSON file."""
         if not self.metrics_file.exists():
             return {}
 
         try:
-            with open(self.metrics_file, "r") as f:
+            with open(self.metrics_file) as f:
                 return json.load(f)
         except json.JSONDecodeError:
             logger.warning("Corrupted metrics file, starting fresh")
             return {}
 
-    def _save_metrics(self, metrics: Dict[str, Any]):
+    def _save_metrics(self, metrics: dict[str, Any]):
         """Save metrics to JSON file."""
         with open(self.metrics_file, "w") as f:
             json.dump(metrics, f, indent=2)
 
-    def _update_metrics(self, dataset_uri: str, event: Dict[str, Any]):
+    def _update_metrics(self, dataset_uri: str, event: dict[str, Any]):
         """Update metrics summary with new event."""
         metrics = self._load_metrics()
 
@@ -478,7 +466,7 @@ class DatasetMonitor:
 
         self._save_metrics(metrics)
 
-    def _update_metrics_summary(self, dataset_uri: str, new_metrics: Dict[str, Any]):
+    def _update_metrics_summary(self, dataset_uri: str, new_metrics: dict[str, Any]):
         """Update metrics summary with new quality metrics."""
         metrics = self._load_metrics()
 
@@ -505,8 +493,7 @@ class DatasetMonitor:
 def create_monitor(
     metrics_dir: str = "/opt/airflow/data/dataset_metrics",
 ) -> DatasetMonitor:
-    """
-    Factory function to create a DatasetMonitor instance.
+    """Factory function to create a DatasetMonitor instance.
 
     Args:
         metrics_dir: Directory to store metrics
@@ -519,8 +506,7 @@ def create_monitor(
 
 # Convenience functions for common operations
 def check_freshness(dataset_uri: str, max_age_hours: int = 24) -> bool:
-    """
-    Quick check if a dataset is fresh.
+    """Quick check if a dataset is fresh.
 
     Args:
         dataset_uri: URI of the dataset
@@ -539,10 +525,9 @@ def log_update(
     task_id: str,
     dag_id: str,
     run_id: str,
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
 ):
-    """
-    Quick log of a dataset update.
+    """Quick log of a dataset update.
 
     Args:
         dataset_uri: URI of the dataset
@@ -555,9 +540,8 @@ def log_update(
     monitor.log_dataset_update(dataset_uri, task_id, dag_id, run_id, metadata)
 
 
-def get_stale_datasets(max_age_hours: int = 24) -> List[Dict[str, Any]]:
-    """
-    Get list of stale datasets.
+def get_stale_datasets(max_age_hours: int = 24) -> list[dict[str, Any]]:
+    """Get list of stale datasets.
 
     Args:
         max_age_hours: Maximum acceptable age

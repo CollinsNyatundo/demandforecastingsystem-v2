@@ -1,15 +1,14 @@
-"""
-Great Expectations data profiling and validation utilities.
+"""Great Expectations data profiling and validation utilities.
 Production-compatible alternative to pandas-profiling.
 """
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +16,13 @@ logger = logging.getLogger(__name__)
 try:
     from great_expectations.data_context import EphemeralDataContext
     from great_expectations.expectations.core import (
-        ExpectTableColumnsToMatchOrderedList,
-        ExpectColumnValuesToBeOfType,
-        ExpectColumnValuesToNotBeNull,
-        ExpectColumnMinToBeBetween,
         ExpectColumnMaxToBeBetween,
         ExpectColumnMeanToBeBetween,
+        ExpectColumnMinToBeBetween,
+        ExpectColumnValuesToBeOfType,
+        ExpectColumnValuesToNotBeNull,
         ExpectColumnValueZScoresToBeLessThan,
+        ExpectTableColumnsToMatchOrderedList,
     )
 
     GX_AVAILABLE = True
@@ -37,8 +36,7 @@ logger = logging.getLogger(__name__)
 def create_gx_data_docs(
     df: pd.DataFrame, dataset_name: str, docs_dir: str = "/opt/airflow/data/docs"
 ) -> str:
-    """
-    Generate Great Expectations Data Docs for a dataset.
+    """Generate Great Expectations Data Docs for a dataset.
 
     Args:
         df: DataFrame to profile
@@ -115,8 +113,8 @@ def create_gx_data_docs(
         col_min = df[col].min()
         col_max = df[col].max()
         col_mean = df[col].mean()
-        col_median = df[col].median()
-        col_std = df[col].std()
+        df[col].median()
+        df[col].std()
 
         # Add reasonable range expectations
         suite.add_expectation(
@@ -224,9 +222,8 @@ def profile_dataset_gx(
     dataset_name: str,
     docs_dir: str = "/opt/airflow/data/docs",
     enable_data_docs: bool = True,
-) -> Optional[str]:
-    """
-    Profile dataset using Great Expectations.
+) -> str | None:
+    """Profile dataset using Great Expectations.
 
     Args:
         df: DataFrame to profile
@@ -244,5 +241,5 @@ def profile_dataset_gx(
     try:
         return create_gx_data_docs(df, dataset_name, docs_dir)
     except Exception as e:
-        logger.error(f"Failed to generate Data Docs for {dataset_name}: {str(e)}")
+        logger.error(f"Failed to generate Data Docs for {dataset_name}: {e!s}")
         raise

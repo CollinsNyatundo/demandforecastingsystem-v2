@@ -1,5 +1,4 @@
-"""
-Enhanced CatBoost training nodes with Optuna persistence and MLflow tracking.
+"""Enhanced CatBoost training nodes with Optuna persistence and MLflow tracking.
 
 This module extends the base CatBoost implementation with:
 - Optuna study persistence to PostgreSQL
@@ -13,7 +12,7 @@ Version: 2.1.0
 
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -45,8 +44,7 @@ except ImportError:
 
 
 def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """
-    Compute MAPE with zero-safe divisor matching notebook implementation.
+    """Compute MAPE with zero-safe divisor matching notebook implementation.
 
     Args:
         y_true: True values
@@ -57,15 +55,13 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
-    mape = (
+    return (
         np.mean(np.abs((y_true - y_pred) / np.where(y_true == 0, 0.01, y_true))) * 100
     )
-    return mape
 
 
-def get_optuna_storage(storage_url: Optional[str] = None) -> Optional[RDBStorage]:
-    """
-    Get Optuna storage backend for study persistence.
+def get_optuna_storage(storage_url: str | None = None) -> RDBStorage | None:
+    """Get Optuna storage backend for study persistence.
 
     Args:
         storage_url: PostgreSQL connection URL. If None, uses environment variable.
@@ -105,13 +101,12 @@ def objective_catboost_enhanced(
     trial: "optuna.Trial",
     x_train: pd.DataFrame,
     y_train: pd.Series,
-    search_space: Dict[str, Any],
-    catboost_params: Dict[str, Any],
+    search_space: dict[str, Any],
+    catboost_params: dict[str, Any],
     n_splits: int = 3,
     enable_mlflow: bool = False,
 ) -> float:
-    """
-    Enhanced Optuna objective function with MLflow logging support.
+    """Enhanced Optuna objective function with MLflow logging support.
 
     Args:
         trial: Optuna trial object
@@ -231,15 +226,14 @@ def objective_catboost_enhanced(
 
 def optimize_catboost_hyperparameters_enhanced(
     model_input_table: pd.DataFrame,
-    parameters: Dict[str, Any],
+    parameters: dict[str, Any],
     train_fraction: float = 0.8,
-    study_name: Optional[str] = None,
-    storage_url: Optional[str] = None,
+    study_name: str | None = None,
+    storage_url: str | None = None,
     enable_mlflow: bool = False,
     load_if_exists: bool = True,
-) -> Tuple[CatBoostRegressor, Dict[str, float]]:
-    """
-    Optimize CatBoost hyperparameters with persistent Optuna study.
+) -> tuple[CatBoostRegressor, dict[str, float]]:
+    """Optimize CatBoost hyperparameters with persistent Optuna study.
 
     This function implements:
     - Study persistence to PostgreSQL
@@ -356,13 +350,13 @@ def optimize_catboost_hyperparameters_enhanced(
 
     # Optimize
     logger.info("🚀 Starting Optuna optimization...")
-    logger.info(f"Sampler: TPESampler (Bayesian optimization)")
-    logger.info(f"Pruner: MedianPruner (early stopping)")
+    logger.info("Sampler: TPESampler (Bayesian optimization)")
+    logger.info("Pruner: MedianPruner (early stopping)")
 
     if storage:
-        logger.info(f"Storage: PostgreSQL (study persists across runs)")
+        logger.info("Storage: PostgreSQL (study persists across runs)")
     else:
-        logger.info(f"Storage: In-memory (study will not persist)")
+        logger.info("Storage: In-memory (study will not persist)")
 
     study.optimize(
         objective,
@@ -372,7 +366,7 @@ def optimize_catboost_hyperparameters_enhanced(
     )
 
     # Log study statistics
-    logger.info(f"✅ Optimization complete!")
+    logger.info("✅ Optimization complete!")
     logger.info(f"Total trials: {len(study.trials)}")
     logger.info(f"Best trial: #{study.best_trial.number}")
     logger.info(f"Best RMSE: {study.best_value:.4f}")
@@ -448,10 +442,9 @@ def optimize_catboost_hyperparameters_enhanced(
 
 
 def compare_models_enhanced(
-    rf_metrics: Dict[str, float], catboost_metrics: Dict[str, float]
-) -> Dict[str, Any]:
-    """
-    Compare RandomForest and CatBoost models with enhanced reporting.
+    rf_metrics: dict[str, float], catboost_metrics: dict[str, float]
+) -> dict[str, Any]:
+    """Compare RandomForest and CatBoost models with enhanced reporting.
 
     Args:
         rf_metrics: RandomForest metrics
@@ -502,10 +495,9 @@ def compare_models_enhanced(
 
 
 def get_study_history(
-    study_name: str, storage_url: Optional[str] = None, n_trials: int = 10
-) -> Dict[str, Any]:
-    """
-    Retrieve optimization history from a persistent Optuna study.
+    study_name: str, storage_url: str | None = None, n_trials: int = 10
+) -> dict[str, Any]:
+    """Retrieve optimization history from a persistent Optuna study.
 
     Args:
         study_name: Name of the Optuna study

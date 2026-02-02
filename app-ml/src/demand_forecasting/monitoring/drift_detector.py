@@ -1,13 +1,11 @@
-"""
-Data drift detection using statistical methods.
-"""
+"""Data drift detection using statistical methods."""
 
 import logging
-from typing import Dict, Any, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.stats import ks_2samp, chi2_contingency
+from scipy.stats import chi2_contingency, ks_2samp
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +14,7 @@ class DriftDetector:
     """Detect distribution drift in features using statistical tests."""
 
     def __init__(self, reference_data: pd.DataFrame, threshold: float = 0.05):
-        """
-        Initialize drift detector.
+        """Initialize drift detector.
 
         Args:
             reference_data: Reference dataset for comparison
@@ -29,10 +26,9 @@ class DriftDetector:
         self.drift_history = []
 
     def detect_drift(
-        self, current_data: pd.DataFrame, threshold: float = None
-    ) -> Dict[str, Any]:
-        """
-        Detect drift between reference and current data.
+        self, current_data: pd.DataFrame, threshold: float | None = None
+    ) -> dict[str, Any]:
+        """Detect drift between reference and current data.
 
         Args:
             current_data: Current dataset to compare
@@ -96,7 +92,7 @@ class DriftDetector:
 
     def _test_column_drift(
         self, column: str, current_data: pd.DataFrame, threshold: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Test drift for a single column."""
         ref_values = self.reference_data[column].dropna()
         curr_values = current_data[column].dropna()
@@ -156,7 +152,7 @@ class DriftDetector:
                     {"reference": ref_counts, "current": curr_counts}
                 ).T
 
-                chi2, p_value, _, expected = chi2_contingency(contingency_table)
+                chi2, p_value, _, _expected = chi2_contingency(contingency_table)
                 drift_score = chi2 / len(ref_values)  # Normalized chi-square
                 is_drifted = p_value < threshold
                 method = "CHI_SQUARE"
@@ -186,7 +182,7 @@ class DriftDetector:
                 "error": str(e),
             }
 
-    def _compute_statistics(self, data: pd.DataFrame) -> Dict[str, Any]:
+    def _compute_statistics(self, data: pd.DataFrame) -> dict[str, Any]:
         """Compute reference statistics for all columns."""
         stats = {}
 
@@ -225,14 +221,13 @@ class DriftDetector:
         """Generate recommendation based on drift score."""
         if drift_score > 0.8:
             return "URGENT_RETRAIN"
-        elif drift_score > 0.6:
+        if drift_score > 0.6:
             return "RETRAIN_SOON"
-        elif drift_score > threshold:
+        if drift_score > threshold:
             return "MONITOR_CLOSELY"
-        else:
-            return "CONTINUE"
+        return "CONTINUE"
 
-    def get_drift_trend(self, window_size: int = 10) -> Dict[str, Any]:
+    def get_drift_trend(self, window_size: int = 10) -> dict[str, Any]:
         """Analyze drift trend over time."""
         if len(self.drift_history) < window_size:
             return {
@@ -314,9 +309,8 @@ class PopulationStabilityIndex:
     @staticmethod
     def calculate_psi(
         expected: pd.Series, actual: pd.Series, buckets: int = 10
-    ) -> Dict[str, Any]:
-        """
-        Calculate PSI between two distributions.
+    ) -> dict[str, Any]:
+        """Calculate PSI between two distributions.
 
         Args:
             expected: Expected/Reference distribution
@@ -377,7 +371,7 @@ class PopulationStabilityIndex:
                 "interpretation": psi_interpretation,
                 "expected_counts": expected_counts.to_dict(),
                 "actual_counts": actual_counts.to_dict(),
-                "psi_components": dict(zip(all_bins, psi_components)),
+                "psi_components": dict(zip(all_bins, psi_components, strict=False)),
                 "buckets_used": len(all_bins),
             }
 

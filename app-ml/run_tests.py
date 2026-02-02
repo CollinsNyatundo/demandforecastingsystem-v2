@@ -1,18 +1,17 @@
-"""
-Comprehensive test execution and reporting script.
+"""Comprehensive test execution and reporting script.
 
 Provides test runner with coverage reporting, performance benchmarking,
 and detailed test result analysis for the app-ml system.
 """
 
-import os
-import sys
-import subprocess
+import argparse
 import json
+import os
+import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Any
-import argparse
+from typing import Any
 
 
 class TestRunner:
@@ -29,11 +28,8 @@ class TestRunner:
         include_slow: bool = False,
         include_mlflow: bool = False,
         include_optuna: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run all tests with specified options."""
-        print("🚀 Starting Comprehensive Test Suite for app-ml System")
-        print("=" * 60)
-
         # Build pytest command
         cmd = [
             "python",
@@ -66,9 +62,6 @@ class TestRunner:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(self.project_root / "src")
 
-        print(f"📋 Running command: {' '.join(cmd)}")
-        print(f"🎯 Markers: {', '.join(markers) if markers else 'all'}")
-        print()
 
         # Run tests
         start_time = time.time()
@@ -102,16 +95,12 @@ class TestRunner:
             return self.results
 
         except subprocess.TimeoutExpired:
-            print("❌ Test execution timed out after 30 minutes")
             return {"exit_code": 1, "error": "timeout"}
         except Exception as e:
-            print(f"❌ Test execution failed: {e}")
             return {"exit_code": 1, "error": str(e)}
 
-    def run_specific_tests(self, test_files: List[str]) -> Dict[str, Any]:
+    def run_specific_tests(self, test_files: list[str]) -> dict[str, Any]:
         """Run specific test files."""
-        print(f"🎯 Running specific tests: {', '.join(test_files)}")
-
         cmd = [
             "python",
             "-m",
@@ -136,27 +125,19 @@ class TestRunner:
 
     def _print_results(self):
         """Print test results summary."""
-        print("\n" + "=" * 60)
-        print("📊 TEST RESULTS SUMMARY")
-        print("=" * 60)
-
         if self.results["exit_code"] == 0:
-            print("✅ ALL TESTS PASSED")
+            pass
         else:
-            print("❌ SOME TESTS FAILED")
+            pass
 
-        print(f"⏱️  Duration: {self.results['duration']:.2f} seconds")
-        print(f"📅 Timestamp: {self.results['timestamp']}")
 
         if self.results["stderr"]:
-            print("\n🔍 ERRORS:")
-            print(self.results["stderr"])
+            pass
 
         # Parse test statistics from stdout
         stdout_lines = self.results["stdout"].split("\n")
         for line in stdout_lines:
             if "passed" in line and "failed" in line and "error" in line:
-                print(f"\n📈 {line.strip()}")
                 break
 
     def _generate_report(self):
@@ -183,9 +164,8 @@ class TestRunner:
         # Save HTML report
         self._generate_html_report(report, report_dir)
 
-        print(f"\n📄 Detailed report saved to: {report_dir}")
 
-    def _parse_coverage(self) -> Dict[str, Any]:
+    def _parse_coverage(self) -> dict[str, Any]:
         """Parse coverage information."""
         coverage_file = self.project_root / "coverage.json"
         if coverage_file.exists():
@@ -205,7 +185,7 @@ class TestRunner:
 
         return {"percent_covered": 0, "lines_covered": 0, "lines_missing": 0}
 
-    def _analyze_performance(self) -> Dict[str, Any]:
+    def _analyze_performance(self) -> dict[str, Any]:
         """Analyze test performance."""
         stdout = self.results.get("stdout", "")
 
@@ -224,7 +204,7 @@ class TestRunner:
 
         return performance
 
-    def _generate_recommendations(self) -> List[str]:
+    def _generate_recommendations(self) -> list[str]:
         """Generate test recommendations."""
         recommendations = []
 
@@ -251,7 +231,7 @@ class TestRunner:
 
         return recommendations
 
-    def _generate_html_report(self, report: Dict[str, Any], report_dir: Path):
+    def _generate_html_report(self, report: dict[str, Any], report_dir: Path):
         """Generate HTML test report."""
         html_content = f"""
 <!DOCTYPE html>
@@ -276,11 +256,11 @@ class TestRunner:
         <h1>🚀 app-ml Demand Forecasting System Test Report</h1>
         <p>Generated on: {report['summary']['timestamp']}</p>
     </div>
-    
+
     <div class="section">
         <h2>📊 Test Summary</h2>
         <div class="metric">
-            <strong>Status:</strong> 
+            <strong>Status:</strong>
             <span class="{'success' if report['summary']['exit_code'] == 0 else 'failure'}">
                 {'✅ PASSED' if report['summary']['exit_code'] == 0 else '❌ FAILED'}
             </span>
@@ -292,7 +272,7 @@ class TestRunner:
             <strong>Markers:</strong> {', '.join(report['summary']['markers']) if report['summary']['markers'] else 'All'}
         </div>
     </div>
-    
+
     <div class="section">
         <h2>📈 Code Coverage</h2>
         <div class="metric">
@@ -305,7 +285,7 @@ class TestRunner:
             <strong>Lines Missing:</strong> {report['coverage']['lines_missing']}
         </div>
     </div>
-    
+
     <div class="section">
         <h2>🎯 Recommendations</h2>
         <ul>

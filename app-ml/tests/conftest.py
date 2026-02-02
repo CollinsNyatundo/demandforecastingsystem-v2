@@ -9,12 +9,12 @@ Provides fixtures and utilities for testing all system components including:
 - Edge cases and error scenarios
 """
 
-import os
+import shutil
 import sys
 import tempfile
-import shutil
+from collections.abc import Generator
 from pathlib import Path
-from typing import Dict, Any, Generator, List
+from typing import Any
 
 # Add src to path for imports
 project_root = Path(__file__).parent.parent
@@ -27,35 +27,35 @@ try:
     PYTEST_AVAILABLE = True
 except ImportError:
     PYTEST_AVAILABLE = False
-    print("Warning: pytest not available, some fixtures may not work")
 
 # Import system components only when available
 try:
-    import numpy as np
-    import pandas as pd
-    from unittest.mock import Mock, patch, MagicMock
+    from unittest.mock import MagicMock, Mock, patch
+
     import mlflow
+    import numpy as np
     import optuna
-    from optuna.storages import RDBStorage
+    import pandas as pd
     from fastapi.testclient import TestClient
+    from optuna.storages import RDBStorage
+
+    from demand_forecasting.automation.retraining_scheduler import RetrainingScheduler
+    from demand_forecasting.explainability.shap_explainer import ModelExplainer
+    from demand_forecasting.monitoring.drift_detector import DriftDetector
+    from demand_forecasting.optimization.ensemble import EnsembleManager
+    from demand_forecasting.optimization.multi_objective import objective_multi
+    from demand_forecasting.serving.model_router import ModelRouter
 
     # Import system components
     from demand_forecasting.serving.model_server import app as model_server_app
-    from demand_forecasting.monitoring.drift_detector import DriftDetector
-    from demand_forecasting.explainability.shap_explainer import ModelExplainer
-    from demand_forecasting.optimization.multi_objective import objective_multi
-    from demand_forecasting.optimization.ensemble import EnsembleManager
-    from demand_forecasting.automation.retraining_scheduler import RetrainingScheduler
-    from demand_forecasting.serving.model_router import ModelRouter
 
     COMPONENTS_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Some components not available: {e}")
+except ImportError:
     COMPONENTS_AVAILABLE = False
 
 
 @pytest.fixture(scope="session")
-def test_config() -> Dict[str, Any]:
+def test_config() -> dict[str, Any]:
     """Test configuration for all components."""
     return {
         "model_params": {
@@ -202,7 +202,7 @@ def model_server_test_client() -> TestClient:
 
 @pytest.fixture
 def drift_detector(
-    reference_data: pd.DataFrame, test_config: Dict[str, Any]
+    reference_data: pd.DataFrame, test_config: dict[str, Any]
 ) -> DriftDetector:
     """Drift detector instance for testing."""
     return DriftDetector(
@@ -217,7 +217,7 @@ def ensemble_manager() -> EnsembleManager:
 
 
 @pytest.fixture
-def retraining_scheduler(test_config: Dict[str, Any]) -> RetrainingScheduler:
+def retraining_scheduler(test_config: dict[str, Any]) -> RetrainingScheduler:
     """Retraining scheduler for testing."""
     return RetrainingScheduler(test_config["retraining_config"])
 

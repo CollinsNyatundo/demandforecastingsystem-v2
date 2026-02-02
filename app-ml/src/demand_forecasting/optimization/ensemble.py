@@ -1,9 +1,7 @@
-"""
-Ensemble methods for demand forecasting using scikit-learn.
-"""
+"""Ensemble methods for demand forecasting using scikit-learn."""
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from catboost import CatBoostRegressor
@@ -28,14 +26,13 @@ class EnsembleManager:
 
     def create_stacking_ensemble(
         self,
-        catboost_params: Dict[str, Any] = None,
-        rf_params: Dict[str, Any] = None,
-        xgb_params: Dict[str, Any] = None,
-        lgbm_params: Dict[str, Any] = None,
+        catboost_params: dict[str, Any] | None = None,
+        rf_params: dict[str, Any] | None = None,
+        xgb_params: dict[str, Any] | None = None,
+        lgbm_params: dict[str, Any] | None = None,
         cv_folds: int = 5,
     ) -> StackingRegressor:
-        """
-        Create a stacking ensemble of multiple models.
+        """Create a stacking ensemble of multiple models.
 
         Args:
             catboost_params: CatBoost hyperparameters
@@ -138,10 +135,9 @@ class EnsembleManager:
             raise
 
     def create_voting_ensemble(
-        self, models: List[Tuple[str, Any]], weights: List[float] = None
+        self, models: list[tuple[str, Any]], weights: list[float] | None = None
     ) -> Any:
-        """
-        Create a voting ensemble (simplified version).
+        """Create a voting ensemble (simplified version).
 
         Args:
             models: List of (name, model) tuples
@@ -161,7 +157,7 @@ class EnsembleManager:
             logger.info(f"Created voting ensemble with {len(models)} models")
             if weights:
                 logger.info(
-                    f"Model weights: {dict(zip([m[0] for m in models], weights))}"
+                    f"Model weights: {dict(zip([m[0] for m in models], weights, strict=False))}"
                 )
 
             return self.ensemble
@@ -172,9 +168,8 @@ class EnsembleManager:
 
     def train_ensemble(
         self, X_train, y_train, X_val=None, y_val=None
-    ) -> Dict[str, Any]:
-        """
-        Train the ensemble and individual base models.
+    ) -> dict[str, Any]:
+        """Train the ensemble and individual base models.
 
         Args:
             X_train, y_train: Training data
@@ -280,9 +275,8 @@ class EnsembleManager:
             logger.error(f"Ensemble training failed: {e}")
             raise
 
-    def evaluate_ensemble(self, X_test, y_test) -> Dict[str, Any]:
-        """
-        Evaluate ensemble performance on test set.
+    def evaluate_ensemble(self, X_test, y_test) -> dict[str, Any]:
+        """Evaluate ensemble performance on test set.
 
         Args:
             X_test, y_test: Test data
@@ -381,9 +375,8 @@ class EnsembleManager:
             logger.error(f"Ensemble evaluation failed: {e}")
             raise
 
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """
-        Get feature importance from ensemble components.
+    def get_feature_importance(self) -> dict[str, Any]:
+        """Get feature importance from ensemble components.
 
         Returns:
             Feature importance from base models
@@ -422,9 +415,8 @@ class EnsembleManager:
             logger.error(f"Failed to get feature importance: {e}")
             return {"error": str(e)}
 
-    def cross_validate_ensemble(self, X, y, cv_folds: int = 5) -> Dict[str, Any]:
-        """
-        Perform cross-validation on the ensemble.
+    def cross_validate_ensemble(self, X, y, cv_folds: int = 5) -> dict[str, Any]:
+        """Perform cross-validation on the ensemble.
 
         Args:
             X, y: Data for cross-validation

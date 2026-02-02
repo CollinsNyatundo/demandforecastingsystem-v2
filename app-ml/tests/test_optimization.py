@@ -5,23 +5,19 @@ Tests Optuna multi-objective optimization, ensemble creation,
 hyperparameter tuning, and performance scenarios.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
-from unittest.mock import Mock, patch, MagicMock
-import optuna
-from optuna.storages import RDBStorage
-from catboost import CatBoostRegressor
-from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-from demand_forecasting.optimization.multi_objective import (
-    objective_multi,
-    compute_zero_safe_mape,
-)
+import numpy as np
+import optuna
+import pandas as pd
+import pytest
+from optuna.storages import RDBStorage
+from sklearn.metrics import mean_squared_error
+
 from demand_forecasting.optimization.ensemble import EnsembleManager
+from demand_forecasting.optimization.multi_objective import (
+    compute_zero_safe_mape,
+    objective_multi,
+)
 
 
 class TestMultiObjectiveOptimization:
@@ -148,7 +144,7 @@ class TestMultiObjectiveOptimization:
         trial = study.ask()
 
         # Run objective function
-        result = objective_multi(trial, X_train, X_test, y_train, y_test, ["rmse"])
+        objective_multi(trial, X_train, X_test, y_train, y_test, ["rmse"])
 
         # Check that suggested parameters are within ranges
         params = trial.params
@@ -216,7 +212,7 @@ class TestMultiObjectiveOptimization:
 
         # Check that trials have different parameters
         params = [trial.params for trial in study.trials]
-        assert len(set(tuple(sorted(p.items())) for p in params)) == n_trials
+        assert len({tuple(sorted(p.items())) for p in params}) == n_trials
 
 
 class TestEnsembleManager:
@@ -479,8 +475,9 @@ class TestOptimizationEdgeCases:
     @pytest.mark.slow
     def test_optimization_memory_usage(self, sample_data: pd.DataFrame):
         """Test memory usage during optimization."""
-        import psutil
         import os
+
+        import psutil
 
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss

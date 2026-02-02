@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
-"""
-Full System Test including DAG execution
-"""
+"""Full System Test including DAG execution."""
+
+import sys
+import time
 
 import requests
-import json
-import time
-import sys
 from requests.auth import HTTPBasicAuth
 
 
 def test_airflow_dag_trigger():
-    """Test triggering an Airflow DAG"""
-    print("[INFO] Testing Airflow DAG Trigger")
-    print("=" * 50)
-
+    """Test triggering an Airflow DAG."""
     # Get DAGs
     try:
         response = requests.get(
@@ -24,10 +19,8 @@ def test_airflow_dag_trigger():
         )
         if response.status_code == 200:
             dags = response.json()
-            print(f"[PASS] Found {len(dags['dags'])} DAG(s)")
 
             for dag in dags["dags"]:
-                print(f"  - {dag['dag_id']} (paused: {dag['is_paused']})")
 
                 # Unpause the DAG if needed
                 if dag["is_paused"]:
@@ -38,9 +31,8 @@ def test_airflow_dag_trigger():
                         timeout=10,
                     )
                     if unpause_response.status_code == 200:
-                        print(f"[PASS] Unpaused DAG: {dag['dag_id']}")
+                        pass
                     else:
-                        print(f"[FAIL] Failed to unpause DAG: {dag['dag_id']}")
                         return False
 
                 # Trigger DAG run
@@ -53,27 +45,17 @@ def test_airflow_dag_trigger():
 
                 if trigger_response.status_code == 200:
                     dag_run = trigger_response.json()
-                    print(f"[PASS] Triggered DAG run: {dag_run['dag_run_id']}")
                     return dag_run["dag_run_id"]
-                else:
-                    print(
-                        f"[FAIL] Failed to trigger DAG: {trigger_response.status_code}"
-                    )
-                    print(f"Response: {trigger_response.text}")
-                    return False
+                return False
         else:
-            print(f"[FAIL] Failed to get DAGs: {response.status_code}")
             return False
 
-    except Exception as e:
-        print(f"[FAIL] Exception: {str(e)}")
+    except Exception:
         return False
 
 
 def check_dag_run_status(dag_id, dag_run_id):
-    """Check the status of a DAG run"""
-    print(f"[INFO] Checking DAG run status for {dag_id}/{dag_run_id}")
-
+    """Check the status of a DAG run."""
     max_wait_time = 300  # 5 minutes
     start_time = time.time()
 
@@ -88,7 +70,6 @@ def check_dag_run_status(dag_id, dag_run_id):
             if response.status_code == 200:
                 dag_run = response.json()
                 status = dag_run["state"]
-                print(f"[INFO] DAG run status: {status}")
 
                 if status in ["success", "failed"]:
                     return status
@@ -102,24 +83,19 @@ def check_dag_run_status(dag_id, dag_run_id):
 
                 if tasks_response.status_code == 200:
                     tasks = tasks_response.json()
-                    print(f"[INFO] Tasks: {len(tasks['task_instances'])}")
-                    for task in tasks["task_instances"]:
-                        print(f"  - {task['task_id']}: {task['state']}")
+                    for _task in tasks["task_instances"]:
+                        pass
 
             time.sleep(10)
 
-        except Exception as e:
-            print(f"[FAIL] Exception checking status: {str(e)}")
+        except Exception:
             break
 
     return "timeout"
 
 
-def test_mlflow_experiment():
-    """Test MLflow experiment creation"""
-    print("[INFO] Testing MLflow Experiment Creation")
-    print("=" * 50)
-
+def test_mlflow_experiment() -> bool | None:
+    """Test MLflow experiment creation."""
     try:
         # Create experiment via REST API (if available)
         response = requests.post(
@@ -129,54 +105,34 @@ def test_mlflow_experiment():
         )
 
         if response.status_code == 200:
-            print("[PASS] MLflow experiment created")
             return True
-        else:
-            print(f"[WARN] MLflow API not available: {response.status_code}")
-            # Try accessing UI instead
-            ui_response = requests.get("http://localhost:5000", timeout=10)
-            if ui_response.status_code == 200:
-                print("[PASS] MLflow UI accessible")
-                return True
-            return False
+        # Try accessing UI instead
+        ui_response = requests.get("http://localhost:5000", timeout=10)
+        return ui_response.status_code == 200
 
-    except Exception as e:
-        print(f"[FAIL] MLflow test failed: {str(e)}")
+    except Exception:
         return False
 
 
-def test_model_server():
-    """Test model server endpoints"""
-    print("[INFO] Testing Model Server")
-    print("=" * 50)
-
+def test_model_server() -> bool | None:
+    """Test model server endpoints."""
     try:
         # Test docs
         response = requests.get("http://localhost:8000/docs", timeout=10)
         if response.status_code == 200:
-            print("[PASS] Model server docs accessible")
+            pass
         else:
-            print(f"[FAIL] Model server docs: {response.status_code}")
             return False
 
         # Test health endpoint
         response = requests.get("http://localhost:8000/health", timeout=10)
-        if response.status_code == 200:
-            print("[PASS] Model server health OK")
-            return True
-        else:
-            print(f"[FAIL] Model server health: {response.status_code}")
-            return False
+        return response.status_code == 200
 
-    except Exception as e:
-        print(f"[FAIL] Model server test failed: {str(e)}")
+    except Exception:
         return False
 
 
-def main():
-    print("=" * 60)
-    print("DEMAND FORECASTING ML SYSTEM - FULL SYSTEM TEST")
-    print("=" * 60)
+def main() -> int:
 
     results = {}
 
@@ -194,42 +150,29 @@ def main():
         status = check_dag_run_status("dataset_monitoring", dag_run_info)
         results["dag_execution"] = status == "success"
 
-        if status == "success":
-            print("[PASS] DAG execution completed successfully")
-        elif status == "failed":
-            print("[FAIL] DAG execution failed")
+        if status in {"success", "failed"}:
+            pass
         else:
-            print("[WARN] DAG execution timed out")
+            pass
     else:
         results["airflow_trigger"] = False
         results["dag_execution"] = False
 
     # Summary
-    print("\n" + "=" * 60)
-    print("FULL SYSTEM TEST SUMMARY")
-    print("=" * 60)
 
     passed = 0
     failed = 0
 
-    for test, result in results.items():
+    for _test, result in results.items():
         if result:
-            print(f"[PASS] {test}")
             passed += 1
         else:
-            print(f"[FAIL] {test}")
             failed += 1
 
-    print(f"\nTotal Tests: {passed + failed}")
-    print(f"Passed: {passed}")
-    print(f"Failed: {failed}")
 
     if failed == 0:
-        print("\n[SUCCESS] All system tests passed!")
         return 0
-    else:
-        print(f"\n[PARTIAL] {failed} test(s) failed. System partially operational.")
-        return 1
+    return 1
 
 
 if __name__ == "__main__":

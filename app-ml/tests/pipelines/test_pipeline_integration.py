@@ -5,22 +5,20 @@ Tests pipeline configuration, data catalog integration, and end-to-end
 pipeline execution with real data scenarios.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
-import tempfile
-import shutil
-
-# Kedro imports
-from kedro.framework.context import KedroContext
-from kedro.io import DataCatalog, MemoryDataset
-from kedro.runner import SequentialRunner
-from kedro.config import OmegaConfigLoader
 
 # Project imports
 import sys
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
+from kedro.config import OmegaConfigLoader
+
+# Kedro imports
+from kedro.io import DataCatalog, MemoryDataset
+from kedro.runner import SequentialRunner
 
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root / "src"))
@@ -30,8 +28,7 @@ try:
     from demand_forecasting.settings import *
 
     PIPELINES_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Could not import pipeline modules: {e}")
+except ImportError:
     PIPELINES_AVAILABLE = False
 
 
@@ -42,8 +39,7 @@ def project_config():
         config_loader = OmegaConfigLoader(
             conf_source=str(project_root / "conf"), env="local"
         )
-        config = config_loader["*"]
-        return config
+        return config_loader["*"]
     except Exception:
         # Return minimal config for testing
         return {"model_options": {"test_size": 0.2, "random_state": 42}}
@@ -508,5 +504,5 @@ class TestPipelinePersistence:
             mock_train.assert_called_once()
 
             # Verify metrics structure
-            args, kwargs = mock_train.call_args
+            args, _kwargs = mock_train.call_args
             assert len(args) >= 4  # X_train, X_test, y_train, y_test

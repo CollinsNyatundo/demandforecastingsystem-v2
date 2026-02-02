@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""
-Input Validation Test Suite for Model Server.
+"""Input Validation Test Suite for Model Server.
 
 Tests comprehensive input validation including range checking,
 NaN/Inf protection, and injection prevention.
 """
 
-import sys
 import os
-import math
+import sys
+
 import pytest
+
 sys.path.append('src')
 
 # Set test environment variables
@@ -17,10 +17,8 @@ os.environ['VALID_API_KEYS'] = 'test_key_123,test_key_456'
 
 def test_valid_input():
     """Test that valid input passes validation."""
-    print("✅ Testing valid input...")
-    
     from demand_forecasting.serving.model_server import PredictionRequest
-    
+
     valid_input = {
         "features": {
             "temp": 0.5,
@@ -30,18 +28,16 @@ def test_valid_input():
             "day_of_week": 3
         }
     }
-    
+
     request = PredictionRequest(**valid_input)
     assert request.features == valid_input["features"]
-    print("   ✅ Valid input accepted")
 
 def test_missing_features():
     """Test validation of missing required features."""
-    print("❌ Testing missing features...")
-    
-    from demand_forecasting.serving.model_server import PredictionRequest
     from pydantic import ValidationError
-    
+
+    from demand_forecasting.serving.model_server import PredictionRequest
+
     # Test missing temp
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -52,8 +48,7 @@ def test_missing_features():
         })
     assert "Missing required features" in str(exc_info.value)
     assert "temp" in str(exc_info.value)
-    print("   ✅ Missing temp detected")
-    
+
     # Test multiple missing features
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -64,15 +59,13 @@ def test_missing_features():
     assert "wind_speed" in str(exc_info.value)
     assert "hour" in str(exc_info.value)
     assert "day_of_week" in str(exc_info.value)
-    print("   ✅ Multiple missing features detected")
 
 def test_extra_features():
     """Test validation of unexpected features (injection protection)."""
-    print("🔒 Testing extra features (injection protection)...")
-    
-    from demand_forecasting.serving.model_server import PredictionRequest
     from pydantic import ValidationError
-    
+
+    from demand_forecasting.serving.model_server import PredictionRequest
+
     # Test with extra field
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -86,8 +79,7 @@ def test_extra_features():
     error_str = str(exc_info.value)
     # Pydantic v2 handles extra fields differently - it may show as type error or extra field error
     assert "malicious_field" in error_str or "extra" in error_str.lower()
-    print("   ✅ Extra field injection blocked")
-    
+
     # Test with multiple extra fields
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -102,15 +94,13 @@ def test_extra_features():
         })
     error_str = str(exc_info.value)
     assert "extra1" in error_str or "extra2" in error_str or "__proto__" in error_str
-    print("   ✅ Multiple extra fields blocked")
 
 def test_range_validation():
     """Test range validation for all features."""
-    print("📏 Testing range validation...")
-    
-    from demand_forecasting.serving.model_server import PredictionRequest
     from pydantic import ValidationError
-    
+
+    from demand_forecasting.serving.model_server import PredictionRequest
+
     # Test temperature out of range
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -121,10 +111,11 @@ def test_range_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "temp" in error_str and "out of range" in error_str
-    assert "0.0" in error_str and "1.0" in error_str
-    print("   ✅ Temperature range validation")
-    
+    assert "temp" in error_str
+    assert "out of range" in error_str
+    assert "0.0" in error_str
+    assert "1.0" in error_str
+
     # Test negative temperature
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -135,9 +126,9 @@ def test_range_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "temp" in error_str and "out of range" in error_str
-    print("   ✅ Negative temperature blocked")
-    
+    assert "temp" in error_str
+    assert "out of range" in error_str
+
     # Test humidity out of range
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -148,9 +139,9 @@ def test_range_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "humidity" in error_str and "out of range" in error_str
-    print("   ✅ Humidity range validation")
-    
+    assert "humidity" in error_str
+    assert "out of range" in error_str
+
     # Test wind speed out of range
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -161,9 +152,9 @@ def test_range_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "wind_speed" in error_str and "out of range" in error_str
-    print("   ✅ Wind speed range validation")
-    
+    assert "wind_speed" in error_str
+    assert "out of range" in error_str
+
     # Test hour out of range
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -174,10 +165,11 @@ def test_range_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "hour" in error_str and "out of range" in error_str
-    assert "0" in error_str and "23" in error_str
-    print("   ✅ Hour range validation")
-    
+    assert "hour" in error_str
+    assert "out of range" in error_str
+    assert "0" in error_str
+    assert "23" in error_str
+
     # Test day_of_week out of range
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -188,17 +180,17 @@ def test_range_validation():
             "day_of_week": 7  # Invalid day (0-6)
         })
     error_str = str(exc_info.value)
-    assert "day_of_week" in error_str and "out of range" in error_str
-    assert "0" in error_str and "6" in error_str
-    print("   ✅ Day of week range validation")
+    assert "day_of_week" in error_str
+    assert "out of range" in error_str
+    assert "0" in error_str
+    assert "6" in error_str
 
 def test_nan_inf_validation():
     """Test NaN and Infinity validation."""
-    print("🔢 Testing NaN/Infinity validation...")
-    
-    from demand_forecasting.serving.model_server import PredictionRequest
     from pydantic import ValidationError
-    
+
+    from demand_forecasting.serving.model_server import PredictionRequest
+
     # Test NaN values
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -209,9 +201,9 @@ def test_nan_inf_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "temp" in error_str and ("NaN" in error_str or "invalid value" in error_str)
-    print("   ✅ NaN value blocked")
-    
+    assert "temp" in error_str
+    assert ("NaN" in error_str or "invalid value" in error_str)
+
     # Test Infinity values
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -222,9 +214,9 @@ def test_nan_inf_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "humidity" in error_str and ("Inf" in error_str or "invalid value" in error_str)
-    print("   ✅ Infinity value blocked")
-    
+    assert "humidity" in error_str
+    assert ("Inf" in error_str or "invalid value" in error_str)
+
     # Test negative infinity
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -235,16 +227,15 @@ def test_nan_inf_validation():
             "day_of_week": 3
         })
     error_str = str(exc_info.value)
-    assert "wind_speed" in error_str and ("inf" in error_str or "invalid value" in error_str)
-    print("   ✅ Negative infinity blocked")
+    assert "wind_speed" in error_str
+    assert ("inf" in error_str or "invalid value" in error_str)
 
 def test_type_validation():
     """Test type validation for features."""
-    print("🔤 Testing type validation...")
-    
-    from demand_forecasting.serving.model_server import PredictionRequest
     from pydantic import ValidationError
-    
+
+    from demand_forecasting.serving.model_server import PredictionRequest
+
     # Test string values
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -256,8 +247,7 @@ def test_type_validation():
         })
     # Pydantic should catch this at the field level
     assert "temp" in str(exc_info.value)
-    print("   ✅ String type blocked")
-    
+
     # Test None values
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -268,8 +258,7 @@ def test_type_validation():
             "day_of_week": 3
         })
     assert "temp" in str(exc_info.value)
-    print("   ✅ None type blocked")
-    
+
     # Test list values
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -280,48 +269,42 @@ def test_type_validation():
             "day_of_week": 3
         })
     assert "temp" in str(exc_info.value)
-    print("   ✅ List type blocked")
 
 def test_boundary_values():
     """Test boundary values (edge cases)."""
-    print("🎯 Testing boundary values...")
-    
     from demand_forecasting.serving.model_server import PredictionRequest
-    
+
     # Test valid boundary values
     boundary_cases = [
         # Temperature boundaries
         {"temp": 0.0, "humidity": 0.5, "wind_speed": 0.5, "hour": 12, "day_of_week": 3},
         {"temp": 1.0, "humidity": 0.5, "wind_speed": 0.5, "hour": 12, "day_of_week": 3},
-        
+
         # Humidity boundaries
         {"temp": 0.5, "humidity": 0.0, "wind_speed": 0.5, "hour": 12, "day_of_week": 3},
         {"temp": 0.5, "humidity": 1.0, "wind_speed": 0.5, "hour": 12, "day_of_week": 3},
-        
+
         # Wind speed boundaries
         {"temp": 0.5, "humidity": 0.5, "wind_speed": 0.0, "hour": 12, "day_of_week": 3},
         {"temp": 0.5, "humidity": 0.5, "wind_speed": 1.0, "hour": 12, "day_of_week": 3},
-        
+
         # Hour boundaries
         {"temp": 0.5, "humidity": 0.5, "wind_speed": 0.5, "hour": 0, "day_of_week": 3},
         {"temp": 0.5, "humidity": 0.5, "wind_speed": 0.5, "hour": 23, "day_of_week": 3},
-        
+
         # Day of week boundaries
         {"temp": 0.5, "humidity": 0.5, "wind_speed": 0.5, "hour": 12, "day_of_week": 0},
         {"temp": 0.5, "humidity": 0.5, "wind_speed": 0.5, "hour": 12, "day_of_week": 6},
     ]
-    
-    for i, case in enumerate(boundary_cases):
+
+    for _i, case in enumerate(boundary_cases):
         request = PredictionRequest(features=case)
         assert request.features == case
-        print(f"   ✅ Boundary case {i+1} accepted")
 
 def test_edge_case_floats():
     """Test edge case float values."""
-    print("🔬 Testing edge case floats...")
-    
     from demand_forecasting.serving.model_server import PredictionRequest
-    
+
     # Test very small positive numbers
     request = PredictionRequest(features={
         "temp": 1e-10,
@@ -331,8 +314,7 @@ def test_edge_case_floats():
         "day_of_week": 0
     })
     assert request.features["temp"] == 1e-10
-    print("   ✅ Very small positive numbers accepted")
-    
+
     # Test floating point precision
     request = PredictionRequest(features={
         "temp": 0.3333333333333333,
@@ -342,32 +324,29 @@ def test_edge_case_floats():
         "day_of_week": 3
     })
     assert request.features["temp"] == 0.3333333333333333
-    print("   ✅ High precision floats accepted")
 
 def test_model_documentation():
     """Test that model documentation is properly set."""
-    print("📚 Testing model documentation...")
-    
-    from demand_forecasting.serving.model_server import PredictionRequest, PredictionResponse
-    
+    from demand_forecasting.serving.model_server import (
+        PredictionRequest,
+        PredictionResponse,
+    )
+
     # Test field descriptions (use model_fields for Pydantic v2)
     try:
         request_fields = PredictionRequest.model_fields
         assert "features" in request_fields
         assert request_fields["features"].description is not None
-        print("   ✅ Field descriptions present (Pydantic v2)")
     except AttributeError:
         # Fallback for older Pydantic versions
         request_fields = PredictionRequest.__fields__
         assert "features" in request_fields
         assert request_fields["features"].description is not None
-        print("   ✅ Field descriptions present (Pydantic v1)")
-    
+
     # Test that models have proper configuration
     assert hasattr(PredictionRequest, 'model_config')
     assert hasattr(PredictionResponse, 'model_config')
-    print("   ✅ Model configuration present")
-    
+
     # Test that models can be instantiated with valid data
     valid_request = PredictionRequest(features={
         "temp": 0.5,
@@ -377,8 +356,7 @@ def test_model_documentation():
         "day_of_week": 3
     })
     assert valid_request.features["temp"] == 0.5
-    print("   ✅ Model instantiation works")
-    
+
     # Test response model
     valid_response = PredictionResponse(
         prediction=142.5,
@@ -388,15 +366,13 @@ def test_model_documentation():
         model_id="production"
     )
     assert valid_response.prediction == 142.5
-    print("   ✅ Response model works")
 
 def test_comprehensive_validation_errors():
     """Test multiple validation errors at once."""
-    print("💥 Testing comprehensive validation errors...")
-    
-    from demand_forecasting.serving.model_server import PredictionRequest
     from pydantic import ValidationError
-    
+
+    from demand_forecasting.serving.model_server import PredictionRequest
+
     # Test multiple issues at once - extra field will be caught first in Pydantic v2
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -407,13 +383,12 @@ def test_comprehensive_validation_errors():
             "day_of_week": 7,  # Out of range
             "extra_field": "injection"  # Extra field
         })
-    
+
     error_str = str(exc_info.value)
-    
+
     # In Pydantic v2, extra field errors are caught first as type errors
     assert "extra_field" in error_str or "extra" in error_str.lower()
-    print("   ✅ Extra field validation caught first")
-    
+
     # Test range validation errors separately (without extra fields)
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={
@@ -423,23 +398,19 @@ def test_comprehensive_validation_errors():
             "hour": 25,  # Out of range
             "day_of_week": 7  # Out of range
         })
-    
+
     error_str = str(exc_info.value)
-    
+
     # Should catch multiple validation errors
     assert "temp" in error_str  # Range error
     assert "humidity" in error_str  # NaN error
     assert "wind_speed" in error_str  # Range error
     assert "hour" in error_str  # Range error
     assert "day_of_week" in error_str  # Range error
-    
-    print("   ✅ Multiple validation errors caught")
 
-def main():
+
+def main() -> int | None:
     """Run all input validation tests."""
-    print("🔒 INPUT VALIDATION TEST SUITE")
-    print("=" * 50)
-    
     try:
         test_valid_input()
         test_missing_features()
@@ -451,22 +422,12 @@ def main():
         test_edge_case_floats()
         test_model_documentation()
         test_comprehensive_validation_errors()
-        
-        print("🎉 ALL INPUT VALIDATION TESTS PASSED!")
-        print("=" * 50)
-        print("✅ Range validation working correctly")
-        print("✅ NaN/Infinity protection implemented")
-        print("✅ Type safety enforced")
-        print("✅ Injection prevention active")
-        print("✅ Boundary values handled properly")
-        print("✅ Comprehensive error reporting")
-        
+
+
         return 0
-        
-    except Exception as e:
-        print(f"❌ TEST FAILED: {e}")
-        print("=" * 50)
+
+    except Exception:
         return 1
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

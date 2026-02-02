@@ -3,14 +3,15 @@ Unit tests for MinIO data upload functionality.
 Tests both the PowerShell script logic and Python equivalent.
 """
 
-import pytest
 import os
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-import pandas as pd
+from unittest.mock import MagicMock, patch
+
 import numpy as np
+import pandas as pd
+import pytest
 
 
 class TestMinioUpload:
@@ -172,7 +173,7 @@ class TestMinioUpload:
 
             # Verify upload was called
             assert mock_client.upload_fileobj.called
-            args, kwargs = mock_client.upload_fileobj.call_args
+            _args, kwargs = mock_client.upload_fileobj.call_args
             assert kwargs["Bucket"] == self.minio_config["bucket"]
             assert kwargs["Key"] == "test/sample_data.parquet"
 
@@ -215,7 +216,7 @@ class TestMinioUpload:
 
             # Verify upload was called with extra args
             assert mock_client.upload_fileobj.called
-            args, kwargs = mock_client.upload_fileobj.call_args
+            _args, kwargs = mock_client.upload_fileobj.call_args
             assert "ExtraArgs" in kwargs
             assert kwargs["ExtraArgs"]["Metadata"]["model_type"] == "catboost"
 
@@ -337,7 +338,7 @@ class TestMinioUpload:
             )
 
             mock_client.put_bucket_policy.assert_called_once()
-            args, kwargs = mock_client.put_bucket_policy.call_args
+            _args, kwargs = mock_client.put_bucket_policy.call_args
             assert kwargs["Bucket"] == self.minio_config["bucket"]
             assert "Policy" in kwargs
 
@@ -415,7 +416,6 @@ class TestMinioUploadIntegration:
         # 2. Upload files
         test_files = ["data.parquet", "model.pickle", "config.json"]
         for filename in test_files:
-            file_path = f"/tmp/{filename}"
             with patch("builtins.open", create=True) as mock_open:
                 mock_file = MagicMock()
                 mock_open.return_value.__enter__.return_value = mock_file

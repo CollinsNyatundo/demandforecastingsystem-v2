@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test runner for core pipeline utilities
+"""Test runner for core pipeline utilities.
 
 Usage:
     python scripts/run_core_tests.py
@@ -19,11 +18,8 @@ def run_tests(verbose=False):
     test_file = project_root / "tests" / "test_core_utilities.py"
 
     if not test_file.exists():
-        print(f"❌ Test file not found: {test_file}")
         return 1
 
-    print("🧪 Running Core Pipeline Utilities Tests")
-    print("=" * 50)
 
     # Set up environment
     env = {
@@ -43,14 +39,13 @@ def run_tests(verbose=False):
         result = subprocess.run(cmd, env=env, capture_output=False, text=True)
 
         if result.returncode == 0:
-            print("\n🎉 All core utilities tests passed!")
+            pass
         else:
-            print(f"\n💥 Tests failed with exit code: {result.returncode}")
+            pass
 
         return result.returncode
 
-    except Exception as e:
-        print(f"❌ Error running tests: {e}")
+    except Exception:
         return 1
 
 
@@ -63,4 +58,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

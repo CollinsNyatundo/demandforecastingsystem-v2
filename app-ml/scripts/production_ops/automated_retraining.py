@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Automated Retraining Scheduler for Demand Forecasting
+"""Automated Retraining Scheduler for Demand Forecasting.
 
 Monitors multiple trigger conditions and initiates retraining when needed:
 - Time-based: Scheduled intervals (daily, weekly, monthly)
@@ -17,13 +16,11 @@ Usage:
 """
 
 import argparse
-import json
 import logging
 import os
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 import requests
@@ -79,8 +76,7 @@ class RetrainingRecord(Base):
 
 
 class RetrainingScheduler:
-    """
-    Automated retraining scheduler with multiple trigger conditions.
+    """Automated retraining scheduler with multiple trigger conditions.
 
     Trigger Conditions:
     1. Time-based: Fixed schedule (daily, weekly, monthly)
@@ -98,14 +94,13 @@ class RetrainingScheduler:
 
     def __init__(
         self,
-        storage_url: Optional[str] = None,
-        airflow_url: Optional[str] = None,
+        storage_url: str | None = None,
+        airflow_url: str | None = None,
         performance_threshold: float = 55.0,
         data_growth_threshold: float = 0.20,
         drift_threshold: int = 3,
     ):
-        """
-        Initialize retraining scheduler.
+        """Initialize retraining scheduler.
 
         Args:
             storage_url: PostgreSQL URL (default: from env)
@@ -150,16 +145,15 @@ class RetrainingScheduler:
         # Create session factory
         self.Session = sessionmaker(bind=self.engine)
 
-        logger.info(f"RetrainingScheduler initialized")
+        logger.info("RetrainingScheduler initialized")
         logger.info(f"  Storage: {self.storage_url}")
         logger.info(f"  Airflow: {self.airflow_url}")
         logger.info(f"  Performance threshold: {self.performance_threshold}")
         logger.info(f"  Data growth threshold: {self.data_growth_threshold * 100}%")
         logger.info(f"  Drift threshold: {self.drift_threshold} features")
 
-    def check_retraining_needed(self) -> Tuple[bool, List[Dict[str, Any]]]:
-        """
-        Check all trigger conditions and determine if retraining is needed.
+    def check_retraining_needed(self) -> tuple[bool, list[dict[str, Any]]]:
+        """Check all trigger conditions and determine if retraining is needed.
 
         Returns:
             Tuple of (should_retrain, list of trigger reasons)
@@ -199,9 +193,8 @@ class RetrainingScheduler:
 
         return should_retrain, triggers
 
-    def _check_time_trigger(self) -> Dict[str, Any]:
-        """
-        Check if retraining is due based on time schedule.
+    def _check_time_trigger(self) -> dict[str, Any]:
+        """Check if retraining is due based on time schedule.
 
         Looks for last retraining timestamp and compares to schedule.
         Default schedule: weekly (7 days)
@@ -243,9 +236,8 @@ class RetrainingScheduler:
         finally:
             session.close()
 
-    def _check_performance_trigger(self) -> Dict[str, Any]:
-        """
-        Check if model performance has degraded below threshold.
+    def _check_performance_trigger(self) -> dict[str, Any]:
+        """Check if model performance has degraded below threshold.
 
         Queries MLflow or production metrics to get current RMSE.
         """
@@ -283,13 +275,12 @@ class RetrainingScheduler:
             return {
                 "should_trigger": False,
                 "reason": "performance_based",
-                "details": f"Error: {str(e)}",
+                "details": f"Error: {e!s}",
                 "error": str(e),
             }
 
-    def _check_data_trigger(self) -> Dict[str, Any]:
-        """
-        Check if training data has grown significantly.
+    def _check_data_trigger(self) -> dict[str, Any]:
+        """Check if training data has grown significantly.
 
         Compares current data size to size at last retraining.
         """
@@ -359,13 +350,12 @@ class RetrainingScheduler:
             return {
                 "should_trigger": False,
                 "reason": "data_based",
-                "details": f"Error: {str(e)}",
+                "details": f"Error: {e!s}",
                 "error": str(e),
             }
 
-    def _check_drift_trigger(self) -> Dict[str, Any]:
-        """
-        Check if data drift has been detected in multiple features.
+    def _check_drift_trigger(self) -> dict[str, Any]:
+        """Check if data drift has been detected in multiple features.
 
         Queries drift_records table for recent drift detections.
         """
@@ -380,12 +370,12 @@ class RetrainingScheduler:
             recent_drift = (
                 session.query(DriftRecord)
                 .filter(DriftRecord.check_timestamp >= cutoff)
-                .filter(DriftRecord.drift_detected == True)
+                .filter(DriftRecord.drift_detected)
                 .all()
             )
 
             # Get unique features with drift
-            features_with_drift = set([r.feature_name for r in recent_drift])
+            features_with_drift = {r.feature_name for r in recent_drift}
             n_features_with_drift = len(features_with_drift)
 
             should_trigger = n_features_with_drift >= self.drift_threshold
@@ -404,17 +394,16 @@ class RetrainingScheduler:
             return {
                 "should_trigger": False,
                 "reason": "drift_based",
-                "details": f"Error: {str(e)}",
+                "details": f"Error: {e!s}",
                 "error": str(e),
             }
         finally:
             session.close()
 
     def trigger_retraining(
-        self, triggers: List[Dict[str, Any]], dry_run: bool = False
-    ) -> Optional[str]:
-        """
-        Trigger Airflow DAG for retraining.
+        self, triggers: list[dict[str, Any]], dry_run: bool = False
+    ) -> str | None:
+        """Trigger Airflow DAG for retraining.
 
         Args:
             triggers: List of trigger reasons
@@ -497,10 +486,9 @@ class RetrainingScheduler:
             raise
 
     def _trigger_airflow_dag(
-        self, dag_id: str, conf: Optional[Dict[str, Any]] = None
+        self, dag_id: str, conf: dict[str, Any] | None = None
     ) -> str:
-        """
-        Trigger Airflow DAG via REST API.
+        """Trigger Airflow DAG via REST API.
 
         Args:
             dag_id: DAG ID to trigger
@@ -527,12 +515,11 @@ class RetrainingScheduler:
         if response.status_code in [200, 201]:
             data = response.json()
             return data["dag_run_id"]
-        else:
-            logger.error(f"Airflow API error: {response.status_code}")
-            logger.error(f"Response: {response.text}")
-            raise Exception(f"Failed to trigger DAG: {response.text}")
+        logger.error(f"Airflow API error: {response.status_code}")
+        logger.error(f"Response: {response.text}")
+        raise Exception(f"Failed to trigger DAG: {response.text}")
 
-    def _get_mlflow_production_rmse(self) -> Optional[float]:
+    def _get_mlflow_production_rmse(self) -> float | None:
         """Query MLflow for production model RMSE."""
         if not MLFLOW_AVAILABLE:
             logger.warning(
@@ -585,7 +572,7 @@ class RetrainingScheduler:
             logger.error(f"Failed to query MLflow for production model RMSE: {e}")
             return None
 
-    def _get_latest_model_rmse(self) -> Optional[float]:
+    def _get_latest_model_rmse(self) -> float | None:
         """Get RMSE from latest retraining record."""
         session = self.Session()
         try:
@@ -605,8 +592,7 @@ class RetrainingScheduler:
             session.close()
 
     def get_retraining_history(self, days: int = 30) -> pd.DataFrame:
-        """
-        Retrieve retraining history from PostgreSQL.
+        """Retrieve retraining history from PostgreSQL.
 
         Args:
             days: Number of days to look back
@@ -716,19 +702,14 @@ def main():
     if args.history:
         history = scheduler.get_retraining_history(days=args.days)
         if not history.empty:
-            print("\n📊 Retraining History:")
-            print(history.to_string(index=False))
 
             # Summary
-            completed = (history["status"] == "completed").sum()
-            failed = (history["status"] == "failed").sum()
-            pending = (history["status"] == "pending").sum()
+            (history["status"] == "completed").sum()
+            (history["status"] == "failed").sum()
+            (history["status"] == "pending").sum()
 
-            print(f"\n✅ Completed: {completed}")
-            print(f"❌ Failed: {failed}")
-            print(f"⏳ Pending: {pending}")
         else:
-            print("No retraining history found")
+            pass
         return
 
     # Check if retraining needed
@@ -737,13 +718,10 @@ def main():
     if args.check:
         # Just check, don't trigger
         if should_retrain:
-            print("\n⚠️  RETRAINING RECOMMENDED")
-            print(f"\nTriggers ({len(triggers)}):")
-            for trigger in triggers:
-                print(f"  • {trigger['reason']}: {trigger['details']}")
+            for _trigger in triggers:
+                pass
             sys.exit(1)  # Exit with error code to signal retraining needed
         else:
-            print("\n✅ No retraining needed")
             sys.exit(0)
 
     elif args.trigger:
@@ -755,20 +733,16 @@ def main():
                 )
 
                 if dag_run_id:
-                    print(f"\n✅ Retraining triggered: {dag_run_id}")
+                    pass
                 elif args.dry_run:
-                    print("\n🔵 DRY RUN: Would have triggered retraining")
-                    print(f"\nTriggers ({len(triggers)}):")
-                    for trigger in triggers:
-                        print(f"  • {trigger['reason']}: {trigger['details']}")
+                    for _trigger in triggers:
+                        pass
 
                 sys.exit(0)
 
-            except Exception as e:
-                print(f"\n❌ Failed to trigger retraining: {e}")
+            except Exception:
                 sys.exit(1)
         else:
-            print("\n✅ No retraining needed")
             sys.exit(0)
 
     else:

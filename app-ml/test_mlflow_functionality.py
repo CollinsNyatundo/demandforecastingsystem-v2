@@ -1,48 +1,38 @@
 #!/usr/bin/env python3
-"""
-Test MLflow functionality by connecting to the tracking server
-"""
+"""Test MLflow functionality by connecting to the tracking server."""
+
+import sys
+import time
 
 import mlflow
 import mlflow.sklearn
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
-import sys
 import requests
-import time
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
 
 
-def test_mlflow_connection():
-    """Test connection to MLflow tracking server"""
-    print("[INFO] Testing MLflow Connection")
-    print("=" * 50)
-
+def test_mlflow_connection() -> bool | None:
+    """Test connection to MLflow tracking server."""
     try:
         # Set tracking URI
         mlflow.set_tracking_uri("http://localhost:5000")
 
         # Test connection by getting experiments
         experiments = mlflow.search_experiments()
-        print(f"[PASS] Connected to MLflow server")
-        print(f"[INFO] Found {len(experiments)} existing experiments")
 
-        for exp in experiments:
-            print(f"  - {exp.name} (ID: {exp.experiment_id})")
+        for _exp in experiments:
+            pass
 
         return True
 
-    except Exception as e:
-        print(f"[FAIL] Failed to connect to MLflow: {str(e)}")
+    except Exception:
         return False
 
 
 def test_mlflow_experiment_creation():
-    """Test creating an MLflow experiment"""
-    print("\n[INFO] Testing MLflow Experiment Creation")
-    print("=" * 50)
-
+    """Test creating an MLflow experiment."""
     try:
         # Create experiment
         experiment_name = f"demand_forecasting_test_{int(time.time())}"
@@ -51,23 +41,18 @@ def test_mlflow_experiment_creation():
             tags={"purpose": "system_test", "environment": "development"},
         )
 
-        print(f"[PASS] Created experiment: {experiment_name} (ID: {experiment_id})")
 
         # Set experiment
         mlflow.set_experiment(experiment_name)
 
         return experiment_id
 
-    except Exception as e:
-        print(f"[FAIL] Failed to create experiment: {str(e)}")
+    except Exception:
         return None
 
 
 def test_mlflow_run_and_model():
-    """Test creating an MLflow run and logging a model"""
-    print("\n[INFO] Testing MLflow Run and Model Logging")
-    print("=" * 50)
-
+    """Test creating an MLflow run and logging a model."""
     try:
         # Generate sample data
         np.random.seed(42)
@@ -80,7 +65,6 @@ def test_mlflow_run_and_model():
 
         # Start MLflow run
         with mlflow.start_run(run_name="demand_forecasting_test_run") as run:
-            print(f"[INFO] Started run: {run.info.run_id}")
 
             # Train model
             model = RandomForestRegressor(n_estimators=10, random_state=42)
@@ -111,56 +95,39 @@ def test_mlflow_run_and_model():
                 registered_model_name="demand_forecasting_test_model",
             )
 
-            print(f"[PASS] Logged model and metrics")
-            print(f"[INFO] MSE: {mse:.4f}")
-            print(f"[INFO] R2: {r2:.4f}")
 
             return run.info.run_id
 
-    except Exception as e:
-        print(f"[FAIL] Failed to create run/log model: {str(e)}")
+    except Exception:
         return None
 
 
-def test_mlflow_model_registry():
-    """Test MLflow model registry functionality"""
-    print("\n[INFO] Testing MLflow Model Registry")
-    print("=" * 50)
-
+def test_mlflow_model_registry() -> bool | None:
+    """Test MLflow model registry functionality."""
     try:
         # Get registered models
         registered_models = mlflow.search_registered_models()
 
-        print(f"[INFO] Found {len(registered_models)} registered models")
 
         for model in registered_models:
-            print(f"  - {model.name}")
-            print(f"    Latest versions: {len(model.latest_versions)}")
 
-            for version in model.latest_versions:
-                print(f"      Version {version.version}: {version.status}")
+            for _version in model.latest_versions:
+                pass
 
         # Test model serving prediction
         if registered_models:
-            model_name = registered_models[0].name
-            latest_version = registered_models[0].latest_versions[0].version
+            registered_models[0].name
+            registered_models[0].latest_versions[0].version
 
-            print(f"[PASS] Model registry working with {model_name} v{latest_version}")
             return True
-        else:
-            print("[WARN] No registered models found")
-            return False
+        return False
 
-    except Exception as e:
-        print(f"[FAIL] Model registry test failed: {str(e)}")
+    except Exception:
         return False
 
 
-def test_mlflow_ui_access():
-    """Test MLflow UI accessibility"""
-    print("\n[INFO] Testing MLflow UI Access")
-    print("=" * 50)
-
+def test_mlflow_ui_access() -> bool | None:
+    """Test MLflow UI accessibility."""
     try:
         # Test UI endpoints
         endpoints = [
@@ -172,21 +139,17 @@ def test_mlflow_ui_access():
         for endpoint in endpoints:
             response = requests.get(endpoint, timeout=10)
             if response.status_code == 200:
-                print(f"[PASS] {endpoint} accessible")
+                pass
             else:
-                print(f"[FAIL] {endpoint} returned {response.status_code}")
+                pass
 
         return True
 
-    except Exception as e:
-        print(f"[FAIL] UI access test failed: {str(e)}")
+    except Exception:
         return False
 
 
-def main():
-    print("=" * 60)
-    print("MLFLOW FUNCTIONALITY TEST")
-    print("=" * 60)
+def main() -> int:
 
     results = {}
 
@@ -213,31 +176,20 @@ def main():
     results["ui_access"] = test_mlflow_ui_access()
 
     # Summary
-    print("\n" + "=" * 60)
-    print("MLFLOW TEST SUMMARY")
-    print("=" * 60)
 
     passed = 0
     failed = 0
 
-    for test, result in results.items():
+    for _test, result in results.items():
         if result:
-            print(f"[PASS] {test}")
             passed += 1
         else:
-            print(f"[FAIL] {test}")
             failed += 1
 
-    print(f"\nTotal Tests: {passed + failed}")
-    print(f"Passed: {passed}")
-    print(f"Failed: {failed}")
 
     if failed == 0:
-        print("\n[SUCCESS] All MLflow tests passed!")
         return 0
-    else:
-        print(f"\n[PARTIAL] {failed} MLflow test(s) failed.")
-        return 1
+    return 1
 
 
 if __name__ == "__main__":

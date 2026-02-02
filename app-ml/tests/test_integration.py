@@ -5,24 +5,24 @@ Tests end-to-end workflows, MLOps integration, data pipelines,
 and system-wide scenarios including failure recovery.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
-from unittest.mock import Mock, patch, MagicMock
-import tempfile
-import shutil
 from pathlib import Path
+from unittest.mock import patch
+
 import mlflow
+import numpy as np
 import optuna
+import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
+
+from demand_forecasting.automation.retraining_scheduler import RetrainingScheduler
+from demand_forecasting.explainability.shap_explainer import ModelExplainer
+from demand_forecasting.monitoring.drift_detector import DriftDetector
+from demand_forecasting.optimization.ensemble import EnsembleManager
+from demand_forecasting.optimization.multi_objective import objective_multi
 
 # Import all system components
 from demand_forecasting.serving.model_server import app as model_server_app
-from demand_forecasting.monitoring.drift_detector import DriftDetector
-from demand_forecasting.explainability.shap_explainer import ModelExplainer
-from demand_forecasting.optimization.multi_objective import objective_multi
-from demand_forecasting.optimization.ensemble import EnsembleManager
-from demand_forecasting.automation.retraining_scheduler import RetrainingScheduler
 
 
 @pytest.mark.integration
@@ -42,7 +42,7 @@ class TestEndToEndWorkflow:
         trial = study.ask()
 
         # Mock MLflow for model saving
-        with patch("mlflow.catboost.log_model") as mock_log_model:
+        with patch("mlflow.catboost.log_model"):
             # Train model
             from catboost import CatBoostRegressor
 
@@ -245,9 +245,8 @@ class TestMLOpsIntegration:
             model = CatBoostRegressor(**params, verbose=False)
             model.fit(X_train, y_train)
             predictions = model.predict(X_test)
-            rmse = np.sqrt(np.mean((y_test - predictions) ** 2))
+            return np.sqrt(np.mean((y_test - predictions) ** 2))
 
-            return rmse
 
         study.optimize(objective, n_trials=5)
 
@@ -293,34 +292,32 @@ class TestSystemResilience:
         # Mock MLflow failure
         with patch(
             "mlflow.pyfunc.load_model", side_effect=Exception("MLflow unavailable")
-        ):
-            with patch("joblib.load", side_effect=Exception("Local model unavailable")):
-                # Test graceful degradation
-                from demand_forecasting.serving.model_server import ml_models
+        ), patch("joblib.load", side_effect=Exception("Local model unavailable")):
+            # Test graceful degradation
 
-                # Should handle loading failures gracefully
-                try:
-                    # This should fail gracefully
-                    client = TestClient(model_server_app)
-                    response = client.post(
-                        "/predict",
-                        json={
-                            "features": {
-                                "temp": 20.0,
-                                "humidity": 60.0,
-                                "wind_speed": 5.0,
-                                "hour": 14,
-                                "day_of_week": 3,
-                            }
-                        },
-                    )
+            # Should handle loading failures gracefully
+            try:
+                # This should fail gracefully
+                client = TestClient(model_server_app)
+                response = client.post(
+                    "/predict",
+                    json={
+                        "features": {
+                            "temp": 20.0,
+                            "humidity": 60.0,
+                            "wind_speed": 5.0,
+                            "hour": 14,
+                            "day_of_week": 3,
+                        }
+                    },
+                )
 
-                    # Should return error, not crash
-                    assert response.status_code in [500, 503]
+                # Should return error, not crash
+                assert response.status_code in [500, 503]
 
-                except Exception as e:
-                    # Should be a handled exception, not a crash
-                    assert "model" in str(e).lower()
+            except Exception as e:
+                # Should be a handled exception, not a crash
+                assert "model" in str(e).lower()
 
     def test_data_quality_robustness(self):
         """Test system robustness to data quality issues."""
@@ -362,15 +359,16 @@ class TestSystemResilience:
 
     def test_memory_pressure_handling(self, sample_data: pd.DataFrame):
         """Test system behavior under memory pressure."""
-        import psutil
         import os
+
+        import psutil
 
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss
 
         # Create large models and data to simulate memory pressure
         large_models = []
-        for i in range(10):
+        for _i in range(10):
             X_large = pd.DataFrame(np.random.random((10000, 100)))
             y_large = pd.Series(np.random.random(10000))
 
@@ -401,7 +399,6 @@ class TestSystemResilience:
     def test_concurrent_operations(self, sample_data: pd.DataFrame):
         """Test system behavior under concurrent operations."""
         import threading
-        import time
 
         results = []
         errors = []
@@ -422,7 +419,7 @@ class TestSystemResilience:
         def detect_drift():
             try:
                 detector = DriftDetector(sample_data)
-                result = detector.detect_drift(sample_data)
+                detector.detect_drift(sample_data)
                 results.append("drift_detection_complete")
             except Exception as e:
                 errors.append(e)
@@ -437,7 +434,7 @@ class TestSystemResilience:
                 model = CatBoostRegressor(iteratives=50, verbose=False)
                 model.fit(X, y)
 
-                explainer = ModelExplainer(model, X)
+                ModelExplainer(model, X)
                 results.append("explainer_created")
             except Exception as e:
                 errors.append(e)
@@ -562,9 +559,8 @@ class TestPerformanceBenchmarks:
             model = CatBoostRegressor(**params, verbose=False)
             model.fit(X_train, y_train)
             predictions = model.predict(X_test)
-            rmse = np.sqrt(np.mean((y_test - predictions) ** 2))
+            return np.sqrt(np.mean((y_test - predictions) ** 2))
 
-            return rmse
 
         study.optimize(objective, n_trials=10)
         end_time = time.time()

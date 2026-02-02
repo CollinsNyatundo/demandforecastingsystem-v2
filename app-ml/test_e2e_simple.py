@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""
-Simple End-to-End System Test Runner
-Tests all Docker services without requiring pytest
+"""Simple End-to-End System Test Runner
+Tests all Docker services without requiring pytest.
 """
 
-import requests
-import json
-import time
 import sys
+
+import requests
 
 
 class Colors:
@@ -20,22 +18,15 @@ class Colors:
 
 
 def print_status(message, status="info"):
-    if status == "success":
-        print(f"[PASS] {message}")
-    elif status == "error":
-        print(f"[FAIL] {message}")
-    elif status == "warning":
-        print(f"[WARN] {message}")
-    elif status == "info":
-        print(f"[INFO] {message}")
+    if status in {"success", "error"} or status in {"warning", "info"}:
+        pass
     else:
-        print(message)
+        pass
 
 
 def test_service_health():
-    """Test all service health endpoints"""
+    """Test all service health endpoints."""
     print_status("Testing Service Health", "info")
-    print("=" * 50)
 
     services = {
         "Airflow": "http://localhost:8081/health",
@@ -55,16 +46,15 @@ def test_service_health():
                 print_status(f"{service_name}: HTTP {response.status_code}", "error")
                 results[service_name] = f"HTTP_{response.status_code}"
         except requests.exceptions.RequestException as e:
-            print_status(f"{service_name}: Connection failed - {str(e)}", "error")
+            print_status(f"{service_name}: Connection failed - {e!s}", "error")
             results[service_name] = "FAILED"
 
     return results
 
 
 def test_service_functionality():
-    """Test basic functionality of services"""
+    """Test basic functionality of services."""
     print_status("\nTesting Service Functionality", "info")
-    print("=" * 50)
 
     results = {}
 
@@ -80,7 +70,7 @@ def test_service_functionality():
             print_status(f"MLflow API: HTTP {response.status_code}", "error")
             results["MLflow_API"] = f"HTTP_{response.status_code}"
     except Exception as e:
-        print_status(f"MLflow API: Failed - {str(e)}", "error")
+        print_status(f"MLflow API: Failed - {e!s}", "error")
         results["MLflow_API"] = "FAILED"
 
     # Test Model Server
@@ -93,7 +83,7 @@ def test_service_functionality():
             print_status(f"Model Server Docs: HTTP {response.status_code}", "error")
             results["Model_Server_Docs"] = f"HTTP_{response.status_code}"
     except Exception as e:
-        print_status(f"Model Server Docs: Failed - {str(e)}", "error")
+        print_status(f"Model Server Docs: Failed - {e!s}", "error")
         results["Model_Server_Docs"] = "FAILED"
 
     # Test Airflow
@@ -106,34 +96,29 @@ def test_service_functionality():
             print_status(f"Airflow API: HTTP {response.status_code}", "error")
             results["Airflow_API"] = f"HTTP_{response.status_code}"
     except Exception as e:
-        print_status(f"Airflow API: Failed - {str(e)}", "error")
+        print_status(f"Airflow API: Failed - {e!s}", "error")
         results["Airflow_API"] = "FAILED"
 
     return results
 
 
-def test_minio_connectivity():
-    """Test MinIO connectivity"""
+def test_minio_connectivity() -> str | None:
+    """Test MinIO connectivity."""
     print_status("\nTesting MinIO Connectivity", "info")
-    print("=" * 50)
 
     try:
         response = requests.get("http://localhost:9000/minio/health/live", timeout=10)
         if response.status_code == 200:
             print_status("MinIO: Healthy", "success")
             return "HEALTHY"
-        else:
-            print_status(f"MinIO: HTTP {response.status_code}", "error")
-            return f"HTTP_{response.status_code}"
+        print_status(f"MinIO: HTTP {response.status_code}", "error")
+        return f"HTTP_{response.status_code}"
     except Exception as e:
-        print_status(f"MinIO: Failed - {str(e)}", "error")
+        print_status(f"MinIO: Failed - {e!s}", "error")
         return "FAILED"
 
 
-def main():
-    print("=" * 60)
-    print("DEMAND FORECASTING ML SYSTEM - END-TO-END TEST")
-    print("=" * 60)
+def main() -> int:
 
     all_results = {}
 
@@ -150,9 +135,6 @@ def main():
     all_results["MinIO"] = minio_result
 
     # Summary
-    print("\n" + "=" * 60)
-    print("TEST SUMMARY")
-    print("=" * 60)
 
     passed = 0
     failed = 0
@@ -165,16 +147,12 @@ def main():
             print_status(f"{service}: {status}", "error")
             failed += 1
 
-    print(f"\nTotal Tests: {passed + failed}")
-    print(f"Passed: {passed}")
-    print(f"Failed: {failed}")
 
     if failed == 0:
         print_status("\nAll tests passed! System is fully operational.", "success")
         return 0
-    else:
-        print_status(f"\n{failed} tests failed. Check logs for details.", "error")
-        return 1
+    print_status(f"\n{failed} tests failed. Check logs for details.", "error")
+    return 1
 
 
 if __name__ == "__main__":

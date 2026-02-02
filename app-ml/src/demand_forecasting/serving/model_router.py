@@ -1,11 +1,9 @@
-"""
-A/B Testing Framework for demand forecasting models.
-"""
+"""A/B Testing Framework for demand forecasting models."""
 
 import logging
 import random
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Any
 
 import mlflow
 import numpy as np
@@ -18,8 +16,7 @@ class ModelRouter:
     """Route requests between models A and B with configurable traffic split."""
 
     def __init__(self, model_a_uri: str, model_b_uri: str, split: float = 0.7):
-        """
-        Initialize model router.
+        """Initialize model router.
 
         Args:
             model_a_uri: MLflow URI for model A
@@ -42,9 +39,8 @@ class ModelRouter:
             logger.error(f"Failed to load models: {e}")
             raise
 
-    def route_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Route request to model A or B based on split ratio.
+    def route_request(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Route request to model A or B based on split ratio.
 
         Args:
             data: Input features dictionary
@@ -82,7 +78,7 @@ class ModelRouter:
             logger.error(f"Prediction failed: {e}")
             raise
 
-    def _calculate_confidence(self, prediction: float, data: Dict[str, Any]) -> float:
+    def _calculate_confidence(self, prediction: float, data: dict[str, Any]) -> float:
         """Calculate prediction confidence."""
         try:
             features = np.array(
@@ -98,7 +94,7 @@ class ModelRouter:
         except Exception:
             return 0.85  # Default confidence
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Return A/B test statistics."""
         total = max(self.request_count, 1)
         return {
@@ -136,7 +132,7 @@ class ABTestMetrics:
         self.predictions_a = []
         self.predictions_b = []
 
-    def log_prediction(self, model_id: str, prediction: float, actual: float = None):
+    def log_prediction(self, model_id: str, prediction: float, actual: float | None = None):
         """Log prediction and actual value for metric calculation."""
         if actual is not None:
             error = abs(prediction - actual)
@@ -147,7 +143,7 @@ class ABTestMetrics:
                 self.metrics_b.append(error)
                 self.predictions_b.append(prediction)
 
-    def compute_statistics(self) -> Dict[str, Any]:
+    def compute_statistics(self) -> dict[str, Any]:
         """Compute statistical comparison between models."""
         if len(self.metrics_a) < 10 or len(self.metrics_b) < 10:
             return {
@@ -198,16 +194,15 @@ class ABTestMetrics:
         """Generate deployment recommendation based on statistics."""
         if p_value >= 0.05:
             return "insufficient_evidence"
-        elif improvement > 5 and p_value < 0.05:
+        if improvement > 5 and p_value < 0.05:
             return "deploy_b"
-        elif improvement < -5 and p_value < 0.05:
+        if improvement < -5 and p_value < 0.05:
             return "deploy_a"
-        else:
-            return "continue_test"
+        return "continue_test"
 
     def _calculate_confidence_interval(
         self, confidence: float = 0.95
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate confidence interval for improvement."""
         if len(self.metrics_a) < 30 or len(self.metrics_b) < 30:
             return {"lower": -2.1, "upper": 3.4, "confidence": confidence}
@@ -239,20 +234,18 @@ class ABTestMetrics:
                 "upper": np.percentile(improvements, upper_percentile),
                 "confidence": confidence,
             }
-        else:
-            return {"lower": -2.1, "upper": 3.4, "confidence": confidence}
+        return {"lower": -2.1, "upper": 3.4, "confidence": confidence}
 
     def _interpret_effect_size(self, cohens_d: float) -> str:
         """Interpret Cohen's d effect size."""
         abs_d = abs(cohens_d)
         if abs_d < 0.2:
             return "negligible"
-        elif abs_d < 0.5:
+        if abs_d < 0.5:
             return "small"
-        elif abs_d < 0.8:
+        if abs_d < 0.8:
             return "medium"
-        else:
-            return "large"
+        return "large"
 
     def reset_metrics(self):
         """Reset all collected metrics."""
@@ -278,8 +271,8 @@ class ABTestManager:
         self.metrics = ABTestMetrics(test_name)
 
     def predict_with_routing(
-        self, features: Dict[str, Any], actual: float = None
-    ) -> Dict[str, Any]:
+        self, features: dict[str, Any], actual: float | None = None
+    ) -> dict[str, Any]:
         """Make prediction with A/B routing and metrics logging."""
         result = self.router.route_request(features)
 
@@ -290,7 +283,7 @@ class ABTestManager:
 
         return result
 
-    def get_test_summary(self) -> Dict[str, Any]:
+    def get_test_summary(self) -> dict[str, Any]:
         """Get comprehensive test summary."""
         return {
             "test_name": self.test_name,
@@ -303,7 +296,7 @@ class ABTestManager:
         """Update traffic split ratio."""
         self.router.update_split(new_split)
 
-    def conclude_test(self) -> Dict[str, Any]:
+    def conclude_test(self) -> dict[str, Any]:
         """Conclude test and provide final recommendation."""
         stats = self.metrics.compute_statistics()
         routing_stats = self.router.get_statistics()
@@ -318,7 +311,7 @@ class ABTestManager:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def _generate_final_recommendation(self, stats: Dict[str, Any]) -> str:
+    def _generate_final_recommendation(self, stats: dict[str, Any]) -> str:
         """Generate final deployment recommendation."""
         recommendation = stats.get("recommendation", "insufficient_data")
 
@@ -327,17 +320,16 @@ class ABTestManager:
                 "Model B shows statistically significant improvement. "
                 f"Recommend deploying Model B with {stats.get('improvement_percent', 0):.1f}% improvement."
             )
-        elif recommendation == "deploy_a":
+        if recommendation == "deploy_a":
             return (
                 "Model A performs better. "
                 "Recommend keeping Model A as production model."
             )
-        elif recommendation == "insufficient_evidence":
+        if recommendation == "insufficient_evidence":
             return (
                 "No statistically significant difference detected. "
                 "Recommend extending test or deploying based on other factors."
             )
-        else:
-            return (
-                "Continue testing. More data needed to reach statistical significance."
-            )
+        return (
+            "Continue testing. More data needed to reach statistical significance."
+        )

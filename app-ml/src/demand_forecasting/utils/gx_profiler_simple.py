@@ -1,15 +1,14 @@
-"""
-Great Expectations data profiling and validation utilities.
+"""Great Expectations data profiling and validation utilities.
 Production-compatible alternative to pandas-profiling.
 """
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +18,8 @@ def profile_dataset_gx(
     dataset_name: str,
     docs_dir: str = "/opt/airflow/data/docs",
     enable_data_docs: bool = True,
-) -> Optional[str]:
-    """
-    Profile dataset using Great Expectations.
+) -> str | None:
+    """Profile dataset using Great Expectations.
 
     Args:
         df: DataFrame to profile
@@ -198,7 +196,7 @@ def profile_dataset_gx(
             <h2>{dataset_name}</h2>
             <p>Generated: {profile_data['timestamp']}</p>
         </div>
-        
+
         <div class="section">
             <h3>Dataset Overview</h3>
             <table class="stats-table">
@@ -208,12 +206,12 @@ def profile_dataset_gx(
                 <tr><td>Total Missing Values</td><td>{sum(profile_data['missing_values'].values())}</td></tr>
             </table>
         </div>
-        
+
         <div class="section">
             <h3>Quality Flags</h3>
             {"".join([f'<p class="quality-flag">⚠️ {flag}</p>' for flag in profile_data.get('quality_flags', [])]) or '<p>No quality issues detected ✅</p>'}
         </div>
-        
+
         <div class="section">
             <h3>Data Quality Checks</h3>
             {"".join([f'''
@@ -222,7 +220,7 @@ def profile_dataset_gx(
             </div>
             ''' for check in profile_data.get('data_quality_checks', [])])}
         </div>
-        
+
         <div class="section">
             <h3>Numeric Summary</h3>
             <table class="stats-table">
@@ -239,7 +237,7 @@ def profile_dataset_gx(
                 ''' for col in profile_data.get('numeric_summary', {})])}
             </table>
         </div>
-        
+
         <div class="section">
             <h3>Missing Values</h3>
             <table class="stats-table">

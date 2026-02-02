@@ -1,20 +1,17 @@
-"""
-Feature Engineering Nodes
+"""Feature Engineering Nodes.
 
 Temporal feature extraction, validation, and feature interaction creation.
 """
 
 import logging
-from typing import List, Dict, Any
+
 import pandas as pd
-import numpy as np
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
-    """
-    Validate data integrity at each ETL stage.
+    """Validate data integrity at each ETL stage.
 
     Args:
         df: DataFrame to validate
@@ -47,8 +44,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
 def extract_temporal_features(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Extract temporal features from datetime index.
+    """Extract temporal features from datetime index.
 
     Args:
         df: Input DataFrame with datetime index
@@ -82,11 +78,10 @@ def extract_temporal_features(
 
 def create_feature_interactions(
     df: pd.DataFrame,
-    lags: List[int] = None,
-    feature_lags: Dict[str, List[int]] = None,
+    lags: list[int] | None = None,
+    feature_lags: dict[str, list[int]] | None = None,
 ) -> pd.DataFrame:
-    """
-    Create feature interactions and lag features with memory optimization.
+    """Create feature interactions and lag features with memory optimization.
 
     Args:
         df: Input DataFrame with base features
@@ -155,8 +150,7 @@ def create_feature_interactions(
 
 
 def validate_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Validate engineered features for model training.
+    """Validate engineered features for model training.
 
     Args:
         df: DataFrame with engineered features
@@ -177,7 +171,7 @@ def validate_features(df: pd.DataFrame) -> pd.DataFrame:
             _LOGGER.warning(f"Missing expected columns: {missing}")
 
         # Handle any remaining NaN values using forward/backward fill instead of dropping
-        initial_len = len(df)
+        len(df)
         df = df.bfill().ffill()
         removed = 0  # We're not removing rows, just filling NaN values
 

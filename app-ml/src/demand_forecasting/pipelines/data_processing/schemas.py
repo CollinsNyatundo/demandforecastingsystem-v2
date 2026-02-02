@@ -3,8 +3,7 @@ from pandera.typing import Series
 
 
 class RawBikeDataSchema(pa.DataFrameModel):
-    """
-    Schema for raw bike sharing data with strict validation.
+    """Schema for raw bike sharing data with strict validation.
 
     All constraints enforce valid data ranges and prevent arbitrary values.
     """

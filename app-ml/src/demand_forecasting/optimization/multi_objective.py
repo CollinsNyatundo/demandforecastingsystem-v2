@@ -1,10 +1,8 @@
-"""
-Multi-objective optimization using Optuna for demand forecasting.
-"""
+"""Multi-objective optimization using Optuna for demand forecasting."""
 
 import logging
 import time
-from typing import Dict, Any, List, Tuple, Callable
+from typing import Any
 
 import numpy as np
 import optuna
@@ -16,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """
-    Compute Mean Absolute Percentage Error with zero-division protection.
+    """Compute Mean Absolute Percentage Error with zero-division protection.
 
     Args:
         y_true: True values
@@ -35,10 +32,9 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def objective_multi(
-    trial, X_train, X_test, y_train, y_test, objectives: List[str] = None
-) -> Tuple[float, ...]:
-    """
-    Multi-objective optimization function.
+    trial, X_train, X_test, y_train, y_test, objectives: list[str] | None = None
+) -> tuple[float, ...]:
+    """Multi-objective optimization function.
 
     Args:
         trial: Optuna trial object
@@ -114,9 +110,7 @@ def objective_multi(
         # Return worst possible values for failed trials
         worst_values = []
         for obj in objectives:
-            if obj in ["rmse", "mae", "mape", "cv_score"]:
-                worst_values.append(float("inf"))
-            elif obj == "training_time":
+            if obj in ["rmse", "mae", "mape", "cv_score"] or obj == "training_time":
                 worst_values.append(float("inf"))
         return tuple(worst_values) if len(worst_values) > 1 else worst_values[0]
 
@@ -124,9 +118,8 @@ def objective_multi(
 class MultiObjectiveOptimizer:
     """Multi-objective optimization using Optuna."""
 
-    def __init__(self, objectives: List[str], directions: List[str] = None):
-        """
-        Initialize multi-objective optimizer.
+    def __init__(self, objectives: list[str], directions: list[str] | None = None):
+        """Initialize multi-objective optimizer.
 
         Args:
             objectives: List of objectives to optimize
@@ -140,11 +133,10 @@ class MultiObjectiveOptimizer:
     def create_study(
         self,
         study_name: str = "demand_forecasting_multi_objective",
-        storage: str = None,
+        storage: str | None = None,
         sampler: optuna.samplers.BaseSampler = None,
     ) -> optuna.Study:
-        """
-        Create Optuna study for multi-objective optimization.
+        """Create Optuna study for multi-objective optimization.
 
         Args:
             study_name: Name of the study
@@ -180,10 +172,9 @@ class MultiObjectiveOptimizer:
         y_train,
         y_test,
         n_trials: int = 100,
-        timeout: float = None,
-    ) -> Dict[str, Any]:
-        """
-        Run multi-objective optimization.
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Run multi-objective optimization.
 
         Args:
             X_train, X_test, y_train, y_test: Data splits
@@ -223,7 +214,7 @@ class MultiObjectiveOptimizer:
             logger.error(f"Optimization failed: {e}")
             raise
 
-    def _analyze_results(self) -> Dict[str, Any]:
+    def _analyze_results(self) -> dict[str, Any]:
         """Analyze optimization results."""
         if not self.best_trials:
             return {"error": "No successful trials found"}
@@ -267,7 +258,7 @@ class MultiObjectiveOptimizer:
             best_trials_per_objective[obj_name] = {
                 "trial_number": self.best_trials[best_idx].number,
                 "params": self.best_trials[best_idx].params,
-                "values": dict(zip(self.objectives, self.best_trials[best_idx].values)),
+                "values": dict(zip(self.objectives, self.best_trials[best_idx].values, strict=False)),
             }
 
         return {
@@ -278,7 +269,7 @@ class MultiObjectiveOptimizer:
                 {
                     "trial_number": trial.number,
                     "params": trial.params,
-                    "values": dict(zip(self.objectives, trial.values)),
+                    "values": dict(zip(self.objectives, trial.values, strict=False)),
                 }
                 for trial in self.best_trials
             ],
@@ -286,7 +277,7 @@ class MultiObjectiveOptimizer:
             "study_name": self.study.study_name,
         }
 
-    def get_pareto_analysis(self) -> Dict[str, Any]:
+    def get_pareto_analysis(self) -> dict[str, Any]:
         """Get detailed analysis of Pareto front."""
         if not self.best_trials:
             return {"error": "No Pareto solutions available"}
@@ -297,7 +288,7 @@ class MultiObjectiveOptimizer:
 
         # Find reference point (worst values + 10% margin)
         reference_point = []
-        for i, obj_name in enumerate(self.objectives):
+        for i, _obj_name in enumerate(self.objectives):
             if self.directions[i] == "minimize":
                 ref_val = np.max(objective_values[:, i]) * 1.1
             else:
@@ -309,7 +300,7 @@ class MultiObjectiveOptimizer:
 
         return {
             "pareto_size": len(self.best_trials),
-            "reference_point": dict(zip(self.objectives, reference_point)),
+            "reference_point": dict(zip(self.objectives, reference_point, strict=False)),
             "diversity_metrics": diversity_metrics,
             "convergence_metrics": self._calculate_convergence_metrics(
                 objective_values
@@ -318,7 +309,7 @@ class MultiObjectiveOptimizer:
 
     def _calculate_diversity_metrics(
         self, objective_values: np.ndarray
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate diversity metrics for Pareto front."""
         try:
             # Calculate pairwise distances
@@ -340,7 +331,7 @@ class MultiObjectiveOptimizer:
 
     def _calculate_convergence_metrics(
         self, objective_values: np.ndarray
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate convergence metrics."""
         try:
             # Calculate distance to ideal point (0 for minimization)
@@ -356,10 +347,9 @@ class MultiObjectiveOptimizer:
             return {"error": f"Failed to calculate convergence: {e}"}
 
     def recommend_solution(
-        self, preference_weights: Dict[str, float] = None
-    ) -> Dict[str, Any]:
-        """
-        Recommend a solution based on preference weights.
+        self, preference_weights: dict[str, float] | None = None
+    ) -> dict[str, Any]:
+        """Recommend a solution based on preference weights.
 
         Args:
             preference_weights: Weights for each objective
@@ -372,7 +362,7 @@ class MultiObjectiveOptimizer:
 
         if preference_weights is None:
             # Equal weights by default
-            preference_weights = {obj: 1.0 for obj in self.objectives}
+            preference_weights = dict.fromkeys(self.objectives, 1.0)
 
         # Normalize weights
         total_weight = sum(preference_weights.values())
@@ -396,7 +386,7 @@ class MultiObjectiveOptimizer:
             # Normalize (0 = best, 1 = worst)
             normalized_values = []
             for i, (val, direction) in enumerate(
-                zip(objective_values, self.directions)
+                zip(objective_values, self.directions, strict=False)
             ):
                 if direction == "minimize":
                     norm_val = (val - min_vals[i]) / (max_vals[i] - min_vals[i] + 1e-8)
@@ -418,7 +408,7 @@ class MultiObjectiveOptimizer:
             "recommended_trial": {
                 "trial_number": best_trial.number,
                 "params": best_trial.params,
-                "values": dict(zip(self.objectives, best_trial.values)),
+                "values": dict(zip(self.objectives, best_trial.values, strict=False)),
                 "weighted_score": best_score,
             },
             "preference_weights": normalized_weights,

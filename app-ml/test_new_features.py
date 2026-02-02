@@ -1,21 +1,18 @@
-"""
-Test script to verify all new features work properly.
-"""
+"""Test script to verify all new features work properly."""
 
 import sys
-import pandas as pd
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.append(str(project_root))
 
 
-def test_data_profiler():
+def test_data_profiler() -> bool | None:
     """Test the data profiler with sample data."""
-    print("🧪 Testing Data Profiler...")
-
     try:
         from src.demand_forecasting.utils.simple_data_profiler_v2 import profile_dataset
 
@@ -44,23 +41,19 @@ def test_data_profiler():
         )
 
         # Test convenience function
-        report_path = profile_dataset(sample_data, "test_dataset")
-        print(f"✅ Data profiler test passed! Report generated at: {report_path}")
+        profile_dataset(sample_data, "test_dataset")
 
         return True
 
-    except Exception as e:
-        print(f"❌ Data profiler test failed: {str(e)}")
+    except Exception:
         import traceback
 
         traceback.print_exc()
         return False
 
 
-def test_feature_lags():
+def test_feature_lags() -> bool | None:
     """Test feature engineering with new lags."""
-    print("\n🧪 Testing Feature Lags...")
-
     try:
         from src.demand_forecasting.pipelines.feature_engineering.nodes import (
             create_derived_features,
@@ -88,8 +81,7 @@ def test_feature_lags():
         )
 
         # Test with default parameters
-        result_default = create_derived_features(sample_data)
-        print(f"✅ Default feature lags test passed! Shape: {result_default.shape}")
+        create_derived_features(sample_data)
 
         # Test with custom parameters
         custom_lags = [1, 2, 3]
@@ -97,7 +89,6 @@ def test_feature_lags():
         result_custom = create_derived_features(
             sample_data, lags=custom_lags, feature_lags=custom_feature_lags
         )
-        print(f"✅ Custom feature lags test passed! Shape: {result_custom.shape}")
 
         # Check for expected lag features
         expected_features = [
@@ -117,60 +108,50 @@ def test_feature_lags():
         ]
 
         if missing_features:
-            print(f"⚠️  Missing expected features: {missing_features}")
+            pass
         else:
-            print("✅ All expected lag features present!")
+            pass
 
         return True
 
-    except Exception as e:
-        print(f"❌ Feature lags test failed: {str(e)}")
+    except Exception:
         import traceback
 
         traceback.print_exc()
         return False
 
 
-def test_catboost_nodes():
+def test_catboost_nodes() -> bool | None:
     """Test CatBoost nodes (without actually training)."""
-    print("\n🧪 Testing CatBoost Nodes...")
-
     try:
         # Test import
         from src.demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
-            compute_zero_safe_mape,
-            train_catboost_model,
             compare_models,
+            compute_zero_safe_mape,
         )
 
-        print("✅ CatBoost nodes import successful!")
 
         # Test zero-safe MAPE function
         y_true = np.array([10, 20, 30, 0, 50])
         y_pred = np.array([12, 18, 32, 1, 48])
-        mape = compute_zero_safe_mape(y_true, y_pred)
-        print(f"✅ Zero-safe MAPE test passed! MAPE: {mape:.2f}%")
+        compute_zero_safe_mape(y_true, y_pred)
 
         # Test compare_models function
         rf_metrics = {"rmse": 50.0, "mae": 30.0, "mape": 20.0}
         catboost_metrics = {"rmse": 45.0, "mae": 28.0, "mape": 18.0}
-        comparison = compare_models(rf_metrics, catboost_metrics)
-        print(f"✅ Model comparison test passed! Winner: {comparison['winner']}")
+        compare_models(rf_metrics, catboost_metrics)
 
         return True
 
-    except Exception as e:
-        print(f"❌ CatBoost nodes test failed: {str(e)}")
+    except Exception:
         import traceback
 
         traceback.print_exc()
         return False
 
 
-def test_metrics_parity():
+def test_metrics_parity() -> bool | None:
     """Test metrics implementation parity."""
-    print("\n🧪 Testing Metrics Parity...")
-
     try:
         from src.demand_forecasting.pipelines.demand_modeling.nodes import (
             compute_zero_safe_mape,
@@ -186,78 +167,58 @@ def test_metrics_parity():
             * 100
         )
 
-        if abs(mape - expected_manual) < 0.001:
-            print(f"✅ Metrics parity test passed! MAPE: {mape:.2f}%")
-            return True
-        else:
-            print(
-                f"❌ Metrics parity test failed! Expected: {expected_manual:.2f}, Got: {mape:.2f}"
-            )
-            return False
+        return abs(mape - expected_manual) < 0.001
 
-    except Exception as e:
-        print(f"❌ Metrics parity test failed: {str(e)}")
+    except Exception:
         import traceback
 
         traceback.print_exc()
         return False
 
 
-def test_pipeline_integration():
+def test_pipeline_integration() -> bool | None:
     """Test pipeline integration."""
-    print("\n🧪 Testing Pipeline Integration...")
-
     try:
         # Test pipeline imports
-        from src.demand_forecasting.pipelines.feature_engineering.pipeline import (
-            create_pipeline as create_fe_pipeline,
+        from src.demand_forecasting.pipelines.data_processing.pipeline import (
+            create_pipeline as create_dp_pipeline,
         )
         from src.demand_forecasting.pipelines.demand_modeling.pipeline import (
             create_pipeline as create_dm_pipeline,
         )
-        from src.demand_forecasting.pipelines.data_processing.pipeline import (
-            create_pipeline as create_dp_pipeline,
+        from src.demand_forecasting.pipelines.feature_engineering.pipeline import (
+            create_pipeline as create_fe_pipeline,
         )
 
-        print("✅ All pipeline imports successful!")
 
         # Test pipeline creation
         fe_pipeline = create_fe_pipeline()
         dm_pipeline = create_dm_pipeline()
         dp_pipeline = create_dp_pipeline()
 
-        print(f"✅ Feature engineering pipeline nodes: {len(fe_pipeline.nodes)}")
-        print(f"✅ Demand modeling pipeline nodes: {len(dm_pipeline.nodes)}")
-        print(f"✅ Data processing pipeline nodes: {len(dp_pipeline.nodes)}")
 
         # Check node names
-        fe_node_names = [node.name for node in fe_pipeline.nodes]
-        dm_node_names = [node.name for node in dm_pipeline.nodes]
-        dp_node_names = [node.name for node in dp_pipeline.nodes]
+        [node.name for node in fe_pipeline.nodes]
+        [node.name for node in dm_pipeline.nodes]
+        [node.name for node in dp_pipeline.nodes]
 
-        print(f"✅ FE nodes: {fe_node_names}")
-        print(f"✅ DM nodes: {dm_node_names}")
-        print(f"✅ DP nodes: {dp_node_names}")
 
         return True
 
-    except Exception as e:
-        print(f"❌ Pipeline integration test failed: {str(e)}")
+    except Exception:
         import traceback
 
         traceback.print_exc()
         return False
 
 
-def test_parameters_config():
+def test_parameters_config() -> bool | None:
     """Test parameters configuration."""
-    print("\n🧪 Testing Parameters Configuration...")
-
     try:
         import yaml
 
         # Load parameters
-        with open("conf/base/parameters.yml", "r") as f:
+        with open("conf/base/parameters.yml") as f:
             params = yaml.safe_load(f)
 
         # Check required parameters
@@ -271,20 +232,9 @@ def test_parameters_config():
         ]
         missing_params = [p for p in required_params if p not in params]
 
-        if missing_params:
-            print(f"❌ Missing parameters: {missing_params}")
-            return False
+        return not missing_params
 
-        print("✅ All required parameters present!")
-        print(f"✅ Train fraction: {params['train_fraction']}")
-        print(f"✅ Feature lags configured: {list(params['feature_lags'].keys())}")
-        print(f"✅ CatBoost parameters: {list(params['catboost'].keys())}")
-        print(f"✅ Optuna trials: {params['optuna']['n_trials']}")
-
-        return True
-
-    except Exception as e:
-        print(f"❌ Parameters configuration test failed: {str(e)}")
+    except Exception:
         import traceback
 
         traceback.print_exc()
@@ -293,8 +243,6 @@ def test_parameters_config():
 
 def main():
     """Run all tests."""
-    print("🚀 Starting Comprehensive Feature Testing...\n")
-
     tests = [
         ("Data Profiler", test_data_profiler),
         ("Feature Lags", test_feature_lags),
@@ -309,28 +257,22 @@ def main():
         try:
             result = test_func()
             results.append((test_name, result))
-        except Exception as e:
-            print(f"❌ {test_name} test crashed: {str(e)}")
+        except Exception:
             results.append((test_name, False))
 
     # Summary
-    print("\n" + "=" * 50)
-    print("📊 TEST SUMMARY")
-    print("=" * 50)
 
     passed = sum(1 for _, result in results if result)
     total = len(results)
 
     for test_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{status} {test_name}")
+        pass
 
-    print(f"\n🎯 Overall: {passed}/{total} tests passed")
 
     if passed == total:
-        print("🎉 All tests passed! Features are ready for production!")
+        pass
     else:
-        print("⚠️  Some tests failed. Please review the issues above.")
+        pass
 
 
 if __name__ == "__main__":

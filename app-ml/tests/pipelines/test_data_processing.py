@@ -5,42 +5,40 @@ Tests data processing, feature engineering, and demand modeling pipelines
 with proper fixtures, error handling, and integration scenarios.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
-import tempfile
 import shutil
-
-# Kedro imports
-from kedro.framework.context import KedroContext
-from kedro.io import DataCatalog, MemoryDataset
-from kedro.runner import SequentialRunner
-from kedro.config import OmegaConfigLoader
 
 # Project imports
 import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
+
+# Kedro imports
+from kedro.io import DataCatalog, MemoryDataset
+from kedro.runner import SequentialRunner
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
 try:
+    from demand_forecasting.pipeline_registry import register_pipelines
     from demand_forecasting.pipelines.data_processing.nodes import preprocess_data
+    from demand_forecasting.pipelines.data_processing.schemas import RawBikeDataSchema
+    from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
+        compare_models,
+        optimize_catboost_hyperparameters,
+        train_catboost_model,
+    )
     from demand_forecasting.pipelines.feature_engineering.nodes import (
         create_derived_features,
     )
-    from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
-        train_catboost_model,
-        optimize_catboost_hyperparameters,
-        compare_models,
-    )
-    from demand_forecasting.pipelines.data_processing.schemas import RawBikeDataSchema
-    from demand_forecasting.pipeline_registry import register_pipelines
 
     PIPELINES_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Could not import pipeline modules: {e}")
+except ImportError:
     PIPELINES_AVAILABLE = False
 
 
@@ -68,8 +66,7 @@ def sample_raw_data():
         "cnt": np.random.randint(0, 300, n_samples),  # target column
     }
 
-    df = pd.DataFrame(data)
-    return df
+    return pd.DataFrame(data)
 
 
 @pytest.fixture
@@ -117,7 +114,7 @@ def sample_parameters():
 @pytest.fixture
 def mock_catalog():
     """Mock data catalog for testing."""
-    catalog = DataCatalog(
+    return DataCatalog(
         {
             # Data processing pipeline datasets
             "raw_bike_data": MemoryDataset(),
@@ -143,7 +140,6 @@ def mock_catalog():
             "regressor_model": MemoryDataset(),
         }
     )
-    return catalog
 
 
 @pytest.fixture
@@ -221,8 +217,7 @@ class TestDataProcessingNodes:
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0  # Should still be empty
         # Should have dropped the specified columns
-        expected_cols = set(
-            [
+        expected_cols = {
                 "season",
                 "mnth",
                 "hr",
@@ -235,8 +230,7 @@ class TestDataProcessingNodes:
                 "hum",
                 "windspeed",
                 "cnt",
-            ]
-        )
+            }
         assert set(result.columns) == expected_cols
 
     @pytest.mark.skipif(
@@ -437,7 +431,7 @@ class TestPipelineIntegration:
     ):
         """Test complete pipeline execution."""
         # Create a mock context
-        with patch("kedro.framework.context.KedroContext") as mock_context:
+        with patch("kedro.framework.context.KedroContext"):
             mock_ctx = Mock()
             mock_ctx.catalog = mock_catalog
 
@@ -613,8 +607,9 @@ class TestPipelinePerformance:
     )
     def test_pipeline_memory_usage(self, sample_raw_data, mock_catalog):
         """Test pipeline memory usage."""
-        import psutil
         import os
+
+        import psutil
 
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss

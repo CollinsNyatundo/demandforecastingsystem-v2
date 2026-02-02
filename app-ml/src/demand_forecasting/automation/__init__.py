@@ -1,3 +1,1 @@
-"""
-Automation module for demand forecasting system.
-"""
+"""Automation module for demand forecasting system."""

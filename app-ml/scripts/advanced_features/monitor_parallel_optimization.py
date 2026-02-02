@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Parallel Optuna Optimization Monitor
+"""Parallel Optuna Optimization Monitor.
 
 Monitors real-time progress of distributed Optuna optimization across multiple workers.
 Shows completed trials, running trials, and best RMSE value.
@@ -29,15 +28,11 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
 
 try:
     import optuna
     from optuna.storages import RDBStorage
 except ImportError:
-    print(
-        "Error: Optuna not installed. Install with: pip install optuna psycopg2-binary"
-    )
     sys.exit(1)
 
 
@@ -45,8 +40,7 @@ class OptimizationMonitor:
     """Monitor and display Optuna optimization progress in real-time."""
 
     def __init__(self, study_name: str, storage_url: str, update_interval: int = 5):
-        """
-        Initialize optimization monitor.
+        """Initialize optimization monitor.
 
         Args:
             study_name: Name of the Optuna study to monitor
@@ -60,8 +54,7 @@ class OptimizationMonitor:
         self.study = None
 
     def connect(self) -> bool:
-        """
-        Connect to Optuna storage and load study.
+        """Connect to Optuna storage and load study.
 
         Returns:
             True if connection successful, False otherwise
@@ -86,21 +79,14 @@ class OptimizationMonitor:
                 study_name=self.study_name, storage=self.storage
             )
 
-            print(f"✅ Connected to study: {self.study_name}")
-            print(f"   Storage: {self.storage_url}")
-            print(f"   Direction: {self.study.direction.name}")
-            print(f"   Sampler: {self.study.sampler.__class__.__name__}")
-            print()
 
             return True
 
-        except Exception as e:
-            print(f"❌ Failed to connect: {e}")
+        except Exception:
             return False
 
-    def get_statistics(self) -> Dict:
-        """
-        Get current study statistics.
+    def get_statistics(self) -> dict:
+        """Get current study statistics.
 
         Returns:
             Dictionary with study statistics
@@ -173,9 +159,8 @@ class OptimizationMonitor:
 
         return stats
 
-    def format_display(self, stats: Dict) -> str:
-        """
-        Format statistics for display.
+    def format_display(self, stats: dict) -> str:
+        """Format statistics for display.
 
         Args:
             stats: Statistics dictionary
@@ -204,12 +189,12 @@ class OptimizationMonitor:
         # Build display string
         lines = [
             f"\r[{timestamp}] Study: {self.study_name}",
-            f"",
+            "",
             f"Progress: [{bar}] {completed_pct:.1f}%",
-            f"",
+            "",
             f"Trials:    Total: {stats['total']:>4}  |  Completed: {stats['completed']:>4}  |  Running: {stats['running']:>2}",
             f"Status:    Failed: {stats['failed']:>3}  |  Pruned: {stats['pruned']:>4}  |  Waiting: {stats['waiting']:>2}",
-            f"",
+            "",
             (
                 f"Best RMSE: {best_str}  (Trial #{stats['best_trial_number']})"
                 if stats["best_trial_number"]
@@ -234,26 +219,20 @@ class OptimizationMonitor:
 
         return "\n".join(lines)
 
-    def monitor(self, max_duration: Optional[int] = None):
-        """
-        Start monitoring optimization progress.
+    def monitor(self, max_duration: int | None = None):
+        """Start monitoring optimization progress.
 
         Args:
             max_duration: Maximum monitoring duration in seconds (None for infinite)
         """
         start_time = time.time()
 
-        print(f"🔍 Monitoring optimization progress...")
-        print(f"   Update interval: {self.update_interval} seconds")
-        print(f"   Press Ctrl+C to stop")
-        print()
 
         try:
             iteration = 0
             while True:
                 # Check if max duration reached
                 if max_duration and (time.time() - start_time) > max_duration:
-                    print("\n⏱️  Maximum monitoring duration reached")
                     break
 
                 # Get and display statistics
@@ -262,24 +241,21 @@ class OptimizationMonitor:
 
                 # Clear screen and display (first iteration only shows, subsequent overwrites)
                 if iteration == 0:
-                    print(display)
+                    pass
                 else:
                     # Move cursor up and overwrite
-                    lines_count = display.count("\n") + 1
-                    print(f"\033[{lines_count}A", end="")
-                    print(display)
+                    display.count("\n") + 1
 
                 iteration += 1
                 time.sleep(self.update_interval)
 
         except KeyboardInterrupt:
-            print("\n\n⏹️  Monitoring stopped by user")
-        except Exception as e:
-            print(f"\n\n❌ Error during monitoring: {e}")
+            pass
+        except Exception:
+            pass
 
     def get_summary(self) -> str:
-        """
-        Get final summary of optimization.
+        """Get final summary of optimization.
 
         Returns:
             Summary string
@@ -393,10 +369,9 @@ Examples:
 
     # Show summary or start monitoring
     if args.summary:
-        print(monitor.get_summary())
+        pass
     else:
         monitor.monitor(max_duration=args.duration)
-        print(monitor.get_summary())
 
 
 if __name__ == "__main__":

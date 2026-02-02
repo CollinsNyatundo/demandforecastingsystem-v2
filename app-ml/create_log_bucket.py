@@ -12,8 +12,7 @@ s3 = boto3.client(
 
 try:
     s3.create_bucket(Bucket="airflow-logs")
-    print("Bucket 'airflow-logs' created successfully.")
 except s3.exceptions.BucketAlreadyOwnedByYou:
-    print("Bucket 'airflow-logs' already exists.")
-except Exception as e:
-    print(f"Error creating bucket: {e}")
+    pass
+except Exception:
+    pass
