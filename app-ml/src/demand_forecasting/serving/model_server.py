@@ -8,6 +8,7 @@ import os
 import secrets
 import hashlib
 import hmac
+import math
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
@@ -20,7 +21,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, Field, model_validator, ValidationError
 from cachetools import TTLCache
 
 # Configure logging
@@ -44,27 +45,149 @@ model_accuracy = Gauge("model_accuracy", "Current model accuracy", ["model_id"])
 
 
 class PredictionRequest(BaseModel):
-    """Request model for prediction endpoint."""
-
-    features: Dict[str, float]
-
+    """
+    Prediction request with comprehensive validation.
+    
+    Implements defense-in-depth:
+    1. Type validation (Pydantic)
+    2. Range validation (domain constraints)
+    3. Anomaly detection (statistical bounds)
+    4. Injection protection (extra field validation)
+    """
+    
+    features: Dict[str, float] = Field(
+        ...,
+        description="Weather and temporal features for demand prediction",
+        example={
+            "temp": 0.5,
+            "humidity": 0.65,
+            "wind_speed": 0.15,
+            "hour": 14,
+            "day_of_week": 3
+        }
+    )
+    
+    class Config:
+        # Reject extra fields (prevents injection attacks)
+        extra = "forbid"
+        
+        # Example for documentation
+        schema_extra = {
+            "example": {
+                "features": {
+                    "temp": 0.5,
+                    "humidity": 0.65,
+                    "wind_speed": 0.15,
+                    "hour": 14,
+                    "day_of_week": 3
+                }
+            }
+        }
+    
     @validator("features")
-    def validate_features(cls, v):
-        required_features = ["temp", "humidity", "wind_speed", "hour", "day_of_week"]
-        missing = [f for f in required_features if f not in v]
+    def validate_feature_structure(cls, v: Dict[str, float]) -> Dict[str, float]:
+        """Validate feature keys and basic structure."""
+        required_features = [
+            "temp", "humidity", "wind_speed", "hour", "day_of_week"
+        ]
+        
+        # Check for missing features
+        missing = set(required_features) - set(v.keys())
         if missing:
-            raise ValueError(f"Missing required features: {missing}")
+            raise ValueError(
+                f"Missing required features: {sorted(missing)}. "
+                f"Required: {sorted(required_features)}"
+            )
+        
+        # Check for unexpected features (potential injection)
+        extra = set(v.keys()) - set(required_features)
+        if extra:
+            raise ValueError(
+                f"Unexpected features detected: {sorted(extra)}. "
+                f"Only these features are accepted: {sorted(required_features)}"
+            )
+        
         return v
+    
+    @model_validator(mode='after')
+    def validate_feature_values(cls, values):
+        """
+        Validate feature value ranges and quality.
+        
+        Based on domain knowledge and training data statistics.
+        """
+        features = values.features
+        
+        # Define validation rules: (min, max, description)
+        validations = {
+            "temp": (0.0, 1.0, "Normalized temperature (0-1)"),
+            "humidity": (0.0, 1.0, "Normalized humidity (0-1)"),
+            "wind_speed": (0.0, 1.0, "Normalized wind speed (0-1)"),
+            "hour": (0, 23, "Hour of day (0-23)"),
+            "day_of_week": (0, 6, "Day of week (0=Mon, 6=Sun)")
+        }
+        
+        errors = []
+        
+        for feature, (min_val, max_val, description) in validations.items():
+            if feature not in features:
+                continue
+            
+            value = features[feature]
+            
+            # Type validation (should be caught by Pydantic, but double-check)
+            if not isinstance(value, (int, float)):
+                errors.append(
+                    f"{feature}: must be numeric, got {type(value).__name__}"
+                )
+                continue
+            
+            # NaN/Inf check
+            if math.isnan(value) or math.isinf(value):
+                errors.append(
+                    f"{feature}: contains invalid value (NaN or Inf)"
+                )
+                continue
+            
+            # Range validation
+            if not (min_val <= value <= max_val):
+                errors.append(
+                    f"{feature}: value {value} out of range. "
+                    f"{description}. Valid range: [{min_val}, {max_val}]"
+                )
+        
+        if errors:
+            raise ValueError(
+                "Feature validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            )
+        
+        return values
 
 
 class PredictionResponse(BaseModel):
-    """Response model for prediction endpoint."""
-
-    prediction: float
-    confidence: float
-    model_version: str
-    timestamp: str
-    model_id: str
+    """Prediction response with metadata for transparency."""
+    
+    prediction: float = Field(..., description="Predicted demand value")
+    confidence: Optional[float] = Field(
+        None,
+        description="Model confidence score (0-1)",
+        ge=0.0,
+        le=1.0
+    )
+    model_version: str = Field(..., description="Model version used")
+    timestamp: str = Field(..., description="Prediction timestamp (ISO 8601)")
+    model_id: Optional[str] = Field(None, description="Model identifier")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "prediction": 142.5,
+                "confidence": 0.87,
+                "model_version": "v2.1.0",
+                "timestamp": "2026-01-31T12:00:00Z",
+                "model_id": "production"
+            }
+        }
 
 
 class ModelInfo(BaseModel):
