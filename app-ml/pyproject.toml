@@ -169,6 +169,7 @@ indent-style = "space"
 # Additional tools
 [tool.mypy]
 python_version = "3.10"
+mypy_path = "src"  # Fix src layout issues
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -189,7 +190,7 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["catboost.*", "shap.*", "pandera.*"]
+module = ["catboost.*", "shap.*", "pandera.*", "kedro.*", "pluggy.*"]
 ignore_missing_imports = true
 
 [tool.bandit]
