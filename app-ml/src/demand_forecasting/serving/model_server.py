@@ -383,9 +383,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 allowed_hosts = ["localhost", "127.0.0.1"]
 env = os.getenv("ENVIRONMENT", "development")
 
-# Add 0.0.0.0 only in development for local access
+# Add 0.0.0.0 only in development for local access (development environment only)
 if env == "development":
-    allowed_hosts.append("0.0.0.0")
+    allowed_hosts.append("0.0.0.0")  # Development: allows local access only
 if env == "production":
     # Production hosts must be explicitly configured
     production_hosts = os.getenv("ALLOWED_HOSTS", "yourdomain.com,*.yourdomain.com")

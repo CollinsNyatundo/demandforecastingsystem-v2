@@ -4,9 +4,8 @@ SHAP-based model interpretation and feature importance analysis.
 """
 
 import logging
-from typing import Any
 import tempfile
-from pathlib import Path
+from typing import Any
 
 import mlflow
 import numpy as np
