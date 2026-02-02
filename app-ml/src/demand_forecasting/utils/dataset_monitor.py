@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import s3fs
 from tenacity import retry, stop_after_attempt, wait_exponential
 

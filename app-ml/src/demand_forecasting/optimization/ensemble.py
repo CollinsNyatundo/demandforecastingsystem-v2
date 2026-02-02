@@ -4,9 +4,10 @@ import logging
 from typing import Any, Optional
 
 import numpy as np
+import pandas as pd
 from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
-from sklearn.ensemble import RandomForestRegressor, StackingRegressor
+from sklearn.ensemble import RandomForestRegressor, StackingRegressor, VotingRegressor
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import cross_val_score
@@ -147,8 +148,6 @@ class EnsembleManager:
             Voting ensemble implementation
         """
         try:
-            from sklearn.ensemble import VotingRegressor
-
             self.ensemble = VotingRegressor(estimators=models, weights=weights)
 
             self.ensemble_type = "voting"

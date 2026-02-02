@@ -1,5 +1,4 @@
-"""
-Simplified data profiling and quality monitoring utilities.
+"""Simplified data profiling and quality monitoring utilities.
 Uses basic pandas profiling instead of pandas-profiling to avoid dependency issues.
 """
 
@@ -15,15 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 class SimpleDataProfiler:
-    """
-    Simple data profiling and quality monitoring inspired by EDA notebook.
+    """Simple data profiling and quality monitoring inspired by EDA notebook.
 
     Uses basic pandas operations instead of pandas-profiling to avoid dependency issues.
     """
 
     def __init__(self, profile_dir: str = "/opt/airflow/data/profiles"):
-        """
-        Initialize data profiler.
+        """Initialize data profiler.
 
         Args:
             profile_dir: Directory to store profile reports and metrics
@@ -33,8 +30,7 @@ class SimpleDataProfiler:
         self.metrics_file = self.profile_dir / "data_quality_metrics.json"
 
     def generate_profile_report(self, df: pd.DataFrame, dataset_name: str) -> str:
-        """
-        Generate comprehensive data profile report similar to EDA notebook.
+        """Generate comprehensive data profile report similar to EDA notebook.
 
         Args:
             df: DataFrame to profile
@@ -59,8 +55,7 @@ class SimpleDataProfiler:
         return str(report_path)
 
     def _generate_summary_stats(self, df: pd.DataFrame, dataset_name: str) -> Dict[str, Any]:
-        """
-        Generate summary statistics similar to EDA notebook analysis.
+        """Generate summary statistics similar to EDA notebook analysis.
 
         Args:
             df: DataFrame to analyze
@@ -136,8 +131,7 @@ class SimpleDataProfiler:
         return str(value)
 
     def _generate_html_report(self, df: pd.DataFrame, stats: Dict[str, Any], dataset_name: str) -> str:
-        """
-        Generate a simple HTML report.
+        """Generate a simple HTML report.
 
         Args:
             df: DataFrame being profiled
@@ -226,8 +220,7 @@ class SimpleDataProfiler:
         return str(report_path)
 
     def _save_metrics(self, metrics: Dict[str, Any], dataset_name: str):
-        """
-        Save metrics to JSON file for tracking over time.
+        """Save metrics to JSON file for tracking over time.
 
         Args:
             metrics: Metrics dictionary
@@ -257,8 +250,7 @@ class SimpleDataProfiler:
             json.dump(existing_metrics, f, indent=2, default=str)
 
     def get_quality_summary(self, dataset_name: str = None) -> Dict[str, Any]:
-        """
-        Get quality summary for a specific dataset or all datasets.
+        """Get quality summary for a specific dataset or all datasets.
 
         Args:
             dataset_name: Specific dataset name, or None for all datasets
@@ -279,8 +271,7 @@ class SimpleDataProfiler:
 
 
 def profile_dataset(df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles") -> str:
-    """
-    Convenience function to profile a dataset.
+    """Convenience function to profile a dataset.
 
     Args:
         df: DataFrame to profile

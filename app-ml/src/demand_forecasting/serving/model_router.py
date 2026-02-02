@@ -16,6 +16,10 @@ MIN_SAMPLE_SIZE_THRESHOLD = 10
 STATISTICAL_SIGNIFICANCE_THRESHOLD = 0.05
 CONFIDENCE_INTERVAL_PERCENTAGE = 5
 NEGATIVE_IMPROVEMENT_THRESHOLD = -5
+CONFIDENCE_INTERVAL_SAMPLE_SIZE = 30
+COHENS_D_NEGLIGIBLE_THRESHOLD = 0.2
+COHENS_D_SMALL_THRESHOLD = 0.5
+COHENS_D_MEDIUM_THRESHOLD = 0.8
 
 
 class ModelRouter:
@@ -210,7 +214,7 @@ class ABTestMetrics:
         self, confidence: float = 0.95
     ) -> dict[str, float]:
         """Calculate confidence interval for improvement."""
-        if len(self.metrics_a) < 30 or len(self.metrics_b) < 30:
+        if len(self.metrics_a) < CONFIDENCE_INTERVAL_SAMPLE_SIZE or len(self.metrics_b) < CONFIDENCE_INTERVAL_SAMPLE_SIZE:
             return {"lower": -2.1, "upper": 3.4, "confidence": confidence}
 
         # Use bootstrap method for confidence interval
@@ -245,11 +249,11 @@ class ABTestMetrics:
     def _interpret_effect_size(self, cohens_d: float) -> str:
         """Interpret Cohen's d effect size."""
         abs_d = abs(cohens_d)
-        if abs_d < 0.2:
+        if abs_d < COHENS_D_NEGLIGIBLE_THRESHOLD:
             return "negligible"
-        if abs_d < 0.5:
+        if abs_d < COHENS_D_SMALL_THRESHOLD:
             return "small"
-        if abs_d < 0.8:
+        if abs_d < COHENS_D_MEDIUM_THRESHOLD:
             return "medium"
         return "large"
 
