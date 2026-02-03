@@ -71,7 +71,7 @@ def optimize_catboost_params(
         model.fit(X_opt_train, y_opt_train)
         # Evaluate on validation set (prevents data leakage)
         pred = model.predict(X_opt_val)
-        return np.sqrt(mean_squared_error(y_opt_val, pred))
+        return float(np.sqrt(mean_squared_error(y_opt_val, pred)))
 
 
     try:

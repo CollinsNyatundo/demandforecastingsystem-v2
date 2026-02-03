@@ -98,9 +98,11 @@ class ModelRouter:
                     for f in ["temp", "humidity", "wind_speed", "hour", "day_of_week"]
                 ]
             )
-            return min(
-                0.95,
-                max(0.70, 1.0 - abs(prediction - np.mean(features)) / np.std(features)),
+            return float(
+                min(
+                    0.95,
+                    max(0.70, 1.0 - abs(prediction - np.mean(features)) / np.std(features)),
+                )
             )
         except Exception:
             return 0.85  # Default confidence

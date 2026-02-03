@@ -55,7 +55,7 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
-    return (
+    return float(
         np.mean(np.abs((y_true - y_pred) / np.where(y_true == 0, 0.01, y_true))) * 100
     )
 

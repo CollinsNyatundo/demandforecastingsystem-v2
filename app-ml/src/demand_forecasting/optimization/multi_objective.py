@@ -31,7 +31,7 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     if np.sum(mask) == 0:
         return 0.0
 
-    return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+    return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
 
 
 def objective_multi(  # noqa: PLR0913

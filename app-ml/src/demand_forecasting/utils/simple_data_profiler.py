@@ -7,7 +7,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
@@ -271,7 +271,7 @@ class SimpleDataProfiler:
             return {"error": "No metrics file found"}
 
         with self.metrics_file.open() as f:
-            all_metrics = json.load(f)
+            all_metrics = cast(Dict[str, Any], json.load(f))
 
         if dataset_name:
             return all_metrics.get(dataset_name, {"error": f"Dataset {dataset_name} not found"})
