@@ -328,7 +328,7 @@ class MultiObjectiveOptimizer:
         except ImportError:
             # Fallback if scipy not available
             return {"error": float('inf')}  # Return float instead of string
-        except Exception as e:
+        except Exception:
             return {"error": float('inf')}  # Return float instead of string
 
     def _calculate_convergence_metrics(
@@ -345,7 +345,7 @@ class MultiObjectiveOptimizer:
                 "mean_distance_to_ideal": np.mean(distances_to_ideal),
                 "std_distance_to_ideal": np.std(distances_to_ideal),
             }
-        except Exception as e:
+        except Exception:
             return {"error": float('inf')}  # Return float instead of string
 
     def recommend_solution(

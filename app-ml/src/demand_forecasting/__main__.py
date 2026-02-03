@@ -28,7 +28,6 @@ def main(*args: object, **kwargs: object) -> None:
 
     run = find_run_command(package_name)
     run(*args, **kwargs)
-    return None
 
 
 if __name__ == "__main__":

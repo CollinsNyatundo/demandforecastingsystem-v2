@@ -7,7 +7,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -41,8 +41,8 @@ def profile_dataset(  # noqa: C901
     profile_path.mkdir(parents=True, exist_ok=True)
 
     # Generate basic statistics
-    quality_flags: List[str] = []
-    stats: Dict[str, Any] = {
+    quality_flags: list[str] = []
+    stats: dict[str, Any] = {
         "dataset_name": dataset_name,
         "timestamp": datetime.now().isoformat(),
         "shape": df.shape,

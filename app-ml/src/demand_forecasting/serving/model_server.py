@@ -6,9 +6,9 @@ import math
 import os
 import secrets
 import time
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import AsyncGenerator, Awaitable, Callable
 
 import catboost
 import mlflow

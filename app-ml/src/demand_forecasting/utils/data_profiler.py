@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -82,8 +82,8 @@ class DataProfiler:
         Returns:
             Dictionary with summary statistics
         """
-        quality_flags: List[str] = []
-        stats: Dict[str, Any] = {
+        quality_flags: list[str] = []
+        stats: dict[str, Any] = {
             "dataset_name": dataset_name,
             "timestamp": datetime.now().isoformat(),
             "shape": df.shape,
@@ -144,7 +144,7 @@ class DataProfiler:
                 zero_percentage = float(cnt_stats["zero_percentage"])  # type: ignore[arg-type]
             except (ValueError, TypeError):
                 zero_percentage = 0.0
-            
+
             if zero_percentage > OUTLIER_THRESHOLD:
                 stats["quality_flags"].append("HIGH_ZERO_COUNT")
 
@@ -193,7 +193,7 @@ class DataProfiler:
             return {"error": "No metrics file found"}
 
         with self.metrics_file.open() as f:
-            all_metrics = cast(Dict[str, Any], json.load(f))
+            all_metrics = cast(dict[str, Any], json.load(f))
 
         if dataset_name:
             dataset_result: dict[str, Any] = all_metrics.get(
@@ -278,7 +278,7 @@ class DataProfiler:
         # Use most recent historical metrics as baseline
         baseline = historical_metrics[-1]
 
-        drift_results: Dict[str, Any] = {
+        drift_results: dict[str, Any] = {
             "status": "no_drift",
             "drift_detected": False,
             "drift_score": 0.0,

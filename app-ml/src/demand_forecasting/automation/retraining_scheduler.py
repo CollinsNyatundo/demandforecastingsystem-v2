@@ -199,75 +199,100 @@ class RetrainingScheduler:
             logger.error(f"Error checking data trigger: {e}")
             return False
 
+    def _get_recent_rmse_values(self, max_results: int = 10) -> list[float]:
+        """Get recent RMSE values from MLflow runs.
+
+        Args:
+            max_results: Maximum number of runs to analyze
+
+        Returns:
+            List of recent RMSE values
+        """
+        client = mlflow.tracking.MlflowClient()
+        experiments = client.search_experiments(
+            filter_string=f"name = '{self.model_registry_name}'"
+        )
+
+        if not experiments:
+            return []
+
+        experiment_id = experiments[0].experiment_id
+
+        # Get recent runs for drift analysis
+        recent_runs = client.search_runs(
+            experiment_ids=[experiment_id],
+            max_results=max_results,
+            order_by=["start_time DESC"],
+        )
+
+        # Extract RMSE values
+        recent_rmse_values = []
+        for run in recent_runs:
+            rmse = run.data.metrics.get("rmse")
+            if rmse is not None:
+                recent_rmse_values.append(rmse)
+
+        return recent_rmse_values
+
+    def _perform_statistical_drift_test(self, recent_rmse_values: list[float]) -> tuple[bool, float, float]:
+        """Perform statistical test for performance drift.
+
+        Args:
+            recent_rmse_values: List of recent RMSE values
+
+        Returns:
+            Tuple of (should_trigger, p_value, cohens_d)
+        """
+        if len(recent_rmse_values) < DEFAULT_DAYS_INTERVAL:
+            return False, 1.0, 0.0
+
+        # Statistical test for performance drift
+        older_rmse = recent_rmse_values[-2:]  # Older runs
+        newer_rmse = recent_rmse_values[:2]  # Recent runs
+
+        if len(older_rmse) == 0 or len(newer_rmse) == 0:
+            return False, 1.0, 0.0
+
+        # Perform t-test
+        _t_stat, p_value_raw = stats.ttest_ind(older_rmse, newer_rmse)
+        p_value: float = float(p_value_raw)
+
+        # Calculate effect size (Cohen's d)
+        pooled_std = (
+            (len(older_rmse) - 1) * pd.Series(older_rmse).var()
+            + (len(newer_rmse) - 1) * pd.Series(newer_rmse).var()
+        ) / (len(older_rmse) + len(newer_rmse) - 2)
+
+        if pooled_std > 0:
+            cohens_d = (
+                pd.Series(newer_rmse).mean() - pd.Series(older_rmse).mean()
+            ) / pooled_std
+        else:
+            cohens_d = 0
+
+        try:
+            p_val_float = float(p_value)
+        except (ValueError, TypeError):
+            p_val_float = 1.0  # Default to no significance
+
+        should_trigger = (
+            p_val_float < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
+        )  # Significant degradation
+
+        return should_trigger, p_value, cohens_d
+
     def _check_drift_trigger(self) -> bool:
         """Check if data drift detected."""
         try:
-            # This would typically use your drift detection implementation
-            # For now, we'll simulate with statistical tests on recent data
+            # Get recent RMSE values
+            recent_rmse_values = self._get_recent_rmse_values()
 
-            client = mlflow.tracking.MlflowClient()
-            experiments = client.search_experiments(
-                filter_string=f"name = '{self.model_registry_name}'"
-            )
-
-            if not experiments:
-                return False
-
-            experiment_id = experiments[0].experiment_id
-
-            # Get recent runs for drift analysis
-            recent_runs = client.search_runs(
-                experiment_ids=[experiment_id],
-                max_results=10,
-                order_by=["start_time DESC"],
-            )
-
-            if len(recent_runs) < DEFAULT_DAYS_INTERVAL:
+            if len(recent_rmse_values) < DEFAULT_DAYS_INTERVAL:
                 logger.info("Insufficient runs for drift analysis")
                 return False
 
-            # Compare recent model performance
-            recent_rmse_values = []
-            for run in recent_runs:
-                rmse = run.data.metrics.get("rmse")
-                if rmse is not None:
-                    recent_rmse_values.append(rmse)
-
-            if len(recent_rmse_values) < DEFAULT_DAYS_INTERVAL:
-                return False
-
-            # Statistical test for performance drift
-            older_rmse = recent_rmse_values[-2:]  # Older runs
-            newer_rmse = recent_rmse_values[:2]  # Recent runs
-
-            if len(older_rmse) == 0 or len(newer_rmse) == 0:
-                return False
-
-            # Perform t-test
-            _t_stat, p_value_raw = stats.ttest_ind(older_rmse, newer_rmse)
-            p_value: float = float(p_value_raw)  # type: ignore[arg-type]  # Type annotation for mypy
-
-            # Calculate effect size (Cohen's d)
-            pooled_std = (
-                (len(older_rmse) - 1) * pd.Series(older_rmse).var()
-                + (len(newer_rmse) - 1) * pd.Series(newer_rmse).var()
-            ) / (len(older_rmse) + len(newer_rmse) - 2)
-
-            if pooled_std > 0:
-                cohens_d = (
-                    pd.Series(newer_rmse).mean() - pd.Series(older_rmse).mean()
-                ) / pooled_std
-            else:
-                cohens_d = 0
-
-            try:
-                p_val_float = float(p_value)
-            except (ValueError, TypeError):
-                p_val_float = 1.0  # Default to no significance
-            
-            should_trigger = (
-                p_val_float < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
-            )  # Significant degradation
+            # Perform statistical drift test
+            should_trigger, p_value, cohens_d = self._perform_statistical_drift_test(recent_rmse_values)
 
             if should_trigger:
                 logger.info(

@@ -19,14 +19,9 @@ ZERO_PERCENTAGE_THRESHOLD = 20
 # Great Expectations imports with graceful fallback
 try:
     from great_expectations.data_context import EphemeralDataContext
-    from great_expectations.expectations.core import (
-        ExpectColumnMaxToBeBetween,
-        ExpectColumnMeanToBeBetween,
-        ExpectColumnMinToBeBetween,
-        ExpectColumnValuesToBeOfType,
-        ExpectColumnValuesToNotBeNull,
-        ExpectColumnValueZScoresToBeLessThan,
-        ExpectTableColumnsToMatchOrderedList,
+    from great_expectations.data_context.types.base import (
+        DataContextConfig,
+        InMemoryStoreBackendDefaults,
     )
 
     GX_AVAILABLE = True
@@ -63,8 +58,6 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
     docs_path.mkdir(parents=True, exist_ok=True)
 
     # Create ephemeral context with proper configuration
-    from great_expectations.data_context.types.base import DataContextConfig, InMemoryStoreBackendDefaults
-    
     data_context_config = DataContextConfig(
         store_backend_defaults=InMemoryStoreBackendDefaults()
     )
@@ -72,7 +65,7 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
 
     # Create expectation suite name
     suite_name = f"{dataset_name}_suite"
-    
+
     # Add expectations based on data characteristics
     validator = context.get_validator(
         batch_data=df,

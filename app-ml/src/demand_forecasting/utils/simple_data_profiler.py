@@ -7,7 +7,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -72,8 +72,8 @@ class SimpleDataProfiler:
         Returns:
             Dictionary with summary statistics
         """
-        quality_flags: List[str] = []
-        stats: Dict[str, Any] = {
+        quality_flags: list[str] = []
+        stats: dict[str, Any] = {
             "dataset_name": dataset_name,
             "timestamp": datetime.now().isoformat(),
             "shape": df.shape,
@@ -132,7 +132,7 @@ class SimpleDataProfiler:
                 zero_percentage = float(cnt_stats["zero_percentage"])  # type: ignore[arg-type]
             except (ValueError, TypeError):
                 zero_percentage = 0.0
-            
+
             if zero_percentage > OUTLIER_THRESHOLD:
                 stats["quality_flags"].append("HIGH_ZERO_COUNT")
 
@@ -276,7 +276,7 @@ class SimpleDataProfiler:
             return {"error": "No metrics file found"}
 
         with self.metrics_file.open() as f:
-            all_metrics = cast(Dict[str, Any], json.load(f))
+            all_metrics = cast(dict[str, Any], json.load(f))
 
         if dataset_name:
             dataset_result: dict[str, Any] = all_metrics.get(dataset_name, {"error": f"Dataset {dataset_name} not found"})

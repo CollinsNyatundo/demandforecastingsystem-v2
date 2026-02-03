@@ -118,7 +118,7 @@ def compare_demand_models(
         rf_rmse = comparison["random_forest"]["rmse"]
 
         best_model = "catboost" if cb_rmse < rf_rmse else "random_forest"
-        
+
         # Add additional metadata to comparison
         comparison["best_model"] = best_model  # type: ignore[assignment]
 
