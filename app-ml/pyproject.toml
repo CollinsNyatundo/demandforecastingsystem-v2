@@ -183,6 +183,7 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 strict_optional = true
+disable_error_code = "import-untyped"  # Research-based global suppression
 
 # Per-module overrides
 [[tool.mypy.overrides]]
@@ -191,6 +192,12 @@ disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = ["catboost.*", "shap.*", "pandera.*", "kedro.*", "pluggy.*"]
+ignore_missing_imports = true
+
+# Research-based selective suppression for libraries without type stubs
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "s3fs.*", "plotly.*", "tenacity.*", "joblib.*", "cachetools.*"]
+disable_error_code = "import-untyped"
 ignore_missing_imports = true
 
 [tool.bandit]

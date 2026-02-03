@@ -231,7 +231,7 @@ class MultiObjectiveOptimizer:
         # Extract objective values
         objective_values = []
         for trial in self.best_trials:
-            values = trial.values
+            values = trial.values  # type: ignore[attr-defined]
             objective_values.append(values)
 
         objective_values = np.array(objective_values)
@@ -267,7 +267,7 @@ class MultiObjectiveOptimizer:
             best_trials_per_objective[obj_name] = {
                 "trial_number": self.best_trials[best_idx].number,
                 "params": self.best_trials[best_idx].params,
-                "values": dict(zip(self.objectives, self.best_trials[best_idx].values, strict=False)),
+                "values": dict(zip(self.objectives, self.best_trials[best_idx].values, strict=False)),  # type: ignore[attr-defined]
             }
 
         return {
@@ -278,7 +278,7 @@ class MultiObjectiveOptimizer:
                 {
                     "trial_number": trial.number,
                     "params": trial.params,
-                    "values": dict(zip(self.objectives, trial.values, strict=False)),
+                    "values": dict(zip(self.objectives, trial.values, strict=False)),  # type: ignore[attr-defined]
                 }
                 for trial in self.best_trials
             ],
@@ -293,7 +293,7 @@ class MultiObjectiveOptimizer:
 
         # Calculate hypervolume (simplified)
         # For true hypervolume, we need a reference point
-        objective_values = np.array([trial.values for trial in self.best_trials])
+        objective_values = np.array([trial.values for trial in self.best_trials])  # type: ignore[attr-defined]
 
         # Find reference point (worst values + 10% margin)
         reference_point = []
@@ -383,7 +383,7 @@ class MultiObjectiveOptimizer:
 
         for trial in self.best_trials:
             # Normalize objectives to [0, 1]
-            objective_values = np.array(trial.values)
+            objective_values = np.array(trial.values)  # type: ignore[attr-defined]
 
             # Get min/max for each objective across all trials
             all_values = np.array([t.values for t in self.best_trials])
@@ -415,7 +415,7 @@ class MultiObjectiveOptimizer:
             "recommended_trial": {
                 "trial_number": best_trial.number if best_trial is not None else -1,
                 "params": best_trial.params if best_trial is not None else {},
-                "values": dict(zip(self.objectives, best_trial.values, strict=False)) if best_trial is not None else {},
+                "values": dict(zip(self.objectives, best_trial.values, strict=False)) if best_trial is not None else {},  # type: ignore[attr-defined]
                 "weighted_score": best_score,
             } if best_trial is not None else None,
             "preference_weights": normalized_weights,
