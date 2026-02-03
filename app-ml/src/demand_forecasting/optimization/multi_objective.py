@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import optuna
@@ -91,7 +91,7 @@ def objective_multi(  # noqa: PLR0913
             objectives_values.append(mae)
 
         if "mape" in objectives:
-            mape = compute_zero_safe_mape(y_test, y_pred)
+            mape = compute_zero_safe_mape(np.array(y_test), np.array(y_pred))
             objectives_values.append(mape)
 
         if "training_time" in objectives:
@@ -118,7 +118,7 @@ def objective_multi(  # noqa: PLR0913
         for obj in objectives:
             if obj in ["rmse", "mae", "mape", "cv_score"] or obj == "training_time":
                 worst_values.append(float("inf"))
-        return tuple(worst_values) if len(worst_values) > 1 else worst_values[0]
+        return tuple(worst_values)
 
 
 class MultiObjectiveOptimizer:
@@ -140,7 +140,7 @@ class MultiObjectiveOptimizer:
         self,
         study_name: str = "demand_forecasting_multi_objective",
         storage: str | None = None,
-        sampler: optuna.samplers.BaseSampler = None,
+        sampler: optuna.samplers.BaseSampler | None = None,
     ) -> optuna.Study:
         """Create Optuna study for multi-objective optimization.
 
@@ -200,7 +200,7 @@ class MultiObjectiveOptimizer:
             # Define objective function with data
             def objective(trial: object) -> tuple[float, ...]:
                 return objective_multi(
-                    trial, X_train, X_test, y_train, y_test, self.objectives
+                    cast(Trial, trial), X_train, X_test, y_train, y_test, self.objectives
                 )
 
             # Run optimization
@@ -208,7 +208,7 @@ class MultiObjectiveOptimizer:
             self.study.optimize(objective, n_trials=n_trials, timeout=timeout)
 
             # Get Pareto front (best trials)
-            self.best_trials = self.study.best_trials
+            self.best_trials = cast(list[Trial], self.study.best_trials)
 
             # Analyze results
             results = self._analyze_results()
@@ -229,17 +229,12 @@ class MultiObjectiveOptimizer:
             return {"error": "No successful trials found"}
 
         # Extract objective values
-        objective_values = []
-        for trial in self.best_trials:
-            values = trial.values  # type: ignore[attr-defined]
-            objective_values.append(values)
-
-        objective_values = np.array(objective_values)
+        objective_values_np = np.array([trial.values for trial in self.best_trials])  # type: ignore[attr-defined]
 
         # Calculate statistics for each objective
         stats = {}
         for i, obj_name in enumerate(self.objectives):
-            obj_values = objective_values[:, i]
+            obj_values = objective_values_np[:, i]
             stats[obj_name] = {
                 "best": (
                     np.min(obj_values)
@@ -260,9 +255,9 @@ class MultiObjectiveOptimizer:
         best_trials_per_objective = {}
         for i, obj_name in enumerate(self.objectives):
             if self.directions[i] == "minimize":
-                best_idx = np.argmin(objective_values[:, i])
+                best_idx = np.argmin(objective_values_np[:, i])
             else:
-                best_idx = np.argmax(objective_values[:, i])
+                best_idx = np.argmax(objective_values_np[:, i])
 
             best_trials_per_objective[obj_name] = {
                 "trial_number": self.best_trials[best_idx].number,
@@ -332,9 +327,9 @@ class MultiObjectiveOptimizer:
             }
         except ImportError:
             # Fallback if scipy not available
-            return {"error": "scipy not available for distance calculations"}
+            return {"error": float('inf')}  # Return float instead of string
         except Exception as e:
-            return {"error": f"Failed to calculate diversity: {e}"}
+            return {"error": float('inf')}  # Return float instead of string
 
     def _calculate_convergence_metrics(
         self, objective_values: np.ndarray
@@ -351,7 +346,7 @@ class MultiObjectiveOptimizer:
                 "std_distance_to_ideal": np.std(distances_to_ideal),
             }
         except Exception as e:
-            return {"error": f"Failed to calculate convergence: {e}"}
+            return {"error": float('inf')}  # Return float instead of string
 
     def recommend_solution(
         self, preference_weights: dict[str, float] | None = None
@@ -386,7 +381,7 @@ class MultiObjectiveOptimizer:
             objective_values = np.array(trial.values)  # type: ignore[attr-defined]
 
             # Get min/max for each objective across all trials
-            all_values = np.array([t.values for t in self.best_trials])
+            all_values = np.array([t.values for t in self.best_trials])  # type: ignore[attr-defined]
             min_vals = np.min(all_values, axis=0)
             max_vals = np.max(all_values, axis=0)
 

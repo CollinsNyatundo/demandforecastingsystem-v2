@@ -141,10 +141,10 @@ class ABTestMetrics:
     def __init__(self, test_name: str):
         """Initialize A/B test collector."""
         self.test_name = test_name
-        self.metrics_a = []
-        self.metrics_b = []
-        self.predictions_a = []
-        self.predictions_b = []
+        self.metrics_a: list[float] = []
+        self.metrics_b: list[float] = []
+        self.predictions_a: list[float] = []
+        self.predictions_b: list[float] = []
 
     def log_prediction(self, model_id: str, prediction: float, actual: float | None = None) -> None:
         """Log prediction and actual value for metric calculation."""

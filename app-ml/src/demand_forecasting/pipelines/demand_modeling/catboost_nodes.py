@@ -129,8 +129,8 @@ def train_catboost_model(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     optimized_params: dict[str, Any],
-    X_test: pd.DataFrame = None,
-    y_test: pd.Series = None,
+    X_test: pd.DataFrame | None = None,
+    y_test: pd.Series | None = None,
 ) -> tuple:
     """Train CatBoost model with optimized parameters on FULL training data.
 

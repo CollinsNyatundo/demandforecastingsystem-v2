@@ -24,9 +24,9 @@ class EnsembleManager:
     def __init__(self) -> None:
         """Initialize ensemble manager."""
         self.ensemble = None
-        self.base_models = {}
+        self.base_models: dict[str, Any] = {}
         self.meta_model = None
-        self.ensemble_type = None
+        self.ensemble_type: str | None = None
 
     def create_stacking_ensemble(
         self,

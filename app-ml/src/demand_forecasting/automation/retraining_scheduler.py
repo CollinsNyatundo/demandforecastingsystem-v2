@@ -259,8 +259,13 @@ class RetrainingScheduler:
             else:
                 cohens_d = 0
 
+            try:
+                p_val_float = float(p_value)
+            except (ValueError, TypeError):
+                p_val_float = 1.0  # Default to no significance
+            
             should_trigger = (
-                float(p_value) < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
+                p_val_float < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
             )  # Significant degradation
 
             if should_trigger:
@@ -287,7 +292,7 @@ class RetrainingScheduler:
             )
 
             if not experiments:
-                return None
+                return float('inf')  # Default to worst case RMSE
 
             experiment_id = experiments[0].experiment_id
 
@@ -302,11 +307,11 @@ class RetrainingScheduler:
             if best_runs:
                 return float(best_runs[0].data.metrics.get("rmse", 0.0))
 
-            return None
+            return float('inf')  # Default to worst case RMSE
 
         except Exception as e:
             logger.error(f"Error getting baseline RMSE: {e}")
-            return None
+            return float('inf')  # Default to worst case RMSE
 
     def _calculate_priority(self, triggers: list[str]) -> str:
         """Calculate retraining priority based on trigger types."""

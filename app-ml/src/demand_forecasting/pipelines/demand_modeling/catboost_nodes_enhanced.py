@@ -12,7 +12,7 @@ Version: 2.1.0
 
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,7 @@ try:
     from optuna.pruners import MedianPruner
     from optuna.samplers import TPESampler
     from optuna.storages import RDBStorage
+    from optuna.trial import Trial
 
     OPTUNA_AVAILABLE = True
 except ImportError:
@@ -210,7 +211,7 @@ def objective_catboost_enhanced(  # noqa: PLR0913
                         "cv_rmse_mean": avg_rmse,
                         "cv_rmse_std": np.std(rmse_scores),
                         "cv_mae_mean": avg_mae,
-                        "cv_mape_mean": avg_mape,
+                        "cv_mape_mean": float(avg_mape),
                     }
                 )
         except Exception as e:
@@ -337,9 +338,9 @@ def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915,
         logger.info(f"🆕 Created new study. Will run {n_trials} trials.")
 
     # Define objective function
-    def objective(trial: object) -> dict[str, float]:
+    def objective(trial: object) -> float:
         return objective_catboost_enhanced(
-            trial,
+            cast(Trial, trial),
             X_train,
             y_train,
             search_space,

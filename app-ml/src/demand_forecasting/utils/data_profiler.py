@@ -196,11 +196,11 @@ class DataProfiler:
             all_metrics = cast(Dict[str, Any], json.load(f))
 
         if dataset_name:
-            return cast(Dict[str, Any], all_metrics.get(
+            return all_metrics.get(
                 dataset_name, {"error": f"Dataset {dataset_name} not found"}
-            ))  # type: ignore[redundant-cast]
+            )
 
-        return cast(Dict[str, Any], all_metrics)  # type: ignore[redundant-cast]
+        return all_metrics
 
     def _compare_shape_drift(
         self, current_shape: tuple[int, int], baseline_shape: tuple[int, int], threshold: float

@@ -8,7 +8,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import AsyncGenerator, Callable
+from typing import AsyncGenerator, Awaitable, Callable
 
 import catboost
 import mlflow
@@ -296,7 +296,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Implements defense-in-depth security headers for production deployment.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """Process HTTP request and add security headers.
 
         Args:
@@ -512,7 +512,7 @@ async def verify_api_key_secure(
     Raises:
         HTTPException: For authentication failures with appropriate status codes
     """
-    client_ip = request.client.host
+    client_ip = request.client.host if request.client else "unknown"
 
     # Check for X-Forwarded-For header (common behind proxy/load balancer)
     # This allows proper rate limiting when behind reverse proxy
