@@ -7,7 +7,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -72,7 +72,8 @@ class SimpleDataProfiler:
         Returns:
             Dictionary with summary statistics
         """
-        stats = {
+        quality_flags: List[str] = []
+        stats: Dict[str, Any] = {
             "dataset_name": dataset_name,
             "timestamp": datetime.now().isoformat(),
             "shape": df.shape,
@@ -83,7 +84,7 @@ class SimpleDataProfiler:
             "numeric_summary": {},
             "categorical_summary": {},
             "correlations": {},
-            "quality_flags": []
+            "quality_flags": quality_flags,
         }
 
         # Numeric columns analysis

@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -82,7 +82,8 @@ class DataProfiler:
         Returns:
             Dictionary with summary statistics
         """
-        stats = {
+        quality_flags: List[str] = []
+        stats: Dict[str, Any] = {
             "dataset_name": dataset_name,
             "timestamp": datetime.now().isoformat(),
             "shape": df.shape,
@@ -93,7 +94,7 @@ class DataProfiler:
             "numeric_summary": {},
             "categorical_summary": {},
             "correlations": {},
-            "quality_flags": [],
+            "quality_flags": quality_flags,
         }
 
         # Numeric columns analysis
@@ -270,7 +271,7 @@ class DataProfiler:
         # Use most recent historical metrics as baseline
         baseline = historical_metrics[-1]
 
-        drift_results = {
+        drift_results: Dict[str, Any] = {
             "status": "no_drift",
             "drift_detected": False,
             "drift_score": 0.0,

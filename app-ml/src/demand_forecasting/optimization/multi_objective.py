@@ -8,6 +8,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostRegressor
+from optuna.trial import Trial
 from scipy.spatial.distance import pdist
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import cross_val_score
@@ -34,7 +35,7 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def objective_multi(  # noqa: PLR0913
-    trial: object, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, objectives: list[str] | None = None
+    trial: Trial, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, objectives: list[str] | None = None
 ) -> tuple[float, ...]:
     """Multi-objective optimization function.
 
@@ -132,8 +133,8 @@ class MultiObjectiveOptimizer:
         """
         self.objectives = objectives
         self.directions = directions or ["minimize"] * len(objectives)
-        self.study = None
-        self.best_trials = []
+        self.study: optuna.Study | None = None
+        self.best_trials: list[Trial] = []
 
     def create_study(
         self,
@@ -281,8 +282,8 @@ class MultiObjectiveOptimizer:
                 }
                 for trial in self.best_trials
             ],
-            "total_trials": len(self.study.trials),
-            "study_name": self.study.study_name,
+            "total_trials": len(self.study.trials) if self.study is not None else 0,
+            "study_name": self.study.study_name if self.study is not None else "unknown",
         }
 
     def get_pareto_analysis(self) -> dict[str, Any]:

@@ -7,6 +7,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -50,7 +51,9 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
     docs_path.mkdir(parents=True, exist_ok=True)
 
     # Generate comprehensive profiling report
-    profile_data = {
+    quality_flags: List[str] = []
+    data_quality_checks: List[str] = []
+    profile_data: Dict[str, Any] = {
         "dataset_name": dataset_name,
         "timestamp": datetime.now().isoformat(),
         "shape": df.shape,
@@ -60,8 +63,8 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
         "missing_percentage": (df.isnull().sum() / len(df) * 100).to_dict(),
         "numeric_summary": {},
         "categorical_summary": {},
-        "quality_flags": [],
-        "data_quality_checks": [],
+        "quality_flags": quality_flags,
+        "data_quality_checks": data_quality_checks,
     }
 
     # Numeric columns analysis
