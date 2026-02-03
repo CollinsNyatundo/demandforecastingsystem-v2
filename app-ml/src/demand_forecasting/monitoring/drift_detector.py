@@ -41,7 +41,7 @@ class DriftDetector:
         self.reference_data = reference_data.copy()
         self.reference_stats = self._compute_statistics(reference_data)
         self.threshold = threshold
-        self.drift_history = []
+        self.drift_history: list[dict[str, Any]] = []
 
     def detect_drift(
         self, current_data: pd.DataFrame, threshold: float | None = None
@@ -292,7 +292,7 @@ class DriftDetector:
             return pd.DataFrame()
 
         # Collect drift scores for each feature over time
-        feature_scores = {}
+        feature_scores: dict[str, list[float]] = {}
         for run in self.drift_history:
             for feature, details in run.get("details", {}).items():
                 if feature not in feature_scores:
@@ -344,13 +344,13 @@ class PopulationStabilityIndex:
                 _, bin_edges = pd.qcut(
                     expected, q=buckets, retbins=True, duplicates="drop"
                 )
-                expected_binned = pd.cut(expected, bins=bin_edges, include_lowest=True)
-                actual_binned = pd.cut(actual, bins=bin_edges, include_lowest=True)
+                expected_binned = pd.cut(expected, bins=bin_edges, include_lowest=True)  # type: ignore[call-overload]
+                actual_binned = pd.cut(actual, bins=bin_edges, include_lowest=True)  # type: ignore[call-overload]
             else:
                 # For categorical data, use unique values as bins
                 all_categories = set(expected.unique()) | set(actual.unique())
-                expected_binned = pd.Categorical(expected, categories=all_categories)
-                actual_binned = pd.Categorical(actual, categories=all_categories)
+                expected_binned = pd.Categorical(expected, categories=list(all_categories))
+                actual_binned = pd.Categorical(actual, categories=list(all_categories))
 
             # Calculate percentages
             expected_counts = expected_binned.value_counts(normalize=True, sort=False)

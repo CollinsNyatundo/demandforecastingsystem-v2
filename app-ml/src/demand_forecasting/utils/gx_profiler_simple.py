@@ -154,7 +154,7 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
         profile_data["target_analysis"] = cnt_stats
 
         try:
-            zero_percentage = float(cnt_stats["zero_percentage"])
+            zero_percentage = float(cnt_stats["zero_percentage"])  # type: ignore[arg-type]
         except (ValueError, TypeError):
             zero_percentage = 0.0
         

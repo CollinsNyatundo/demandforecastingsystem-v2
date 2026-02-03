@@ -141,7 +141,7 @@ class DataProfiler:
             stats["target_analysis"] = cnt_stats
 
             try:
-                zero_percentage = float(cnt_stats["zero_percentage"])
+                zero_percentage = float(cnt_stats["zero_percentage"])  # type: ignore[arg-type]
             except (ValueError, TypeError):
                 zero_percentage = 0.0
             
@@ -198,9 +198,9 @@ class DataProfiler:
         if dataset_name:
             return cast(Dict[str, Any], all_metrics.get(
                 dataset_name, {"error": f"Dataset {dataset_name} not found"}
-            ))
+            ))  # type: ignore[redundant-cast]
 
-        return cast(Dict[str, Any], all_metrics)
+        return cast(Dict[str, Any], all_metrics)  # type: ignore[redundant-cast]
 
     def _compare_shape_drift(
         self, current_shape: tuple[int, int], baseline_shape: tuple[int, int], threshold: float

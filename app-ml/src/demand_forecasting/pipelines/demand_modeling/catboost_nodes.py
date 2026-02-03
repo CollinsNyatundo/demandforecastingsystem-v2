@@ -81,7 +81,7 @@ def optimize_catboost_params(
         if storage:
             study = optuna.create_study(
                 direction="minimize",
-                storage=storage,
+                storage=storage,  # type: ignore[arg-type]
                 study_name=study_name,
                 load_if_exists=True,  # Resume existing study
                 sampler=sampler,  # Use seeded sampler for reproducibility

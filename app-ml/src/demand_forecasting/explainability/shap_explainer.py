@@ -113,7 +113,9 @@ class ModelExplainer:
 
             # Get prediction
             if hasattr(self.model, "predict"):
-                prediction = self.model.predict(sample.values.reshape(1, -1))[0]
+                # Convert to numpy array to handle ExtensionArray cases
+                sample_array = np.asarray(sample.values).reshape(1, -1)
+                prediction = self.model.predict(sample_array)[0]
             else:
                 prediction = "unknown"
 

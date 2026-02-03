@@ -129,7 +129,7 @@ class SimpleDataProfiler:
             stats["target_analysis"] = cnt_stats
 
             try:
-                zero_percentage = float(cnt_stats["zero_percentage"])
+                zero_percentage = float(cnt_stats["zero_percentage"])  # type: ignore[arg-type]
             except (ValueError, TypeError):
                 zero_percentage = 0.0
             
@@ -279,9 +279,9 @@ class SimpleDataProfiler:
             all_metrics = cast(Dict[str, Any], json.load(f))
 
         if dataset_name:
-            return cast(Dict[str, Any], all_metrics.get(dataset_name, {"error": f"Dataset {dataset_name} not found"}))
+            return cast(Dict[str, Any], all_metrics.get(dataset_name, {"error": f"Dataset {dataset_name} not found"}))  # type: ignore[redundant-cast]
 
-        return cast(Dict[str, Any], all_metrics)
+        return cast(Dict[str, Any], all_metrics)  # type: ignore[redundant-cast]
 
 
 def profile_dataset(df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles") -> str:
