@@ -413,11 +413,11 @@ class MultiObjectiveOptimizer:
 
         return {
             "recommended_trial": {
-                "trial_number": best_trial.number,
-                "params": best_trial.params,
-                "values": dict(zip(self.objectives, best_trial.values, strict=False)),
+                "trial_number": best_trial.number if best_trial is not None else -1,
+                "params": best_trial.params if best_trial is not None else {},
+                "values": dict(zip(self.objectives, best_trial.values, strict=False)) if best_trial is not None else {},
                 "weighted_score": best_score,
-            },
+            } if best_trial is not None else None,
             "preference_weights": normalized_weights,
             "selection_criteria": "weighted_sum",
         }

@@ -15,7 +15,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import s3fs
@@ -441,7 +441,7 @@ class DatasetMonitor:
 
         try:
             with self.metrics_file.open() as f:
-                return json.load(f)
+                return cast(dict[str, Any], json.load(f))
         except json.JSONDecodeError:
             logger.warning("Corrupted metrics file, starting fresh")
             return {}

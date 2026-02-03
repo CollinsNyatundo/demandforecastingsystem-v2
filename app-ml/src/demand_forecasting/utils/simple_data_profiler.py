@@ -128,7 +128,7 @@ class SimpleDataProfiler:
             }
             stats["target_analysis"] = cnt_stats
 
-            if cnt_stats["zero_percentage"] > OUTLIER_THRESHOLD:
+            if float(cnt_stats["zero_percentage"]) > OUTLIER_THRESHOLD:
                 stats["quality_flags"].append("HIGH_ZERO_COUNT")
 
         return stats
