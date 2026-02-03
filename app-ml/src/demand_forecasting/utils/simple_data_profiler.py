@@ -227,7 +227,7 @@ class SimpleDataProfiler:
 
         return str(report_path)
 
-    def _save_metrics(self, metrics: dict[str, Any], dataset_name: str):
+    def _save_metrics(self, metrics: dict[str, Any], dataset_name: str) -> None:
         """Save metrics to JSON file for tracking over time.
 
         Args:

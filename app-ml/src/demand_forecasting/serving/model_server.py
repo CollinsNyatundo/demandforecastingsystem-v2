@@ -8,6 +8,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import AsyncGenerator
 
 import catboost
 import mlflow
@@ -209,7 +210,7 @@ class HealthResponse(BaseModel):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Load models during startup and cleanup on shutdown. Fails if no model available."""
     try:
         logger.info("Starting model server...")
@@ -427,7 +428,7 @@ class APIKeyManager:
     - FastAPI Security Guide: https://fastapi.tiangolo.com/tutorial/security/
     - NIST SP 800-63B: Digital Authentication Guidelines
     """  # noqa: D205
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize API key manager."""
         # Load hashed keys from environment
         self.valid_key_hashes = self._load_api_key_hashes()

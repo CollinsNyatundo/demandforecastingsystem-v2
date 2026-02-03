@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class EnsembleManager:
     """Manage ensemble methods for demand forecasting."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize ensemble manager."""
         self.ensemble = None
         self.base_models = {}
@@ -487,7 +487,7 @@ class EnsembleManager:
             logger.error(f"Cross-validation failed: {e}")
             raise
 
-    def save_ensemble(self, filepath: str):
+    def save_ensemble(self, filepath: str) -> None:
         """Save the trained ensemble to disk."""
         if self.ensemble is None:
             raise ValueError("No ensemble to save.")
@@ -500,7 +500,7 @@ class EnsembleManager:
             logger.error(f"Failed to save ensemble: {e}")
             raise
 
-    def load_ensemble(self, filepath: str):
+    def load_ensemble(self, filepath: str) -> None:
         """Load a trained ensemble from disk."""
         try:
             self.ensemble = joblib.load(filepath)

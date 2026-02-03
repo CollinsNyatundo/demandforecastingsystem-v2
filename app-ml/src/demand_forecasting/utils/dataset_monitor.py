@@ -327,7 +327,7 @@ class DatasetMonitor:
 
         return results
 
-    def _update_s3_timestamp(self, dataset_uri: str, timestamp: datetime):
+    def _update_s3_timestamp(self, dataset_uri: str, timestamp: datetime) -> None:
         """Update metrics with S3 timestamp for consistency.
 
         Args:
@@ -451,7 +451,7 @@ class DatasetMonitor:
         with self.metrics_file.open("w") as f:
             json.dump(metrics, f, indent=2)
 
-    def _update_metrics(self, dataset_uri: str, event: dict[str, Any]):
+    def _update_metrics(self, dataset_uri: str, event: dict[str, Any]) -> None:
         """Update metrics summary with new event."""
         metrics = self._load_metrics()
 
@@ -473,7 +473,7 @@ class DatasetMonitor:
 
         self._save_metrics(metrics)
 
-    def _update_metrics_summary(self, dataset_uri: str, new_metrics: dict[str, Any]):
+    def _update_metrics_summary(self, dataset_uri: str, new_metrics: dict[str, Any]) -> None:
         """Update metrics summary with new quality metrics."""
         metrics = self._load_metrics()
 
@@ -533,7 +533,7 @@ def log_update(
     dag_id: str,
     run_id: str,
     metadata: dict[str, Any] | None = None,
-):
+) -> None:
     """Quick log of a dataset update.
 
     Args:

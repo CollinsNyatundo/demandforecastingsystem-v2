@@ -121,7 +121,7 @@ class ModelRouter:
             * 100,
         }
 
-    def update_split(self, new_split: float):
+    def update_split(self, new_split: float) -> None:
         """Update traffic split ratio."""
         if not 0.0 <= new_split <= 1.0:
             raise ValueError("Split ratio must be between 0.0 and 1.0")
@@ -144,7 +144,7 @@ class ABTestMetrics:
         self.predictions_a = []
         self.predictions_b = []
 
-    def log_prediction(self, model_id: str, prediction: float, actual: float | None = None):
+    def log_prediction(self, model_id: str, prediction: float, actual: float | None = None) -> None:
         """Log prediction and actual value for metric calculation."""
         if actual is not None:
             error = abs(prediction - actual)
@@ -259,7 +259,7 @@ class ABTestMetrics:
             return "medium"
         return "large"
 
-    def reset_metrics(self):
+    def reset_metrics(self) -> None:
         """Reset all collected metrics."""
         self.metrics_a.clear()
         self.metrics_b.clear()
@@ -305,7 +305,7 @@ class ABTestManager:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def update_traffic_split(self, new_split: float):
+    def update_traffic_split(self, new_split: float) -> None:
         """Update traffic split ratio."""
         self.router.update_split(new_split)
 

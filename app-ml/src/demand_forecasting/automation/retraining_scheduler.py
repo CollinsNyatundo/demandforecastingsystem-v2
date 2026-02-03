@@ -349,7 +349,7 @@ class RetrainingScheduler:
             },
         }
 
-    def log_retraining_decision(self, decision: dict[str, Any]):
+    def log_retraining_decision(self, decision: dict[str, Any]) -> None:
         """Log retraining decision to MLflow."""
         try:
             mlflow.tracking.MlflowClient()

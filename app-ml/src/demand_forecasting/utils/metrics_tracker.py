@@ -171,13 +171,13 @@ class MetricsTracker:
         Args:
             filepath: Path to save the JSON file
         """
-        filepath = Path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
+        filepath_path = Path(filepath)
+        filepath_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with filepath.open("w") as f:
+        with filepath_path.open("w") as f:
             json.dump(self.metrics, f, indent=2, default=str)
 
-        logger.info(f"Metrics saved to {filepath}")
+        logger.info(f"Metrics saved to {filepath_path}")
 
     def save_to_csv(self, filepath: str, metrics_type: str = "validation") -> None:
         """Save metrics to CSV file for easy analysis.
@@ -215,11 +215,11 @@ class MetricsTracker:
             rows.append(row)
 
         df = pd.DataFrame(rows)
-        filepath = Path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(filepath, index=False)
+        filepath_path = Path(filepath)
+        filepath_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(filepath_path, index=False)
 
-        logger.info(f"{metrics_type.capitalize()} metrics saved to {filepath}")
+        logger.info(f"{metrics_type.capitalize()} metrics saved to {filepath_path}")
 
     def load_from_json(self, filepath: str) -> None:
         """Load metrics from JSON file.
@@ -227,12 +227,12 @@ class MetricsTracker:
         Args:
             filepath: Path to the JSON file
         """
-        filepath = Path(filepath)
-        with filepath.open() as f:
+        filepath_path = Path(filepath)
+        with filepath_path.open() as f:
             self.metrics = json.load(f)
 
         self.run_id = self.metrics.get("run_id", self.run_id)
-        logger.info(f"Metrics loaded from {filepath}")
+        logger.info(f"Metrics loaded from {filepath_path}")
 
     def compare_models(self, metric_names: list[str] | None = None) -> pd.DataFrame:
         """Compare all models across multiple metrics.

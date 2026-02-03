@@ -280,7 +280,7 @@ class DriftDetector:
             "window_size": window_size,
         }
 
-    def update_reference(self, new_reference: pd.DataFrame):
+    def update_reference(self, new_reference: pd.DataFrame) -> None:
         """Update reference data with new dataset."""
         self.reference_data = new_reference.copy()
         self.reference_stats = self._compute_statistics(new_reference)
