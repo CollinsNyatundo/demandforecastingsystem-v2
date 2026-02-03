@@ -196,7 +196,7 @@ class ABTestMetrics:
             "p_value": p_value,
             "t_statistic": t_stat,
             "cohens_d": cohens_d,
-            "is_significant": p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD,
+            "is_significant": float(p_value) < STATISTICAL_SIGNIFICANCE_THRESHOLD,
             "recommendation": self._get_recommendation(improvement, p_value),
             "confidence_interval": self._calculate_confidence_interval(),
             "effect_size_interpretation": self._interpret_effect_size(cohens_d),

@@ -8,7 +8,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Callable
 
 import catboost
 import mlflow
@@ -296,7 +296,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Implements defense-in-depth security headers for production deployment.
     """
 
-    async def dispatch(self, request: Request, call_next: object) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
         """Process HTTP request and add security headers.
 
         Args:

@@ -260,7 +260,7 @@ class RetrainingScheduler:
                 cohens_d = 0
 
             should_trigger = (
-                p_value < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
+                float(p_value) < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
             )  # Significant degradation
 
             if should_trigger:

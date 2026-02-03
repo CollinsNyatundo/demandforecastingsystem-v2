@@ -153,7 +153,7 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
         }
         profile_data["target_analysis"] = cnt_stats
 
-        if cnt_stats["zero_percentage"] > HIGH_VARIANCE_THRESHOLD:
+        if float(cnt_stats["zero_percentage"]) > HIGH_VARIANCE_THRESHOLD:
             profile_data["quality_flags"].append("HIGH_ZERO_COUNT")
 
         # Check for negative values (shouldn't exist for bike counts)
