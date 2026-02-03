@@ -401,7 +401,7 @@ def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915,
     # Compute metrics
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     mae = mean_absolute_error(y_test, y_pred)
-    mape = compute_zero_safe_mape(y_test.values, y_pred)
+    mape = compute_zero_safe_mape(np.array(y_test.values), np.array(y_pred))
 
     metrics = {
         "rmse": round(rmse, 4),
@@ -519,7 +519,7 @@ def get_study_history(
         study = optuna.load_study(study_name=study_name, storage=storage)
 
         # Get study statistics
-        history = {
+        history: dict[str, Any] = {
             "study_name": study_name,
             "n_trials": len(study.trials),
             "best_trial_number": study.best_trial.number,

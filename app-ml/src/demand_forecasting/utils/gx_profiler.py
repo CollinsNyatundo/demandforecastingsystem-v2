@@ -62,48 +62,40 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
     docs_path = Path(docs_dir)
     docs_path.mkdir(parents=True, exist_ok=True)
 
-    # Create ephemeral context
-    context = EphemeralDataContext()
-
-    # Create expectation suite
-    suite_name = f"{dataset_name}_suite"
-    suite = context.create_expectation_suite(
-        expectation_suite_name=suite_name, overwrite_existing=True
+    # Create ephemeral context with proper configuration
+    from great_expectations.data_context.types.base import DataContextConfig, InMemoryStoreBackendDefaults
+    
+    data_context_config = DataContextConfig(
+        store_backend_defaults=InMemoryStoreBackendDefaults()
     )
+    context = EphemeralDataContext(project_config=data_context_config)
 
+    # Create expectation suite name
+    suite_name = f"{dataset_name}_suite"
+    
     # Add expectations based on data characteristics
-    batch = context.get_batch(
-        batch_request={
-            "datasource_name": "pandas",
-            "data_connector_name": "default_in_memory_data_connector_name",
-            "data_asset_name": dataset_name,
-            "data": df,
-        }
+    validator = context.get_validator(
+        batch_data=df,
+        create_expectation_suite_with_name=suite_name
     )
 
     # Basic structure expectations
-    suite.add_expectation(
-        ExpectTableColumnsToMatchOrderedList(column_list=list(df.columns))
-    )
+    validator.expect_table_columns_to_match_ordered_list(column_list=list(df.columns))
 
     # Column type expectations
     for col in df.columns:
         dtype_str = str(df[col].dtype)
         if "int" in dtype_str:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="int64")
-            )
+            validator.expect_column_values_to_be_of_type(column=col, type_="int")
         elif "float" in dtype_str:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="float64")
-            )
-        elif "datetime" in dtype_str:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="datetime64[ns]")
-            )
-        else:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="object")
+            validator.expect_column_values_to_be_of_type(column=col, type_="float")
+        elif "object" in dtype_str:
+            validator.expect_column_values_to_be_of_type(column=col, type_="str")
+
+        # Outlier detection - use correct parameter name
+        if "int" in dtype_str or "float" in dtype_str:
+            validator.expect_column_z_scores_to_be_less_than(
+                column=col, threshold=3.0  # Correct parameter name
             )
 
     # Numeric column expectations
@@ -111,39 +103,24 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
     for col in numeric_cols:
         # Non-null expectation
         if df[col].isnull().sum() == 0:
-            suite.add_expectation(ExpectColumnValuesToNotBeNull(column=col))
+            validator.expect_column_values_to_not_be_null(column=col)
 
         # Range expectations
         col_min = df[col].min()
         col_max = df[col].max()
         col_mean = df[col].mean()
-        df[col].median()
-        df[col].std()
 
         # Add reasonable range expectations
-        suite.add_expectation(
-            ExpectColumnMinToBeBetween(
-                column=col, min_value=col_min * 0.9, max_value=col_min * 1.1
-            )
+        validator.expect_column_min_to_be_between(
+            column=col, min_value=col_min * 0.9, max_value=col_min * 1.1
         )
 
-        suite.add_expectation(
-            ExpectColumnMaxToBeBetween(
-                column=col, min_value=col_max * 0.9, max_value=col_max * 1.1
-            )
+        validator.expect_column_max_to_be_between(
+            column=col, min_value=col_max * 0.9, max_value=col_max * 1.1
         )
 
-        suite.add_expectation(
-            ExpectColumnMeanToBeBetween(
-                column=col, min_value=col_mean * 0.9, max_value=col_mean * 1.1
-            )
-        )
-
-        # Outlier detection
-        suite.add_expectation(
-            ExpectColumnValueZScoresToBeLessThan(
-                column=col, max_zscore=3.0, mostly=0.95  # Allow 5% outliers
-            )
+        validator.expect_column_mean_to_be_between(
+            column=col, min_value=col_mean * 0.9, max_value=col_mean * 1.1
         )
 
     # Special handling for target column (cnt)
@@ -151,17 +128,13 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
         cnt_col = df["cnt"]
 
         # Non-negative values
-        suite.add_expectation(
-            ExpectColumnMinToBeBetween(column="cnt", min_value=0, max_value=0)
-        )
+        validator.expect_column_min_to_be_between(column="cnt", min_value=0, max_value=0)
 
         # Reasonable range for bike counts
-        suite.add_expectation(
-            ExpectColumnMaxToBeBetween(
-                column="cnt",
-                min_value=cnt_col.max() * 0.9,
-                max_value=cnt_col.max() * 1.1,
-            )
+        validator.expect_column_max_to_be_between(
+            column="cnt",
+            min_value=cnt_col.max() * 0.9,
+            max_value=cnt_col.max() * 1.1,
         )
 
         # Check for excessive zeros
@@ -172,9 +145,7 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
             )
 
     # Validate expectations
-    validation_result = context.validate_batch(
-        batch=batch, expectation_suite_name=suite_name
-    )
+    validation_result = validator.validate()
 
     # Generate summary statistics
     summary_stats = {
@@ -188,10 +159,10 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
         "numeric_summary": {},
         "validation_results": {
             "success": validation_result.success,
-            "statistics": validation_result.statistics,
-            "expectations_count": len(validation_result.results),
+            "statistics": getattr(validation_result, 'statistics', {}),
+            "expectations_count": len(getattr(validation_result, 'results', [])),
             "failed_expectations": len(
-                [r for r in validation_result.results if not r.success]
+                [r for r in getattr(validation_result, 'results', []) if not getattr(r, 'success', True)]
             ),
         },
     }

@@ -44,4 +44,4 @@ class RawBikeDataSchema(pa.DataFrameModel):
         # Enable type coercion only for numeric types
         coerce = True
         # Provide detailed error messages
-        error_handler = pa.errors.SchemaErrorHandler.raise_
+        error_handler = pa.errors.SchemaError
