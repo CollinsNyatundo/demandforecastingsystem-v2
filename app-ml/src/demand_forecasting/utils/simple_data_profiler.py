@@ -279,9 +279,11 @@ class SimpleDataProfiler:
             all_metrics = cast(Dict[str, Any], json.load(f))
 
         if dataset_name:
-            return cast(Dict[str, Any], all_metrics.get(dataset_name, {"error": f"Dataset {dataset_name} not found"}))
+            dataset_result: dict[str, Any] = all_metrics.get(dataset_name, {"error": f"Dataset {dataset_name} not found"})
+            return dataset_result
 
-        return cast(Dict[str, Any], all_metrics)
+        all_result: dict[str, Any] = all_metrics
+        return all_result
 
 
 def profile_dataset(df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles") -> str:

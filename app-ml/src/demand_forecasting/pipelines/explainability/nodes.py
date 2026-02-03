@@ -65,6 +65,38 @@ def generate_shap_explanations(
         raise
 
 
+def calculate_feature_importance(
+    catboost_model: "CatBoostRegressor",
+) -> pd.DataFrame:
+    """Calculate feature importance from CatBoost model.
+
+    Args:
+        catboost_model: Trained CatBoost model
+
+    Returns:
+        DataFrame with feature importance scores
+    """
+    _LOGGER.info("Calculating feature importance from CatBoost model...")
+
+    try:
+        # Get feature importance from CatBoost model
+        feature_names = catboost_model.feature_names_
+        importance_scores = catboost_model.get_feature_importance()
+
+        # Create DataFrame with feature importance
+        feature_importance = pd.DataFrame({
+            "feature": feature_names,
+            "importance": importance_scores
+        }).sort_values("importance", ascending=False)
+
+        _LOGGER.info(f"Calculated importance for {len(feature_importance)} features")
+        return feature_importance
+
+    except Exception as e:
+        _LOGGER.error(f"Failed to calculate feature importance: {e}")
+        raise
+
+
 def log_explainability_artifacts(
     catboost_model: "CatBoostRegressor",
     shap_explanations: dict[str, Any],
@@ -97,9 +129,10 @@ def log_explainability_artifacts(
                 _LOGGER.error(f"Failed to log CatBoost model: {e}")
                 raise
 
-            artifact_paths = {
+            active_run = mlflow.active_run()
+            artifact_paths: dict[str, str] = {
                 "importance_artifact": importance_path,
-                "mlflow_run_id": mlflow.active_run().info.run_id,
+                "mlflow_run_id": str(active_run.info.run_id) if active_run else "",
             }
 
             _LOGGER.info("Successfully logged artifacts to MLflow")
@@ -108,6 +141,24 @@ def log_explainability_artifacts(
     except Exception as e:
         _LOGGER.error(f"Failed to log model artifacts: {e}")
         raise
+
+
+def log_model_artifacts(
+    catboost_model: "CatBoostRegressor",
+    shap_explanations: dict[str, Any],
+    feature_importance: pd.DataFrame,
+) -> dict[str, str]:
+    """Log model artifacts to MLflow (alias for log_explainability_artifacts).
+
+    Args:
+        catboost_model: Trained CatBoost model
+        shap_explanations: SHAP explanation results
+        feature_importance: Feature importance DataFrame
+
+    Returns:
+        Dictionary with artifact paths
+    """
+    return log_explainability_artifacts(catboost_model, shap_explanations)
 
 
 def create_explainability_report(

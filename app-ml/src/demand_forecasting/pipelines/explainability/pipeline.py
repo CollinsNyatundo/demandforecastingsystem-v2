@@ -10,6 +10,7 @@ from .nodes import (
     calculate_feature_importance,
     create_explainability_report,
     generate_shap_explanations,
+    log_explainability_artifacts,
     log_model_artifacts,
 )
 

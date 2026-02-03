@@ -244,7 +244,8 @@ class RetrainingScheduler:
                 return False
 
             # Perform t-test
-            _t_stat, p_value = stats.ttest_ind(older_rmse, newer_rmse)
+            _t_stat, p_value_raw = stats.ttest_ind(older_rmse, newer_rmse)
+            p_value: float = float(p_value_raw)  # type: ignore[arg-type]  # Type annotation for mypy
 
             # Calculate effect size (Cohen's d)
             pooled_std = (
