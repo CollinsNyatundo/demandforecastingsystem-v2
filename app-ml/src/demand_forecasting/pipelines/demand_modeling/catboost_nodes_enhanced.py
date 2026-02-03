@@ -221,7 +221,7 @@ def objective_catboost_enhanced(  # noqa: PLR0913
     trial.set_user_attr("mape", avg_mape)
     trial.set_user_attr("cv_scores", rmse_scores)
 
-    return avg_rmse
+    return float(avg_rmse)
 
 
 def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915, PLR0912

@@ -366,7 +366,7 @@ def validate_model_save(
     return True
 
 
-def get_email_config() -> dict[str, str]:
+def get_email_config() -> dict[str, str] | None:
     """Get email configuration from environment variables.
 
     Returns:

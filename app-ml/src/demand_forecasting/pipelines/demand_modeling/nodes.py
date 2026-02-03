@@ -118,10 +118,12 @@ def compare_demand_models(
         rf_rmse = comparison["random_forest"]["rmse"]
 
         best_model = "catboost" if cb_rmse < rf_rmse else "random_forest"
-        comparison["best_model"] = best_model
+        
+        # Add additional metadata to comparison
+        comparison["best_model"] = best_model  # type: ignore[assignment]
 
         # Add timestamp for audit trail (important for ML systems)
-        comparison["comparison_timestamp"] = datetime.datetime.now().isoformat()
+        comparison["comparison_timestamp"] = datetime.datetime.now().isoformat()  # type: ignore[assignment]
 
         # Comprehensive logging for production monitoring
         _LOGGER.info("Model comparison completed:")

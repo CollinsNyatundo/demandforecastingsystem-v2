@@ -196,7 +196,7 @@ ignore_missing_imports = true
 
 # Research-based selective suppression for libraries without type stubs
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "s3fs.*", "plotly.*", "tenacity.*", "joblib.*", "cachetools.*"]
+module = ["sklearn.*", "s3fs.*", "plotly.*", "tenacity.*", "joblib.*", "cachetools.*", "pandas_profiling.*"]
 disable_error_code = "import-untyped"
 ignore_missing_imports = true
 

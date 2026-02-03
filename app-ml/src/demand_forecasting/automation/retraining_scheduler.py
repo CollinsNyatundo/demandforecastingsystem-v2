@@ -86,7 +86,7 @@ class RetrainingScheduler:
             # Calculate days since last training
             days_since = (datetime.now() - last_training_time).days
 
-            should_trigger = days_since >= self.time_interval_days
+            should_trigger = bool(days_since >= self.time_interval_days)
 
             if should_trigger:
                 logger.info(
@@ -136,7 +136,7 @@ class RetrainingScheduler:
 
             # Calculate performance degradation
             degradation_pct = ((current_rmse - baseline_rmse) / baseline_rmse) * 100
-            should_trigger = degradation_pct > self.performance_threshold
+            should_trigger = bool(degradation_pct > self.performance_threshold)
 
             if should_trigger:
                 logger.info(
@@ -182,7 +182,7 @@ class RetrainingScheduler:
             # In practice, you'd query your actual data source
             estimated_new_data = len(runs) * 1000  # Rough estimate
 
-            should_trigger = estimated_new_data >= self.data_volume_threshold
+            should_trigger = bool(estimated_new_data >= self.data_volume_threshold)
 
             if should_trigger:
                 logger.info(
@@ -300,7 +300,7 @@ class RetrainingScheduler:
             )
 
             if best_runs:
-                return best_runs[0].data.metrics.get("rmse")
+                return float(best_runs[0].data.metrics.get("rmse", 0.0))
 
             return None
 

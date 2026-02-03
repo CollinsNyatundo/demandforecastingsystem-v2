@@ -27,7 +27,8 @@ def main(*args: object, **kwargs: object) -> None:
     kwargs["standalone_mode"] = not interactive
 
     run = find_run_command(package_name)
-    return run(*args, **kwargs)
+    run(*args, **kwargs)
+    return None
 
 
 if __name__ == "__main__":
