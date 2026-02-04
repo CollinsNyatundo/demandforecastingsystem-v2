@@ -20,6 +20,10 @@ from typing import Any
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
+# Import required modules
+from demand_forecasting.monitoring.drift_detector import DriftDetector
+from demand_forecasting.optimization.ensemble import EnsembleManager
+
 # Import pytest fixtures only when available
 try:
     import pytest
