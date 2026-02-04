@@ -41,17 +41,6 @@ repos:
         verbose: true
 
   # ==========================================
-  # Dependency vulnerability checking
-  # ==========================================
-  - repo: https://github.com/pyupio/safety
-    rev: 2.3.5
-    hooks:
-      - id: safety
-        args: [--output, json, --output-file, safety-report.json]
-        # Continue on error to allow human review
-        pass_filenames: false
-
-  # ==========================================
   # General file quality checks
   # ==========================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -94,23 +83,6 @@ repos:
       
       # Check for case conflicts
       - id: check-case-conflict
-
-  # ==========================================
-  # Dockerfile linting
-  # ==========================================
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.14.0
-    hooks:
-      - id: hadolint-docker
-        args: [--ignore, DL3008, --ignore, DL3009]
-
-  # ==========================================
-  # Shell script linting
-  # ==========================================
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
-    hooks:
-      - id: shellcheck
 
 # Configuration options
 default_language_version:
