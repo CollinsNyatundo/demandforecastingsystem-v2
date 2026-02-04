@@ -6,7 +6,7 @@ repos:
   # Python code formatting and linting
   # ==========================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.6
+    rev: v0.15.0
     hooks:
       # Run Ruff linter
       - id: ruff
@@ -21,21 +21,20 @@ repos:
   # Type checking
   # ==========================================
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+    rev: v1.19.1
     hooks:
       - id: mypy
         additional_dependencies: [types-all]
-        args: [--ignore-missing-imports]
+        args: [--ignore-missing-imports, --explicit-package-bases]
         types: [python]
 
   # ==========================================
   # Security scanning
   # ==========================================
   - repo: https://github.com/pycqa/bandit
-    rev: 1.9.2
+    rev: 1.9.3
     hooks:
       - id: bandit
-        additional_dependencies: [pbr]
         args: [-r, src, -f, json, -o, bandit-report.json]
         pass_filenames: false
         # Run bandit check separately for human-readable output
@@ -48,7 +47,7 @@ repos:
     rev: 2.3.5
     hooks:
       - id: safety
-        args: [--json, --output, safety-report.json]
+        args: [--output, json, --output-file, safety-report.json]
         # Continue on error to allow human review
         pass_filenames: false
 
@@ -56,7 +55,7 @@ repos:
   # General file quality checks
   # ==========================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       # Check for large files
       - id: check-added-large-files
@@ -93,15 +92,14 @@ repos:
       # Check for AWS credentials
       - id: detect-aws-credentials
       
-      # Check for line length (88 chars to match Ruff)
-      - id: check-ast
+      # Check for case conflicts
       - id: check-case-conflict
 
   # ==========================================
   # Dockerfile linting
   # ==========================================
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
+    rev: v2.14.0
     hooks:
       - id: hadolint-docker
         args: [--ignore, DL3008, --ignore, DL3009]
@@ -110,15 +108,15 @@ repos:
   # Shell script linting
   # ==========================================
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.9.0.6
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
 
 # Configuration options
 default_language_version:
-  python: python3.10
+  python: python3.11
 
-# Fail fast - stop on first failure
+# Fail fast - stop on first failure (set to false for comprehensive checks)
 fail_fast: false
 
 # Minimum pre-commit version
