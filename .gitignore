@@ -35,3 +35,7 @@ ENV/
 .vscode/
 .idea/
 *.swp
+app-ml/catboost_info/
+bandit-report.json
+safety-report.json
+mlruns.db*
