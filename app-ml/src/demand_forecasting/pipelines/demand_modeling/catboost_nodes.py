@@ -13,7 +13,7 @@ from catboost import CatBoostRegressor
 from optuna.samplers import TPESampler
 from optuna.trial import Trial
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
+# sklearn.model_selection.train_test_split removed - using time-based split for time series
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,25 +70,29 @@ def optimize_catboost_params(
     else:
         _LOGGER.info("Using in-memory storage (study will not persist)")
 
-    # Split data for hyperparameter optimization: 80% train, 20% validation
-    # This prevents data leakage by evaluating on unseen data
-    X_opt_train, X_opt_val, y_opt_train, y_opt_val = train_test_split(
-        X_train, y_train, test_size=0.2, random_state=42, shuffle=True
-    )
+    # TIME-BASED split for hyperparameter optimization: 80% train, 20% validation
+    # CRITICAL for time series: validation data must be AFTER training data
+    # This mirrors how the model will be used in production (predict future from past)
+    # Using shuffle=False to preserve temporal order
+    train_size = int(0.8 * len(X_train))
+    X_opt_train = X_train.iloc[:train_size]
+    X_opt_val = X_train.iloc[train_size:]
+    y_opt_train = y_train.iloc[:train_size]
+    y_opt_val = y_train.iloc[train_size:]
     _LOGGER.info(
-        f"Optimization data split: {len(X_opt_train)} train, {len(X_opt_val)} validation"
+        f"TIME-BASED optimization split: {len(X_opt_train)} train (first 80%), "
+        f"{len(X_opt_val)} validation (last 20%)"
     )
 
     def objective(trial: Trial) -> float:
-        # Wider search space for better optimization
-        # Based on CatBoost documentation and best practices
+        # Search space matching notebook experimentation for best results
+        # Notebook ranges: learning_rate=0.01-0.2, depth=3-8, l2_leaf_reg=0.5-5
+        # These ranges are proven to work well for bike demand forecasting
         params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.001, 0.5, log=True),
-            "depth": trial.suggest_int("depth", 2, 12),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2),
+            "depth": trial.suggest_int("depth", 3, 8),
             "iterations": 1000,  # Fixed iterations, use early stopping to find optimal
-            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.1, 10.0, log=True),
-            "random_strength": trial.suggest_float("random_strength", 0.1, 10.0, log=True),
-            "bagging_temperature": trial.suggest_float("bagging_temperature", 0.0, 1.0),
+            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.5, 5.0),
             "loss_function": "RMSE",
         }
 
