@@ -35,7 +35,19 @@ ENV/
 .vscode/
 .idea/
 *.swp
-app-ml/catboost_info/
-bandit-report.json
-safety-report.json
-mlruns.db*
+
+# ML/Model artifacts - be selective!
+app-ml/catboost_info/          # CatBoost training artifacts (auto-generated)
+app-ml/data/06_models/         # Kedro model cache (auto-generated)
+app-ml/models/                 # Local model cache (auto-generated)
+app-ml/test_reports/           # Test reports (auto-generated)
+app-ml/logs/                   # Log files (auto-generated)
+app-ml/plugins/                # Plugin cache (auto-generated)
+app-ml/mlruns.db*              # MLflow local database (auto-generated)
+bandit-report.json            # Security scan reports (auto-generated)
+safety-report.json            # Vulnerability reports (auto-generated)
+
+# Keep important files tracked!
+# models/experiments/ - Trained models (IMPORTANT)
+# data/raw_data/ - Raw datasets (IMPORTANT)  
+# data/prod_data/ - Production data (IMPORTANT)
