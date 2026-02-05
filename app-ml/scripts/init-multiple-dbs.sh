@@ -3,9 +3,26 @@
 # MULTIPLE DATABASES INITIALIZATION SCRIPT
 # =============================================================================
 # Creates airflow, mlflow, and optuna databases with proper permissions
+#
+# Required environment variables:
+#   - POSTGRES_USER: PostgreSQL admin user
+#   - POSTGRES_DB: PostgreSQL default database
+#   - MLFLOW_DB_PASSWORD: Password for mlflow_user (required)
+#   - OPTUNA_DB_PASSWORD: Password for optuna_user (required)
 # =============================================================================
 
 set -e
+
+# Validate required environment variables
+if [ -z "$MLFLOW_DB_PASSWORD" ]; then
+    echo "ERROR: MLFLOW_DB_PASSWORD environment variable is not set"
+    exit 1
+fi
+
+if [ -z "$OPTUNA_DB_PASSWORD" ]; then
+    echo "ERROR: OPTUNA_DB_PASSWORD environment variable is not set"
+    exit 1
+fi
 
 # Wait for PostgreSQL to be ready
 until pg_isready -U "$POSTGRES_USER"; do
@@ -23,9 +40,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- Create Optuna database  
     CREATE DATABASE optuna;
     
-    -- Create users for each service (optional but recommended for isolation)
-    CREATE USER mlflow_user WITH PASSWORD 'mlflow_password';
-    CREATE USER optuna_user WITH PASSWORD 'optuna_password';
+    -- Create users for each service with passwords from environment
+    CREATE USER mlflow_user WITH PASSWORD '$MLFLOW_DB_PASSWORD';
+    CREATE USER optuna_user WITH PASSWORD '$OPTUNA_DB_PASSWORD';
     
     -- Grant permissions
     GRANT ALL PRIVILEGES ON DATABASE mlflow TO mlflow_user;
@@ -67,8 +84,8 @@ echo "  - mlflow (for MLflow tracking)"
 echo "  - optuna (for Optuna study persistence)"
 echo ""
 echo "Users created:"
-echo "  - mlflow_user (password: mlflow_password)"
-echo "  - optuna_user (password: optuna_password)"
-echo "  - airflow (password: airflow)"
+echo "  - mlflow_user (password set from MLFLOW_DB_PASSWORD)"
+echo "  - optuna_user (password set from OPTUNA_DB_PASSWORD)"
+echo "  - airflow (password from POSTGRES_PASSWORD)"
 echo ""
 echo "Schemas created for better isolation:"

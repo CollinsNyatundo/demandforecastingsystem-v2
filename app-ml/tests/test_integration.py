@@ -247,7 +247,6 @@ class TestMLOpsIntegration:
             predictions = model.predict(X_test)
             return np.sqrt(np.mean((y_test - predictions) ** 2))
 
-
         study.optimize(objective, n_trials=5)
 
         # Verify persistence
@@ -290,9 +289,12 @@ class TestSystemResilience:
     def test_model_loading_failure_recovery(self, sample_data: pd.DataFrame):
         """Test system recovery when model loading fails."""
         # Mock MLflow failure
-        with patch(
-            "mlflow.pyfunc.load_model", side_effect=Exception("MLflow unavailable")
-        ), patch("joblib.load", side_effect=Exception("Local model unavailable")):
+        with (
+            patch(
+                "mlflow.pyfunc.load_model", side_effect=Exception("MLflow unavailable")
+            ),
+            patch("joblib.load", side_effect=Exception("Local model unavailable")),
+        ):
             # Test graceful degradation
 
             # Should handle loading failures gracefully
@@ -560,7 +562,6 @@ class TestPerformanceBenchmarks:
             model.fit(X_train, y_train)
             predictions = model.predict(X_test)
             return np.sqrt(np.mean((y_test - predictions) ** 2))
-
 
         study.optimize(objective, n_trials=10)
         end_time = time.time()

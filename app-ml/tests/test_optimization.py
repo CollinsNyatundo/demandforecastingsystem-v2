@@ -5,7 +5,6 @@ Tests Optuna multi-objective optimization, ensemble creation,
 hyperparameter tuning, and performance scenarios.
 """
 
-
 import numpy as np
 import optuna
 import pandas as pd

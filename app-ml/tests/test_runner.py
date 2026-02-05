@@ -4,15 +4,15 @@ Comprehensive test runner for the demand forecasting ML system.
 Runs all test suites and provides detailed reporting.
 """
 
-import os
-import sys
-import subprocess
-import json
-import time
-from pathlib import Path
-from typing import Dict, List, Any, Tuple
 import argparse
+import json
+import os
+import subprocess
+import sys
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 class TestRunner:
@@ -62,7 +62,7 @@ class TestRunner:
 
     def run_all_tests(
         self, verbose: bool = False, coverage: bool = True, html_report: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run all test suites."""
         print("🚀 Starting Comprehensive ML System Test Suite")
         print("=" * 60)
@@ -114,7 +114,7 @@ class TestRunner:
 
     def run_specific_suite(
         self, suite_name: str, verbose: bool = False, coverage: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run a specific test suite."""
         if suite_name not in self.test_suites:
             available_suites = list(self.test_suites.keys())
@@ -141,10 +141,10 @@ class TestRunner:
     def _run_test_suite(
         self,
         suite_name: str,
-        suite_config: Dict[str, Any],
+        suite_config: dict[str, Any],
         verbose: bool = False,
         coverage: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run a single test suite."""
         suite_result = {
             "name": suite_config["name"],
@@ -193,7 +193,7 @@ class TestRunner:
 
     def _run_test_file(
         self, test_path: Path, verbose: bool = False, coverage: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run a single test file."""
         cmd = [sys.executable, "-m", "pytest", str(test_path)]
 
@@ -261,7 +261,7 @@ class TestRunner:
                 },
             }
 
-    def _parse_pytest_output(self, stdout: str, stderr: str) -> Dict[str, int]:
+    def _parse_pytest_output(self, stdout: str, stderr: str) -> dict[str, int]:
         """Parse pytest output to extract test counts."""
         summary = {"total": 0, "passed": 0, "failed": 0, "skipped": 0, "errors": 0}
 
@@ -299,7 +299,7 @@ class TestRunner:
 
         return summary
 
-    def _print_suite_summary(self, suite_result: Dict[str, Any]):
+    def _print_suite_summary(self, suite_result: dict[str, Any]):
         """Print summary for a test suite."""
         summary = suite_result["summary"]
         total = summary["total"]
@@ -319,7 +319,7 @@ class TestRunner:
         else:
             print("      ✅ All tests passed")
 
-    def _print_final_summary(self, results: Dict[str, Any]):
+    def _print_final_summary(self, results: dict[str, Any]):
         """Print final test summary."""
         print("\n" + "=" * 60)
         print("🎯 FINAL TEST SUMMARY")
@@ -357,7 +357,7 @@ class TestRunner:
 
         print(f"\n📄 Detailed reports saved to: {self.reports_dir}")
 
-    def _generate_html_report(self, results: Dict[str, Any]):
+    def _generate_html_report(self, results: dict[str, Any]):
         """Generate HTML test report."""
         html_content = f"""
 <!DOCTYPE html>
@@ -495,7 +495,7 @@ class TestRunner:
         print(f"📄 HTML report saved to: {report_path}")
 
     def _save_results(
-        self, results: Dict[str, Any], filename: str = "comprehensive_test_results.json"
+        self, results: dict[str, Any], filename: str = "comprehensive_test_results.json"
     ):
         """Save test results to JSON file."""
         results_path = self.reports_dir / filename

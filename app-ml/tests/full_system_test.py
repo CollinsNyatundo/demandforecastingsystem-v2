@@ -21,7 +21,6 @@ def test_airflow_dag_trigger():
             dags = response.json()
 
             for dag in dags["dags"]:
-
                 # Unpause the DAG if needed
                 if dag["is_paused"]:
                     unpause_response = requests.patch(
@@ -133,7 +132,6 @@ def test_model_server() -> bool | None:
 
 
 def main() -> int:
-
     results = {}
 
     # Test MLflow
@@ -168,7 +166,6 @@ def main() -> int:
             passed += 1
         else:
             failed += 1
-
 
     if failed == 0:
         return 0

@@ -4,8 +4,10 @@ Temporal feature extraction, validation, and feature interaction creation.
 """
 
 import logging
+from typing import Any
 
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ def create_feature_interactions(  # noqa: C901, PLR0912
         feature_lags: Dictionary mapping feature names to lag values
 
     Returns:
-        DataFrame with interaction and lag features added
+        DataFrame with interaction and lag features added, including 'target' column
     """
     _LOGGER.info("Creating feature interactions and lags...")
 
@@ -104,40 +106,129 @@ def create_feature_interactions(  # noqa: C901, PLR0912
         else:
             df = df.copy()
 
-        # Default lag configurations
+        # Default lag configurations matching notebook experimentation
+        # Notebook: "We see that the autocorrelations are high for the first and last 3 values
+        # that indicates a strong daily seasonality."
         if lags is None:
-            lags = [1, 2, 22, 23]
+            lags = [1, 2, 22, 23]  # Demand lags based on autocorrelation analysis
+        
+        # Default feature lags matching notebook:
+        # lag_feats = ['hr', 'weekday', 'weathersit', 'temp', 'hum']
+        # for feat in lag_feats: for i in range(1, n+1): df[f'{feat}_lag_{i}'] = ...
         if feature_lags is None:
-            feature_lags = {}
+            feature_lags = {
+                "hour": [1, 2, 3],
+                "day_of_week": [1, 2, 3],
+                "weather_condition": [1, 2, 3],
+                "temp": [1, 2, 3],
+                "humidity": [1, 2, 3],
+            }
 
-        # Create target lags (if 'demand' or 'cnt' column exists)
-        target_col = (
-            "demand"
-            if "demand" in df.columns
-            else "cnt" if "cnt" in df.columns else None
-        )
+        # Standardize column names from raw data format
+        # This ensures consistency across the pipeline
+        column_mapping = {
+            "cnt": "demand",       # Total bike count -> demand (target source)
+            "hr": "hour",          # Hour of day
+            "hum": "humidity",     # Humidity
+            "windspeed": "wind_speed",  # Wind speed
+            "weekday": "day_of_week",   # Day of week
+            "mnth": "month",       # Month
+            "yr": "year",          # Year
+            "atemp": "feels_like_temp",  # Feels like temperature
+            "weathersit": "weather_condition",  # Weather situation
+        }
 
-        if target_col:
+        # Apply column renaming (only for columns that exist AND target name doesn't exist)
+        # This prevents duplicate columns when temporal features already exist
+        existing_renames = {
+            k: v for k, v in column_mapping.items() 
+            if k in df.columns and v not in df.columns
+        }
+        
+        # For columns where target already exists, drop the source column instead
+        cols_to_drop = [
+            k for k, v in column_mapping.items() 
+            if k in df.columns and v in df.columns
+        ]
+        if cols_to_drop:
+            df = df.drop(columns=cols_to_drop)
+            _LOGGER.info(f"Dropped duplicate source columns: {cols_to_drop}")
+        
+        if existing_renames:
+            df = df.rename(columns=existing_renames)
+            _LOGGER.info(f"Standardized column names: {list(existing_renames.keys())}")
+
+        # Create target column as NEXT HOUR's demand (shift -1)
+        # This matches the notebook experimentation where we predict future demand
+        # Quote from notebook: "For the target, we will use the next hour bike count
+        # because we want to predict what this value will be to adjust the pricing."
+        if "demand" in df.columns:
+            df["target"] = df["demand"].shift(-1)
+            _LOGGER.info("Created 'target' column as next hour's demand (shift -1)")
+        elif "cnt" in df.columns:
+            df["target"] = df["cnt"].shift(-1)
+            _LOGGER.info("Created 'target' column as next hour's cnt (shift -1)")
+        else:
+            _LOGGER.warning("No demand/cnt column found - 'target' column not created")
+
+        # Fill NaN values at the end (last row has no next value)
+        # Using forward fill as done in notebook: fillna(method='ffill')
+        if "target" in df.columns:
+            df["target"] = df["target"].ffill()
+
+        # Create demand lags (using 'demand' column, NOT 'target')
+        # CRITICAL: Notebook creates lags from 'cnt' (current hour data), not 'target' (next hour)
+        # This matches the notebook logic:
+        #   df['cnt_lag_1'] = df['cnt'].shift(1)  # 1 hour before current
+        # Using 'target' would be semantically wrong since target = demand.shift(-1)
+        demand_col = "demand" if "demand" in df.columns else None
+
+        if demand_col:
             # Vectorized lag creation for better performance
+            # Using demand_lag naming to match notebook's cnt_lag semantics
             for lag in lags:
-                df[f"{target_col}_lag{lag}"] = df[target_col].shift(lag)
+                df[f"demand_lag{lag}"] = df[demand_col].shift(lag)
+            _LOGGER.info(f"Created demand lag features: {[f'demand_lag{l}' for l in lags]}")
 
-        # Create feature lags with memory optimization
+        # Create feature lags matching notebook experimentation
+        # Notebook: for feat in lag_feats: for i in range(1, n+1): df[f'{feat}_lag_{i}'] = df[feat].shift(i)
+        created_feature_lags = []
         for feature, lag_values in feature_lags.items():
             if feature in df.columns:
                 for lag in lag_values:
-                    df[f"{feature}_lag{lag}"] = df[feature].shift(lag)
+                    col_name = f"{feature}_lag{lag}"
+                    df[col_name] = df[feature].shift(lag)
+                    created_feature_lags.append(col_name)
+        
+        if created_feature_lags:
+            _LOGGER.info(f"Created {len(created_feature_lags)} feature lag columns: {created_feature_lags[:5]}...")
 
         # Optimize memory usage by downcasting numeric columns
-        for col in df.select_dtypes(include=["int64"]).columns:
-            df[col] = pd.to_numeric(df[col], downcast="integer")
+        # Skip columns that can't be downcasted safely
+        int_cols = df.select_dtypes(include=["int64"]).columns.tolist()
+        for col in int_cols:
+            try:
+                df[col] = pd.to_numeric(df[col].values, downcast="integer")
+            except (TypeError, ValueError):
+                pass  # Skip columns that can't be downcasted
 
-        for col in df.select_dtypes(include=["float64"]).columns:
-            df[col] = pd.to_numeric(df[col], downcast="float")
+        float_cols = df.select_dtypes(include=["float64"]).columns.tolist()
+        for col in float_cols:
+            try:
+                df[col] = pd.to_numeric(df[col].values, downcast="float")
+            except (TypeError, ValueError):
+                pass  # Skip columns that can't be downcasted
 
-        # Create some basic interactions
+        # Create some basic interactions (only if columns are unique)
         if "hour" in df.columns and "day_of_week" in df.columns:
-            df["hour_day_interaction"] = df["hour"] * df["day_of_week"]
+            hour_col = df["hour"]
+            dow_col = df["day_of_week"]
+            # Handle case where columns might be duplicated
+            if isinstance(hour_col, pd.DataFrame):
+                hour_col = hour_col.iloc[:, 0]
+            if isinstance(dow_col, pd.DataFrame):
+                dow_col = dow_col.iloc[:, 0]
+            df["hour_day_interaction"] = hour_col.values * dow_col.values
 
         # Handle missing values from lagging using backward fill (bfill)
         # bfill() fills NaN values with the next available value, then forward fill remaining NaN
@@ -166,12 +257,18 @@ def validate_features(df: pd.DataFrame) -> pd.DataFrame:
     try:
         df = df.copy()
 
-        # Check for required columns
-        required_base = ["demand", "hour", "day_of_week"]
+        # Check for required columns (standardized names after feature engineering)
+        required_base = ["target", "hour", "day_of_week"]
         missing = [col for col in required_base if col not in df.columns]
 
         if missing:
             _LOGGER.warning(f"Missing expected columns: {missing}")
+            # Provide specific guidance for common issues
+            if "target" in missing:
+                _LOGGER.error(
+                    "CRITICAL: 'target' column is missing. "
+                    "Ensure create_feature_interactions() was called first."
+                )
 
         # Handle any remaining NaN values using forward/backward fill instead of dropping
         len(df)
@@ -190,4 +287,70 @@ def validate_features(df: pd.DataFrame) -> pd.DataFrame:
 
     except Exception as e:
         _LOGGER.error(f"Feature validation failed: {e}")
+        raise
+
+
+def split_features(
+    df: pd.DataFrame,
+    train_fraction: float = 0.8,
+) -> dict[str, Any]:
+    """Split validated features into train and test sets using TIME-BASED split.
+
+    IMPORTANT: For time series data, we must preserve temporal order.
+    The notebook uses: x_train, x_test = x[:train_size], x[train_size:]
+    This ensures training data is BEFORE test data chronologically.
+
+    Args:
+        df: DataFrame with validated features including 'target' column
+        train_fraction: Proportion of data for training (default 0.8)
+
+    Returns:
+        Dictionary with X_train, X_test, y_train, y_test DataFrames/Series
+    """
+    _LOGGER.info(f"Splitting features into train/test sets (train_fraction={train_fraction})...")
+
+    try:
+        # Ensure target column exists
+        if "target" not in df.columns:
+            raise ValueError("'target' column not found in DataFrame")
+
+        # Separate features and target
+        X = df.drop(columns=["target"])
+        y = df["target"]
+
+        # Remove any non-numeric columns that might cause issues
+        non_numeric = X.select_dtypes(exclude=["number"]).columns.tolist()
+        if non_numeric:
+            _LOGGER.warning(f"Dropping non-numeric columns: {non_numeric}")
+            X = X.select_dtypes(include=["number"])
+
+        # TIME-BASED SPLIT (matching notebook approach)
+        # Critical for time series: training data must be before test data
+        # Notebook: train_size = int(train_fraction * df.shape[0])
+        #           x_train, x_test = x[:train_size], x[train_size:]
+        train_size = int(train_fraction * len(df))
+        
+        X_train = X.iloc[:train_size]
+        X_test = X.iloc[train_size:]
+        y_train = y.iloc[:train_size]
+        y_test = y.iloc[train_size:]
+
+        _LOGGER.info(
+            f"TIME-BASED split complete. Train: {len(X_train)} samples, Test: {len(X_test)} samples"
+        )
+        _LOGGER.info(f"Features: {X_train.shape[1]} columns")
+
+        # Convert Series to DataFrame for Parquet compatibility
+        y_train_df = y_train.to_frame(name="target")
+        y_test_df = y_test.to_frame(name="target")
+
+        return {
+            "X_train": X_train,
+            "X_test": X_test,
+            "y_train": y_train_df,
+            "y_test": y_test_df,
+        }
+
+    except Exception as e:
+        _LOGGER.error(f"Failed to split features: {e}")
         raise

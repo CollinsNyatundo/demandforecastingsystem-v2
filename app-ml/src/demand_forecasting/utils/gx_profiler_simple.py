@@ -90,7 +90,11 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
                     {
                         "column": col,
                         "check": "outliers",
-                        "status": "warning" if outlier_percentage > OUTLIER_PERCENTAGE_THRESHOLD else "info",
+                        "status": (
+                            "warning"
+                            if outlier_percentage > OUTLIER_PERCENTAGE_THRESHOLD
+                            else "info"
+                        ),
                         "message": f"{len(outliers)} outliers detected ({outlier_percentage:.1f}%)",
                     }
                 )
@@ -103,7 +107,11 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
                     {
                         "column": col,
                         "check": "zero_values",
-                        "status": "warning" if zero_percentage > MISSING_VALUES_THRESHOLD else "info",
+                        "status": (
+                            "warning"
+                            if zero_percentage > MISSING_VALUES_THRESHOLD
+                            else "info"
+                        ),
                         "message": f"{zero_count} zero values ({zero_percentage:.1f}%)",
                     }
                 )
@@ -210,38 +218,58 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
         <div class="header">
             <h1>Data Profile Report</h1>
             <h2>{dataset_name}</h2>
-            <p>Generated: {profile_data['timestamp']}</p>
+            <p>Generated: {profile_data["timestamp"]}</p>
         </div>
 
         <div class="section">
             <h3>Dataset Overview</h3>
             <table class="stats-table">
                 <tr><th>Metric</th><th>Value</th></tr>
-                <tr><td>Shape</td><td>{profile_data['shape']}</td></tr>
-                <tr><td>Columns</td><td>{len(profile_data['columns'])}</td></tr>
-                <tr><td>Total Missing Values</td><td>{sum(profile_data['missing_values'].values())}</td></tr>
+                <tr><td>Shape</td><td>{profile_data["shape"]}</td></tr>
+                <tr><td>Columns</td><td>{len(profile_data["columns"])}</td></tr>
+                <tr><td>Total Missing Values</td><td>{
+        sum(profile_data["missing_values"].values())
+    }</td></tr>
             </table>
         </div>
 
         <div class="section">
             <h3>Quality Flags</h3>
-            {"".join([f'<p class="quality-flag">⚠️ {flag}</p>' for flag in profile_data.get('quality_flags', [])]) or '<p>No quality issues detected ✅</p>'}
+            {
+        "".join(
+            [
+                f'<p class="quality-flag">⚠️ {flag}</p>'
+                for flag in profile_data.get("quality_flags", [])
+            ]
+        )
+        or "<p>No quality issues detected ✅</p>"
+    }
         </div>
 
         <div class="section">
             <h3>Data Quality Checks</h3>
-            {"".join([f'''
+            {
+        "".join(
+            [
+                f'''
             <div class="quality-check {check['status']}">
                 <strong>{check['column']} - {check['check']}:</strong> {check['message']}
             </div>
-            ''' for check in profile_data.get('data_quality_checks', [])])}
+            '''
+                for check in profile_data.get("data_quality_checks", [])
+            ]
+        )
+    }
         </div>
 
         <div class="section">
             <h3>Numeric Summary</h3>
             <table class="stats-table">
                 <tr><th>Column</th><th>Count</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr>
-                {"".join([f'''
+                {
+        "".join(
+            [
+                f'''
                 <tr>
                     <td>{col}</td>
                     <td>{profile_data['numeric_summary'][col].get('count', 'N/A')}</td>
@@ -250,7 +278,11 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
                     <td>{profile_data['numeric_summary'][col].get('min', 'N/A')}</td>
                     <td>{profile_data['numeric_summary'][col].get('max', 'N/A')}</td>
                 </tr>
-                ''' for col in profile_data.get('numeric_summary', {})])}
+                '''
+                for col in profile_data.get("numeric_summary", {})
+            ]
+        )
+    }
             </table>
         </div>
 
@@ -258,13 +290,21 @@ def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
             <h3>Missing Values</h3>
             <table class="stats-table">
                 <tr><th>Column</th><th>Missing Count</th><th>Missing %</th></tr>
-                {"".join([f'''
+                {
+        "".join(
+            [
+                f'''
                 <tr>
                     <td>{col}</td>
                     <td>{profile_data['missing_values'][col]}</td>
                     <td>{profile_data['missing_percentage'][col]:.2f}%</td>
                 </tr>
-                ''' for col in profile_data['missing_values'] if profile_data['missing_values'][col] > 0])}
+                '''
+                for col in profile_data["missing_values"]
+                if profile_data["missing_values"][col] > 0
+            ]
+        )
+    }
             </table>
         </div>
     </body>

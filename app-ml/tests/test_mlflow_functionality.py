@@ -41,7 +41,6 @@ def test_mlflow_experiment_creation():
             tags={"purpose": "system_test", "environment": "development"},
         )
 
-
         # Set experiment
         mlflow.set_experiment(experiment_name)
 
@@ -65,7 +64,6 @@ def test_mlflow_run_and_model():
 
         # Start MLflow run
         with mlflow.start_run(run_name="demand_forecasting_test_run") as run:
-
             # Train model
             model = RandomForestRegressor(n_estimators=10, random_state=42)
             model.fit(X_train, y_train)
@@ -95,7 +93,6 @@ def test_mlflow_run_and_model():
                 registered_model_name="demand_forecasting_test_model",
             )
 
-
             return run.info.run_id
 
     except Exception:
@@ -108,9 +105,7 @@ def test_mlflow_model_registry() -> bool | None:
         # Get registered models
         registered_models = mlflow.search_registered_models()
 
-
         for model in registered_models:
-
             for _version in model.latest_versions:
                 pass
 
@@ -150,7 +145,6 @@ def test_mlflow_ui_access() -> bool | None:
 
 
 def main() -> int:
-
     results = {}
 
     # Test connection
@@ -185,7 +179,6 @@ def main() -> int:
             passed += 1
         else:
             failed += 1
-
 
     if failed == 0:
         return 0

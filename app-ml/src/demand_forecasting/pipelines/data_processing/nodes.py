@@ -1,7 +1,7 @@
 import logging
 
 import pandas as pd
-import pandera as pa
+import pandera.pandas as pa
 from pandera.typing import DataFrame
 
 from .schemas import RawBikeDataSchema
@@ -117,12 +117,26 @@ def preprocess_data(df: DataFrame[RawBikeDataSchema]) -> pd.DataFrame:
 
     # Validate that expected columns remain after preprocessing
     expected_remaining_cols = [
-        "season", "mnth", "hr", "holiday", "weekday", "workingday",
-        "weathersit", "temp", "atemp", "hum", "windspeed", "cnt"
+        "season",
+        "mnth",
+        "hr",
+        "holiday",
+        "weekday",
+        "workingday",
+        "weathersit",
+        "temp",
+        "atemp",
+        "hum",
+        "windspeed",
+        "cnt",
     ]
     remaining_missing = set(expected_remaining_cols) - set(result.columns)
     if remaining_missing:
-        logger.error(f"Critical columns missing after preprocessing: {remaining_missing}")
-        logger.warning("Proceeding with available data - model performance may be severely impacted")
+        logger.error(
+            f"Critical columns missing after preprocessing: {remaining_missing}"
+        )
+        logger.warning(
+            "Proceeding with available data - model performance may be severely impacted"
+        )
 
     return result

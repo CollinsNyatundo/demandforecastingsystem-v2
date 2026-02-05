@@ -26,8 +26,8 @@ def create_pipeline(**kwargs: object) -> Pipeline:
             ),
             node(
                 func=train_catboost_model,
-                inputs=["X_train", "y_train", "optimized_params"],
-                outputs="catboost_model",
+                inputs=["X_train", "y_train", "optimized_params", "X_test", "y_test"],
+                outputs=["catboost_model", "catboost_metrics"],
                 name="train_catboost_model",
             ),
             node(

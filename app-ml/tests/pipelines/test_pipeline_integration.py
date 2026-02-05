@@ -5,7 +5,6 @@ Tests pipeline configuration, data catalog integration, and end-to-end
 pipeline execution with real data scenarios.
 """
 
-
 # Project imports
 import sys
 from pathlib import Path

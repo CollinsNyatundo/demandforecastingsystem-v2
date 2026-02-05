@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from demand_forecasting.serving.model_server import APIKeyManager, app, rate_limit_cache
 
@@ -25,20 +25,20 @@ class TestAPIKeyManager:
 
     def test_load_api_key_hashes(self):
         """Test loading and hashing of API keys."""
-        with patch.dict(os.environ, {'VALID_API_KEYS': 'key1,key2,key3'}):
+        with patch.dict(os.environ, {"VALID_API_KEYS": "key1,key2,key3"}):
             manager = APIKeyManager()
             assert len(manager.valid_key_hashes) == 3
 
             # Verify keys are hashed (not stored in plain text)
             for key_hash, metadata in manager.valid_key_hashes.items():
-                assert key_hash not in ['key1', 'key2', 'key3']  # Not plain text
+                assert key_hash not in ["key1", "key2", "key3"]  # Not plain text
                 assert len(key_hash) == 64  # SHA-256 hex length
-                assert 'hash' in metadata
-                assert 'created_at' in metadata
+                assert "hash" in metadata
+                assert "created_at" in metadata
 
     def test_load_empty_api_keys(self):
         """Test handling of empty API key configuration."""
-        with patch.dict(os.environ, {'VALID_API_KEYS': ''}, clear=True):
+        with patch.dict(os.environ, {"VALID_API_KEYS": ""}, clear=True):
             manager = APIKeyManager()
             assert len(manager.valid_key_hashes) == 0
 
@@ -51,15 +51,15 @@ class TestAPIKeyManager:
 
     def test_verify_key_constant_time_valid(self):
         """Test constant-time verification with valid key."""
-        with patch.dict(os.environ, {'VALID_API_KEYS': 'valid_key_123'}):
+        with patch.dict(os.environ, {"VALID_API_KEYS": "valid_key_123"}):
             manager = APIKeyManager()
-            assert manager.verify_key_constant_time('valid_key_123') is True
+            assert manager.verify_key_constant_time("valid_key_123") is True
 
     def test_verify_key_constant_time_invalid(self):
         """Test constant-time verification with invalid key."""
-        with patch.dict(os.environ, {'VALID_API_KEYS': 'valid_key_123'}):
+        with patch.dict(os.environ, {"VALID_API_KEYS": "valid_key_123"}):
             manager = APIKeyManager()
-            assert manager.verify_key_constant_time('invalid_key') is False
+            assert manager.verify_key_constant_time("invalid_key") is False
 
 
 class TestTimingAttackResistance:
@@ -99,8 +99,9 @@ class TestTimingAttackResistance:
         timing_difference = abs(valid_mean - invalid_mean)
         max_allowed_difference = max(valid_mean, invalid_mean) * 0.1
 
-        assert timing_difference < max_allowed_difference, \
-            f"Timing difference too large: {timing_difference:.6f}s vs {max_allowed_difference:.6f}s"
+        assert (
+            timing_difference < max_allowed_difference
+        ), f"Timing difference too large: {timing_difference:.6f}s vs {max_allowed_difference:.6f}s"
 
     def test_no_short_circuit_on_first_character(self):
         """Test that comparison doesn't short-circuit on first character mismatch."""
@@ -108,7 +109,7 @@ class TestTimingAttackResistance:
 
         # Keys that differ on first character vs last character
         key2_diff_first = "xalid_key_123"  # Different first character
-        key2_diff_last = "valid_key_124"   # Different last character
+        key2_diff_last = "valid_key_124"  # Different last character
 
         # Measure timing
         timings_first = []
@@ -130,8 +131,9 @@ class TestTimingAttackResistance:
         avg_last = sum(timings_last) / len(timings_last)
 
         # Should be within reasonable tolerance
-        assert abs(avg_first - avg_last) < max(avg_first, avg_last) * 0.2, \
-            "Timing varies too much based on character position"
+        assert (
+            abs(avg_first - avg_last) < max(avg_first, avg_last) * 0.2
+        ), "Timing varies too much based on character position"
 
 
 class TestRateLimiting:
@@ -151,7 +153,15 @@ class TestRateLimiting:
             response = client.post(
                 "/predict",
                 headers={"X-API-Key": f"invalid_key_{i}"},
-                json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+                json={
+                    "features": {
+                        "temp": 20.0,
+                        "humidity": 50.0,
+                        "wind_speed": 10.0,
+                        "hour": 12,
+                        "day_of_week": 3,
+                    }
+                },
             )
             responses.append(response)
 
@@ -166,7 +176,7 @@ class TestRateLimiting:
 
     def test_rate_limiting_resets_on_success(self):
         """Test that rate limit resets on successful authentication."""
-        with patch.dict(os.environ, {'VALID_API_KEYS': 'valid_key_123'}):
+        with patch.dict(os.environ, {"VALID_API_KEYS": "valid_key_123"}):
             client = TestClient(app)
 
             # Make 9 failed attempts
@@ -174,7 +184,15 @@ class TestRateLimiting:
                 response = client.post(
                     "/predict",
                     headers={"X-API-Key": f"invalid_key_{i}"},
-                    json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+                    json={
+                        "features": {
+                            "temp": 20.0,
+                            "humidity": 50.0,
+                            "wind_speed": 10.0,
+                            "hour": 12,
+                            "day_of_week": 3,
+                        }
+                    },
                 )
                 assert response.status_code == 403
 
@@ -182,7 +200,15 @@ class TestRateLimiting:
             response = client.post(
                 "/predict",
                 headers={"X-API-Key": "valid_key_123"},
-                json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+                json={
+                    "features": {
+                        "temp": 20.0,
+                        "humidity": 50.0,
+                        "wind_speed": 10.0,
+                        "hour": 12,
+                        "day_of_week": 3,
+                    }
+                },
             )
             # Should fail with 503 (model not loaded), not 403/429 (auth)
             assert response.status_code == 503
@@ -191,7 +217,15 @@ class TestRateLimiting:
             response = client.post(
                 "/predict",
                 headers={"X-API-Key": "another_invalid_key"},
-                json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+                json={
+                    "features": {
+                        "temp": 20.0,
+                        "humidity": 50.0,
+                        "wind_speed": 10.0,
+                        "hour": 12,
+                        "day_of_week": 3,
+                    }
+                },
             )
             assert response.status_code == 403
 
@@ -201,21 +235,32 @@ class TestSecureLogging:
 
     def test_no_key_logging_on_failure(self):
         """Test that API keys are not logged on authentication failure."""
-        with patch('demand_forecasting.serving.model_server.logger') as mock_logger:
+        with patch("demand_forecasting.serving.model_server.logger") as mock_logger:
             client = TestClient(app)
 
             # Make failed authentication attempt
             response = client.post(
                 "/predict",
                 headers={"X-API-Key": "sensitive_key_12345"},
-                json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+                json={
+                    "features": {
+                        "temp": 20.0,
+                        "humidity": 50.0,
+                        "wind_speed": 10.0,
+                        "hour": 12,
+                        "day_of_week": 3,
+                    }
+                },
             )
 
             assert response.status_code == 403
 
             # Check that no API key material was logged
-            warning_calls = [call for call in mock_logger.warning.call_args_list
-                           if 'Invalid API key attempt' in str(call)]
+            warning_calls = [
+                call
+                for call in mock_logger.warning.call_args_list
+                if "Invalid API key attempt" in str(call)
+            ]
 
             assert len(warning_calls) > 0
 
@@ -234,14 +279,30 @@ class TestSecureLogging:
             client.post(
                 "/predict",
                 headers={"X-API-Key": f"invalid_key_{i}"},
-                json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+                json={
+                    "features": {
+                        "temp": 20.0,
+                        "humidity": 50.0,
+                        "wind_speed": 10.0,
+                        "hour": 12,
+                        "day_of_week": 3,
+                    }
+                },
             )
 
         # 11th attempt should be rate limited
         response = client.post(
             "/predict",
             headers={"X-API-Key": "invalid_key_final"},
-            json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+            json={
+                "features": {
+                    "temp": 20.0,
+                    "humidity": 50.0,
+                    "wind_speed": 10.0,
+                    "hour": 12,
+                    "day_of_week": 3,
+                }
+            },
         )
 
         assert response.status_code == 429
@@ -258,7 +319,15 @@ class TestSecurityHeaders:
 
         response = client.post(
             "/predict",
-            json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+            json={
+                "features": {
+                    "temp": 20.0,
+                    "humidity": 50.0,
+                    "wind_speed": 10.0,
+                    "hour": 12,
+                    "day_of_week": 3,
+                }
+            },
         )
 
         assert response.status_code == 401
@@ -271,7 +340,15 @@ class TestSecurityHeaders:
         response = client.post(
             "/predict",
             headers={"X-API-Key": "invalid_key"},
-            json={"features": {"temp": 20.0, "humidity": 50.0, "wind_speed": 10.0, "hour": 12, "day_of_week": 3}}
+            json={
+                "features": {
+                    "temp": 20.0,
+                    "humidity": 50.0,
+                    "wind_speed": 10.0,
+                    "hour": 12,
+                    "day_of_week": 3,
+                }
+            },
         )
 
         assert response.status_code == 403

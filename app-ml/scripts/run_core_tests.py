@@ -20,7 +20,6 @@ def run_tests(verbose=False):
     if not test_file.exists():
         return 1
 
-
     # Set up environment
     env = {
         "PYTHONPATH": str(project_root / "src"),

@@ -769,9 +769,12 @@ def main():
 
             for _test_name, test_result in result["tests"].items():
                 "⚠️ " if test_result.get("drift", False) else "✅"
-                if "p_value" in test_result or "score" in test_result or "distance" in test_result:
+                if (
+                    "p_value" in test_result
+                    or "score" in test_result
+                    or "distance" in test_result
+                ):
                     pass
-
 
     # Send alert if requested
     if args.alert:

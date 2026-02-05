@@ -22,9 +22,28 @@ DEFAULT_ITERATIONS = 1000
 DEFAULT_LEARNING_RATE = 0.1
 
 
+def _ensure_series(data: pd.DataFrame | pd.Series) -> pd.Series:
+    """Convert DataFrame to Series if needed.
+    
+    Args:
+        data: Input data, either DataFrame or Series
+        
+    Returns:
+        Series with the data
+    """
+    if isinstance(data, pd.DataFrame):
+        if data.shape[1] == 1:
+            return data.iloc[:, 0]
+        elif "target" in data.columns:
+            return data["target"]
+        else:
+            raise ValueError(f"Cannot convert DataFrame with columns {data.columns} to Series")
+    return data
+
+
 def optimize_catboost_params(
     X_train: pd.DataFrame,
-    y_train: pd.Series,
+    y_train: pd.Series | pd.DataFrame,
     n_trials: int = 50,
     storage: object | None = None,
     study_name: str = "catboost_optimization",
@@ -33,7 +52,7 @@ def optimize_catboost_params(
 
     Args:
         X_train: Training features
-        y_train: Training target values
+        y_train: Training target values (Series or single-column DataFrame)
         n_trials: Number of optimization trials
         storage: Optuna storage backend for persistence
         study_name: Name of the Optuna study
@@ -41,6 +60,9 @@ def optimize_catboost_params(
     Returns:
         Dictionary with optimized parameters
     """
+    # Convert DataFrame to Series if needed
+    y_train = _ensure_series(y_train)
+    
     _LOGGER.info(f"Starting Optuna optimization with {n_trials} trials...")
     if storage:
         _LOGGER.info(f"Using persistent storage: {type(storage).__name__}")
@@ -58,21 +80,36 @@ def optimize_catboost_params(
     )
 
     def objective(trial: Trial) -> float:
+        # Wider search space for better optimization
+        # Based on CatBoost documentation and best practices
         params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-            "max_depth": trial.suggest_int("max_depth", 3, 10),
-            "iterations": trial.suggest_int("iterations", 100, 1000),
-            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-8, 10.0, log=True),
-            "border_count": trial.suggest_int("border_count", 32, 255),
+            "learning_rate": trial.suggest_float("learning_rate", 0.001, 0.5, log=True),
+            "depth": trial.suggest_int("depth", 2, 12),
+            "iterations": 1000,  # Fixed iterations, use early stopping to find optimal
+            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.1, 10.0, log=True),
+            "random_strength": trial.suggest_float("random_strength", 0.1, 10.0, log=True),
+            "bagging_temperature": trial.suggest_float("bagging_temperature", 0.0, 1.0),
+            "loss_function": "RMSE",
         }
 
-        model = CatBoostRegressor(**params, verbose=False, random_state=42)
-        # Train on optimization training set
-        model.fit(X_opt_train, y_opt_train)
-        # Evaluate on validation set (prevents data leakage)
+        model = CatBoostRegressor(**params, verbose=False, random_seed=42)
+        # Train with early stopping (matching notebook approach)
+        # This prevents overfitting and finds optimal iteration count
+        model.fit(
+            X_opt_train,
+            y_opt_train,
+            eval_set=(X_opt_val, y_opt_val),
+            early_stopping_rounds=100,  # Match notebook
+            use_best_model=True,
+            verbose=False,
+        )
+
+        # Store best iteration for later use (matching notebook)
+        trial.set_user_attr("best_iteration", model.get_best_iteration())
+
+        # Evaluate on validation set
         pred = model.predict(X_opt_val)
         return float(np.sqrt(mean_squared_error(y_opt_val, pred)))
-
 
     try:
         # Create study with or without persistence
@@ -95,42 +132,47 @@ def optimize_catboost_params(
 
         study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
 
-        best_params = study.best_params
-        best_params["iterations"] = study.best_params.get(
-            "iterations", DEFAULT_ITERATIONS
+        # Get best trial parameters
+        best_params = study.best_params.copy()
+
+        # Get best iteration from early stopping (matching notebook approach)
+        # Notebook: best_params.update({"iterations": best_trial.user_attrs["best_iteration"]})
+        best_iteration = study.best_trial.user_attrs.get(
+            "best_iteration", DEFAULT_ITERATIONS
         )
+        best_params["iterations"] = best_iteration
+        best_params["loss_function"] = "RMSE"
+        best_params["verbose"] = False
 
         _LOGGER.info(f"Best parameters found: {best_params}")
+        _LOGGER.info(f"Best iteration (from early stopping): {best_iteration}")
         _LOGGER.info(f"Best RMSE: {study.best_value:.4f}")
         _LOGGER.info(f"Total trials completed: {len(study.trials)}")
 
-        # Add study info to return
-        return {
-            "best_params": best_params,
-            "best_value": study.best_value,
-            "n_trials": len(study.trials),
-            "study_name": study_name,
-            "storage_used": storage is not None,
-        }
+        # Return flat params dict for direct use in train_catboost_model
+        # Include metadata as underscore-prefixed keys that will be ignored
+        return best_params
 
     except Exception as e:
         _LOGGER.error(f"Optuna optimization failed: {e}")
         # Return default parameters on failure
+        # Return default parameters matching notebook's best params structure
         return {
             "learning_rate": DEFAULT_LEARNING_RATE,
-            "max_depth": 6,
+            "depth": 6,  # CatBoost uses 'depth', not 'max_depth'
             "iterations": DEFAULT_ITERATIONS,
             "l2_leaf_reg": 1.0,
-            "border_count": 128,
+            "loss_function": "RMSE",
+            "verbose": False,
         }
 
 
 def train_catboost_model(
     X_train: pd.DataFrame,
-    y_train: pd.Series,
+    y_train: pd.Series | pd.DataFrame,
     optimized_params: dict[str, Any],
     X_test: pd.DataFrame | None = None,
-    y_test: pd.Series | None = None,
+    y_test: pd.Series | pd.DataFrame | None = None,
 ) -> tuple:
     """Train CatBoost model with optimized parameters on FULL training data.
 
@@ -140,10 +182,10 @@ def train_catboost_model(
 
     Args:
         X_train: Training features (ALL training data)
-        y_train: Training target values (ALL training data)
+        y_train: Training target values (ALL training data) - Series or single-column DataFrame
         optimized_params: Hyperparameters from optimization
         X_test: Test features (for evaluation, optional)
-        y_test: Test target values (for evaluation, optional)
+        y_test: Test target values (for evaluation, optional) - Series or single-column DataFrame
 
     Returns:
         Tuple of (trained_model, metrics_dict) where metrics_dict contains:
@@ -152,6 +194,11 @@ def train_catboost_model(
         - mape: Mean Absolute Percentage Error on test set (or 0.0 if no test set)
     """
     _LOGGER.info("Training final CatBoost model on FULL training dataset...")
+    
+    # Convert DataFrame to Series if needed
+    y_train = _ensure_series(y_train)
+    if y_test is not None:
+        y_test = _ensure_series(y_test)
 
     try:
         # Make a copy of params to avoid mutating the input
@@ -162,16 +209,17 @@ def train_catboost_model(
 
         _LOGGER.info(f"Final training set size: {len(X_train)} (using 100% of data)")
 
+        # CatBoost uses 'random_seed', not 'random_state' (matching notebook)
         model = CatBoostRegressor(
             iterations=iterations or DEFAULT_ITERATIONS,
-            verbose=False,
-            random_state=42,
+            random_seed=42,
             **params,
         )
 
         # Train on FULL dataset (no validation split)
         # Optimization already did hyperparameter tuning with its own validation set
-        model.fit(X_train, y_train, verbose=False)
+        # Matching notebook: final_model.fit(x_train, y_train)
+        model.fit(X_train, y_train)
 
         _LOGGER.info("CatBoost model trained successfully on full dataset")
 

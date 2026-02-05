@@ -283,8 +283,9 @@ class E2ETestRunner:
 
         try:
             import pandas as pd
-            import pandera as pa
-            from pandera import Check, Column, DataFrameSchema
+            import pandera.pandas as pa
+            from pandera.pandas import Column, DataFrameSchema
+            from pandera import Check
 
             # Define schema matching the actual data
             # Note: pandera 0.27+ uses Check() instead of checks module
@@ -515,7 +516,6 @@ class E2ETestRunner:
         passed = len(self.passed_tests)
         failed = len(self.failed_tests)
 
-
         if self.failed_tests:
             for _test_name, _message in self.failed_tests:
                 pass
@@ -525,7 +525,7 @@ class E2ETestRunner:
             "total_tests": total_tests,
             "passed": passed,
             "failed": failed,
-            "success_rate": f"{100*passed/total_tests if total_tests > 0 else 0:.1f}%",
+            "success_rate": f"{100 * passed / total_tests if total_tests > 0 else 0:.1f}%",
         }
 
         report_path = "e2e_test_report.json"

@@ -14,7 +14,7 @@ sys.path.append(str(project_root))
 def test_data_profiler() -> bool | None:
     """Test the data profiler with sample data."""
     try:
-        from src.demand_forecasting.utils.simple_data_profiler_v2 import profile_dataset
+        from demand_forecasting.utils.simple_data_profiler_v2 import profile_dataset
 
         # Create sample data similar to bike sharing dataset
         np.random.seed(42)
@@ -55,7 +55,7 @@ def test_data_profiler() -> bool | None:
 def test_feature_lags() -> bool | None:
     """Test feature engineering with new lags."""
     try:
-        from src.demand_forecasting.pipelines.feature_engineering.nodes import (
+        from demand_forecasting.pipelines.feature_engineering.nodes import (
             create_derived_features,
         )
 
@@ -125,11 +125,10 @@ def test_catboost_nodes() -> bool | None:
     """Test CatBoost nodes (without actually training)."""
     try:
         # Test import
-        from src.demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
+        from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
             compare_models,
             compute_zero_safe_mape,
         )
-
 
         # Test zero-safe MAPE function
         y_true = np.array([10, 20, 30, 0, 50])
@@ -153,7 +152,7 @@ def test_catboost_nodes() -> bool | None:
 def test_metrics_parity() -> bool | None:
     """Test metrics implementation parity."""
     try:
-        from src.demand_forecasting.pipelines.demand_modeling.nodes import (
+        from demand_forecasting.pipelines.demand_modeling.nodes import (
             compute_zero_safe_mape,
         )
 
@@ -180,28 +179,25 @@ def test_pipeline_integration() -> bool | None:
     """Test pipeline integration."""
     try:
         # Test pipeline imports
-        from src.demand_forecasting.pipelines.data_processing.pipeline import (
+        from demand_forecasting.pipelines.data_processing.pipeline import (
             create_pipeline as create_dp_pipeline,
         )
-        from src.demand_forecasting.pipelines.demand_modeling.pipeline import (
+        from demand_forecasting.pipelines.demand_modeling.pipeline import (
             create_pipeline as create_dm_pipeline,
         )
-        from src.demand_forecasting.pipelines.feature_engineering.pipeline import (
+        from demand_forecasting.pipelines.feature_engineering.pipeline import (
             create_pipeline as create_fe_pipeline,
         )
-
 
         # Test pipeline creation
         fe_pipeline = create_fe_pipeline()
         dm_pipeline = create_dm_pipeline()
         dp_pipeline = create_dp_pipeline()
 
-
         # Check node names
         [node.name for node in fe_pipeline.nodes]
         [node.name for node in dm_pipeline.nodes]
         [node.name for node in dp_pipeline.nodes]
-
 
         return True
 
@@ -267,7 +263,6 @@ def main():
 
     for test_name, result in results:
         pass
-
 
     if passed == total:
         pass

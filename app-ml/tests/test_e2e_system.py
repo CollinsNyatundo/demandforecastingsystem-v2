@@ -110,7 +110,6 @@ class TestE2ESystem:
             dags = response.json().get("dags", [])
             [dag["dag_id"] for dag in dags]
 
-
             # Check for expected DAGs (at least one should exist)
             if len(dags) > 0:
                 pass
@@ -161,7 +160,6 @@ class TestE2ESystem:
                 f"{service_endpoints['model_server']}/metrics", timeout=10
             )
             assert response.status_code == 200
-
 
         except requests.exceptions.RequestException as e:
             pytest.fail(f"Cannot check model server: {e}")

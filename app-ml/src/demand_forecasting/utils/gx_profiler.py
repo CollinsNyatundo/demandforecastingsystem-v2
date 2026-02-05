@@ -68,8 +68,7 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
 
     # Add expectations based on data characteristics
     validator = context.get_validator(
-        batch_data=df,
-        create_expectation_suite_with_name=suite_name
+        batch_data=df, create_expectation_suite_with_name=suite_name
     )
 
     # Basic structure expectations
@@ -88,7 +87,8 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
         # Outlier detection - use correct parameter name
         if "int" in dtype_str or "float" in dtype_str:
             validator.expect_column_z_scores_to_be_less_than(
-                column=col, threshold=3.0  # Correct parameter name
+                column=col,
+                threshold=3.0,  # Correct parameter name
             )
 
     # Numeric column expectations
@@ -121,7 +121,9 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
         cnt_col = df["cnt"]
 
         # Non-negative values
-        validator.expect_column_min_to_be_between(column="cnt", min_value=0, max_value=0)
+        validator.expect_column_min_to_be_between(
+            column="cnt", min_value=0, max_value=0
+        )
 
         # Reasonable range for bike counts
         validator.expect_column_max_to_be_between(
@@ -152,10 +154,14 @@ def create_gx_data_docs(  # noqa: C901, PLR0915
         "numeric_summary": {},
         "validation_results": {
             "success": validation_result.success,
-            "statistics": getattr(validation_result, 'statistics', {}),
-            "expectations_count": len(getattr(validation_result, 'results', [])),
+            "statistics": getattr(validation_result, "statistics", {}),
+            "expectations_count": len(getattr(validation_result, "results", [])),
             "failed_expectations": len(
-                [r for r in getattr(validation_result, 'results', []) if not getattr(r, 'success', True)]
+                [
+                    r
+                    for r in getattr(validation_result, "results", [])
+                    if not getattr(r, "success", True)
+                ]
             ),
         },
     }

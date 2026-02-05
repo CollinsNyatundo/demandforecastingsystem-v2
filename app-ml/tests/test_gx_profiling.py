@@ -14,7 +14,7 @@ sys.path.append(str(project_root))
 def test_gx_profiling() -> bool | None:
     """Test Great Expectations profiling with sample data."""
     try:
-        from src.demand_forecasting.utils.gx_profiler_simple import profile_dataset_gx
+        from demand_forecasting.utils.gx_profiler_simple import profile_dataset_gx
 
         # Create sample data similar to bike sharing dataset
         np.random.seed(42)
@@ -47,7 +47,6 @@ def test_gx_profiling() -> bool | None:
             enable_data_docs=True,
         )
 
-
         # Test with Data Docs disabled
         disabled_result = profile_dataset_gx(
             sample_data,
@@ -73,13 +72,12 @@ def test_gx_profiling() -> bool | None:
 def test_pipeline_integration() -> bool | None:
     """Test pipeline integration with Great Expectations."""
     try:
-        from src.demand_forecasting.pipelines.data_processing.pipeline import (
+        from demand_forecasting.pipelines.data_processing.pipeline import (
             create_pipeline as create_dp_pipeline,
         )
 
         # Test pipeline creation
         pipeline = create_dp_pipeline()
-
 
         # Check node names
         node_names = [node.name for node in pipeline.nodes]
@@ -144,7 +142,6 @@ def main():
 
     for test_name, result in results:
         pass
-
 
     if passed == total:
         pass

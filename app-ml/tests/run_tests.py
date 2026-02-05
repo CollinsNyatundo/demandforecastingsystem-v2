@@ -62,7 +62,6 @@ class TestRunner:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(self.project_root / "src")
 
-
         # Run tests
         start_time = time.time()
 
@@ -130,7 +129,6 @@ class TestRunner:
         else:
             pass
 
-
         if self.results["stderr"]:
             pass
 
@@ -163,7 +161,6 @@ class TestRunner:
 
         # Save HTML report
         self._generate_html_report(report, report_dir)
-
 
     def _parse_coverage(self) -> dict[str, Any]:
         """Parse coverage information."""
@@ -254,42 +251,42 @@ class TestRunner:
 <body>
     <div class="header">
         <h1>🚀 app-ml Demand Forecasting System Test Report</h1>
-        <p>Generated on: {report['summary']['timestamp']}</p>
+        <p>Generated on: {report["summary"]["timestamp"]}</p>
     </div>
 
     <div class="section">
         <h2>📊 Test Summary</h2>
         <div class="metric">
             <strong>Status:</strong>
-            <span class="{'success' if report['summary']['exit_code'] == 0 else 'failure'}">
-                {'✅ PASSED' if report['summary']['exit_code'] == 0 else '❌ FAILED'}
+            <span class="{"success" if report["summary"]["exit_code"] == 0 else "failure"}">
+                {"✅ PASSED" if report["summary"]["exit_code"] == 0 else "❌ FAILED"}
             </span>
         </div>
         <div class="metric">
-            <strong>Duration:</strong> {report['summary']['duration']:.2f} seconds
+            <strong>Duration:</strong> {report["summary"]["duration"]:.2f} seconds
         </div>
         <div class="metric">
-            <strong>Markers:</strong> {', '.join(report['summary']['markers']) if report['summary']['markers'] else 'All'}
+            <strong>Markers:</strong> {", ".join(report["summary"]["markers"]) if report["summary"]["markers"] else "All"}
         </div>
     </div>
 
     <div class="section">
         <h2>📈 Code Coverage</h2>
         <div class="metric">
-            <strong>Coverage:</strong> {report['coverage']['percent_covered']:.1f}%
+            <strong>Coverage:</strong> {report["coverage"]["percent_covered"]:.1f}%
         </div>
         <div class="metric">
-            <strong>Lines Covered:</strong> {report['coverage']['lines_covered']}
+            <strong>Lines Covered:</strong> {report["coverage"]["lines_covered"]}
         </div>
         <div class="metric">
-            <strong>Lines Missing:</strong> {report['coverage']['lines_missing']}
+            <strong>Lines Missing:</strong> {report["coverage"]["lines_missing"]}
         </div>
     </div>
 
     <div class="section">
         <h2>🎯 Recommendations</h2>
         <ul>
-            {''.join(f'<li>{rec}</li>' for rec in report['recommendations'])}
+            {"".join(f"<li>{rec}</li>" for rec in report["recommendations"])}
         </ul>
     </div>
 </body>

@@ -1,9 +1,9 @@
 import sys
 
-sys.path.insert(
-    0,
-    r"D:\Projects\MLOPs\ml-systems\ml-systems\System 1 - demand_forecasting\app-ml\src",
-)
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root / "src"))
 
 import logging
 
@@ -19,7 +19,7 @@ test_results = {"passed": [], "failed": []}
 try:
     import yaml
 
-    catalog_path = r"D:\Projects\MLOPs\ml-systems\ml-systems\System 1 - demand_forecasting\app-ml\conf\base\catalog.yml"
+    catalog_path = project_root / "conf" / "base" / "catalog.yml"
     with open(catalog_path) as f:
         catalog = yaml.safe_load(f)
 
@@ -47,7 +47,6 @@ except Exception:
 
 # TEST 2: Pipeline imports
 try:
-
     test_results["passed"].append("Pipeline imports")
 except Exception:
     test_results["failed"].append("Pipeline imports")
@@ -126,4 +125,3 @@ if test_results["failed"]:
         pass
 else:
     pass
-

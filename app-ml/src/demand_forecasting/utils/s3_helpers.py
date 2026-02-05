@@ -150,15 +150,15 @@ def _validate_optuna_config(optuna_params: dict[str, Any]) -> None:
             )
 
 
-def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:  # noqa: C901
+def _validate_catboost_search_space(
+    catboost_space: dict[str, Any]
+) -> None:  # noqa: C901
     """Validate CatBoost search space parameters."""
     # Validate required CatBoost hyperparameters
     required_params = ["learning_rate", "depth", "l2_leaf_reg"]
     for param in required_params:
         if param not in catboost_space:
-            raise KeyError(
-                f"Missing '{param}' in catboost_search_space configuration."
-            )
+            raise KeyError(f"Missing '{param}' in catboost_search_space configuration.")
 
         param_config = catboost_space[param]
 
@@ -180,7 +180,10 @@ def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:  # 
 
         # Validate specific parameter ranges
         if param == "learning_rate":
-            if not (MIN_FILE_SIZE_MB <= min_val <= 1.0 and MIN_FILE_SIZE_MB <= max_val <= 1.0):
+            if not (
+                MIN_FILE_SIZE_MB <= min_val <= 1.0
+                and MIN_FILE_SIZE_MB <= max_val <= 1.0
+            ):
                 raise ValueError(
                     f"learning_rate range [{min_val}, {max_val}] is outside valid bounds [{MIN_FILE_SIZE_MB}, 1.0]"
                 )
@@ -192,7 +195,10 @@ def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:  # 
                 )
 
         elif param == "l2_leaf_reg":
-            if not (MIN_L2_LEAF_REG <= min_val <= MAX_L2_LEAF_REG and MIN_L2_LEAF_REG <= max_val <= MAX_L2_LEAF_REG):  # noqa: SIM102
+            if not (
+                MIN_L2_LEAF_REG <= min_val <= MAX_L2_LEAF_REG
+                and MIN_L2_LEAF_REG <= max_val <= MAX_L2_LEAF_REG
+            ):  # noqa: SIM102
                 raise ValueError(
                     f"l2_leaf_reg range [{min_val}, {max_val}] is outside valid bounds [{MIN_L2_LEAF_REG}, {MAX_L2_LEAF_REG}]"
                 )
@@ -212,7 +218,10 @@ def _validate_random_forest_search_space(rf_space: dict[str, Any]) -> None:
                     f"Invalid n_estimators range: min={min_est} >= max={max_est}"
                 )
 
-            if not (MIN_N_ESTIMATORS <= min_est <= MAX_N_ESTIMATORS and MIN_N_ESTIMATORS <= max_est <= MAX_N_ESTIMATORS):
+            if not (
+                MIN_N_ESTIMATORS <= min_est <= MAX_N_ESTIMATORS
+                and MIN_N_ESTIMATORS <= max_est <= MAX_N_ESTIMATORS
+            ):
                 raise ValueError(
                     f"n_estimators range [{min_est}, {max_est}] is outside valid bounds [{MIN_N_ESTIMATORS}, {MAX_N_ESTIMATORS}]"
                 )
@@ -229,7 +238,9 @@ def _validate_random_forest_search_space(rf_space: dict[str, Any]) -> None:
                     f"Invalid max_depth range: min={min_depth} >= max={max_depth}"
                 )
 
-            if not (1 <= min_depth <= MAX_DEPTH_LIMIT and 1 <= max_depth <= MAX_DEPTH_LIMIT):
+            if not (
+                1 <= min_depth <= MAX_DEPTH_LIMIT and 1 <= max_depth <= MAX_DEPTH_LIMIT
+            ):
                 raise ValueError(
                     f"max_depth range [{min_depth}, {max_depth}] is outside valid bounds [1, {MAX_DEPTH_LIMIT}]"
                 )

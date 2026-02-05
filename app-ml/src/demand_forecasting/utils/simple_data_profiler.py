@@ -62,7 +62,9 @@ class SimpleDataProfiler:
         logger.info(f"Generated profile report for {dataset_name}: {report_path}")
         return str(report_path)
 
-    def _generate_summary_stats(self, df: pd.DataFrame, dataset_name: str) -> dict[str, Any]:
+    def _generate_summary_stats(
+        self, df: pd.DataFrame, dataset_name: str
+    ) -> dict[str, Any]:
         """Generate summary statistics similar to EDA notebook analysis.
 
         Args:
@@ -98,13 +100,15 @@ class SimpleDataProfiler:
                 stats["correlations"] = correlation_matrix.to_dict()
 
         # Categorical columns analysis
-        categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+        categorical_cols = df.select_dtypes(include=["object", "category"]).columns
         if len(categorical_cols) > 0:
             for col in categorical_cols:
                 stats["categorical_summary"][col] = {
                     "unique_count": df[col].nunique(),
-                    "most_frequent": df[col].mode().iloc[0] if not df[col].mode().empty else None,
-                    "frequency": df[col].value_counts().head().to_dict()
+                    "most_frequent": (
+                        df[col].mode().iloc[0] if not df[col].mode().empty else None
+                    ),
+                    "frequency": df[col].value_counts().head().to_dict(),
                 }
 
         # Data quality flags
@@ -118,13 +122,13 @@ class SimpleDataProfiler:
             stats["quality_flags"].append("SMALL_DATASET")
 
         # Check for potential target column (cnt)
-        if 'cnt' in df.columns:
+        if "cnt" in df.columns:
             cnt_stats = {
-                "mean": df['cnt'].mean(),
-                "std": df['cnt'].std(),
-                "skewness": df['cnt'].skew(),
-                "zeros": (df['cnt'] == 0).sum(),
-                "zero_percentage": ((df['cnt'] == 0).sum() / len(df)) * 100
+                "mean": df["cnt"].mean(),
+                "std": df["cnt"].std(),
+                "skewness": df["cnt"].skew(),
+                "zeros": (df["cnt"] == 0).sum(),
+                "zero_percentage": ((df["cnt"] == 0).sum() / len(df)) * 100,
             }
             stats["target_analysis"] = cnt_stats
 
@@ -144,7 +148,9 @@ class SimpleDataProfiler:
             return f"{value:.2f}"
         return str(value)
 
-    def _generate_html_report(self, df: pd.DataFrame, stats: dict[str, Any], dataset_name: str) -> str:
+    def _generate_html_report(
+        self, df: pd.DataFrame, stats: dict[str, Any], dataset_name: str
+    ) -> str:
         """Generate a simple HTML report.
 
         Args:
@@ -155,7 +161,10 @@ class SimpleDataProfiler:
         Returns:
             Path to generated HTML report
         """
-        report_path = self.profile_dir / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        report_path = (
+            self.profile_dir
+            / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        )
 
         html_content = f"""
         <!DOCTYPE html>
@@ -176,29 +185,42 @@ class SimpleDataProfiler:
             <div class="header">
                 <h1>Data Profile Report</h1>
                 <h2>{dataset_name}</h2>
-                <p>Generated: {stats['timestamp']}</p>
+                <p>Generated: {stats["timestamp"]}</p>
             </div>
 
             <div class="section">
                 <h3>Dataset Overview</h3>
                 <table class="stats-table">
                     <tr><th>Metric</th><th>Value</th></tr>
-                    <tr><td>Shape</td><td>{stats['shape']}</td></tr>
-                    <tr><td>Columns</td><td>{len(stats['columns'])}</td></tr>
-                    <tr><td>Total Missing Values</td><td>{sum(stats['missing_values'].values())}</td></tr>
+                    <tr><td>Shape</td><td>{stats["shape"]}</td></tr>
+                    <tr><td>Columns</td><td>{len(stats["columns"])}</td></tr>
+                    <tr><td>Total Missing Values</td><td>{
+            sum(stats["missing_values"].values())
+        }</td></tr>
                 </table>
             </div>
 
             <div class="section">
                 <h3>Quality Flags</h3>
-                {"".join([f'<p class="quality-flag">⚠️ {flag}</p>' for flag in stats.get('quality_flags', [])]) or '<p>No quality issues detected ✅</p>'}
+                {
+            "".join(
+                [
+                    f'<p class="quality-flag">⚠️ {flag}</p>'
+                    for flag in stats.get("quality_flags", [])
+                ]
+            )
+            or "<p>No quality issues detected ✅</p>"
+        }
             </div>
 
             <div class="section">
                 <h3>Numeric Summary</h3>
                 <table class="stats-table">
                     <tr><th>Column</th><th>Count</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr>
-                    {"".join([f'''
+                    {
+            "".join(
+                [
+                    f'''
                     <tr>
                         <td>{col}</td>
                         <td>{stats['numeric_summary'][col].get('count', 'N/A')}</td>
@@ -207,7 +229,11 @@ class SimpleDataProfiler:
                         <td>{stats['numeric_summary'][col].get('min', 'N/A')}</td>
                         <td>{stats['numeric_summary'][col].get('max', 'N/A')}</td>
                     </tr>
-                    ''' for col in stats.get('numeric_summary', {})])}
+                    '''
+                    for col in stats.get("numeric_summary", {})
+                ]
+            )
+        }
                 </table>
             </div>
 
@@ -215,20 +241,28 @@ class SimpleDataProfiler:
                 <h3>Missing Values</h3>
                 <table class="stats-table">
                     <tr><th>Column</th><th>Missing Count</th><th>Missing %</th></tr>
-                    {"".join([f'''
+                    {
+            "".join(
+                [
+                    f'''
                     <tr>
                         <td>{col}</td>
                         <td>{stats['missing_values'][col]}</td>
                         <td>{stats['missing_percentage'][col]:.2f}%</td>
                     </tr>
-                    ''' for col in stats['missing_values'] if stats['missing_values'][col] > 0])}
+                    '''
+                    for col in stats["missing_values"]
+                    if stats["missing_values"][col] > 0
+                ]
+            )
+        }
                 </table>
             </div>
         </body>
         </html>
         """
 
-        with report_path.open('w', encoding='utf-8') as f:
+        with report_path.open("w", encoding="utf-8") as f:
             f.write(html_content)
 
         return str(report_path)
@@ -257,10 +291,12 @@ class SimpleDataProfiler:
 
         # Keep only last MAX_PROFILES_PER_DATASET profiles per dataset
         if len(existing_metrics[dataset_name]) > MAX_PROFILES_PER_DATASET:
-            existing_metrics[dataset_name] = existing_metrics[dataset_name][-MAX_PROFILES_PER_DATASET:]
+            existing_metrics[dataset_name] = existing_metrics[dataset_name][
+                -MAX_PROFILES_PER_DATASET:
+            ]
 
         # Save updated metrics
-        with self.metrics_file.open('w') as f:
+        with self.metrics_file.open("w") as f:
             json.dump(existing_metrics, f, indent=2, default=str)
 
     def get_quality_summary(self, dataset_name: str | None = None) -> dict[str, Any]:
@@ -279,14 +315,18 @@ class SimpleDataProfiler:
             all_metrics = cast(dict[str, Any], json.load(f))
 
         if dataset_name:
-            dataset_result: dict[str, Any] = all_metrics.get(dataset_name, {"error": f"Dataset {dataset_name} not found"})
+            dataset_result: dict[str, Any] = all_metrics.get(
+                dataset_name, {"error": f"Dataset {dataset_name} not found"}
+            )
             return dataset_result
 
         all_result: dict[str, Any] = all_metrics
         return all_result
 
 
-def profile_dataset(df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles") -> str:
+def profile_dataset(
+    df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles"
+) -> str:
     """Convenience function to profile a dataset.
 
     Args:

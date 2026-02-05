@@ -47,9 +47,17 @@ class DatasetMonitor:
 
         # S3 filesystem for actual file timestamp checking
         self.s3_endpoint = s3_endpoint
-        self.s3_key = s3_key or os.getenv("MINIO_ROOT_USER", "minioadmin")
-        self.s3_secret = s3_secret or os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
+        # Load credentials from environment - NO hardcoded defaults for security
+        self.s3_key = s3_key or os.getenv("MINIO_ACCESS_KEY") or os.getenv("MINIO_ROOT_USER")
+        self.s3_secret = s3_secret or os.getenv("MINIO_SECRET_KEY") or os.getenv("MINIO_ROOT_PASSWORD")
         self.s3_bucket = s3_bucket
+
+        if not self.s3_key or not self.s3_secret:
+            logger.warning(
+                "S3 credentials not found in environment. "
+                "Set MINIO_ACCESS_KEY and MINIO_SECRET_KEY for S3 operations. "
+                "Dataset freshness checks via S3 will be disabled."
+            )
 
         # Initialize S3 filesystem
         try:
@@ -473,7 +481,9 @@ class DatasetMonitor:
 
         self._save_metrics(metrics)
 
-    def _update_metrics_summary(self, dataset_uri: str, new_metrics: dict[str, Any]) -> None:
+    def _update_metrics_summary(
+        self, dataset_uri: str, new_metrics: dict[str, Any]
+    ) -> None:
         """Update metrics summary with new quality metrics."""
         metrics = self._load_metrics()
 

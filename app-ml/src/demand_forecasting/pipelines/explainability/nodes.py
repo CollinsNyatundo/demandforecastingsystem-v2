@@ -84,10 +84,9 @@ def calculate_feature_importance(
         importance_scores = catboost_model.get_feature_importance()
 
         # Create DataFrame with feature importance
-        feature_importance = pd.DataFrame({
-            "feature": feature_names,
-            "importance": importance_scores
-        }).sort_values("importance", ascending=False)
+        feature_importance = pd.DataFrame(
+            {"feature": feature_names, "importance": importance_scores}
+        ).sort_values("importance", ascending=False)
 
         _LOGGER.info(f"Calculated importance for {len(feature_importance)} features")
         return feature_importance
@@ -109,7 +108,9 @@ def log_explainability_artifacts(
             feature_importance = shap_explanations["feature_importance"]
 
             # Log feature importance as artifact
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".csv", delete=False
+            ) as tmp_file:
                 importance_path = tmp_file.name
                 feature_importance.to_csv(importance_path, index=False)
                 mlflow.log_artifact(importance_path, artifact_path="explanations")
@@ -183,9 +184,9 @@ def create_explainability_report(
         <body>
         <h1>Model Explainability Analysis</h1>
         <h2>SHAP Analysis</h2>
-        <p>Samples analyzed: {shap_explanations['num_samples']}</p>
-        <p>Features: {len(shap_explanations['feature_names'])}</p>
-        <p>Base value: {shap_explanations['base_value']:.4f}</p>
+        <p>Samples analyzed: {shap_explanations["num_samples"]}</p>
+        <p>Features: {len(shap_explanations["feature_names"])}</p>
+        <p>Base value: {shap_explanations["base_value"]:.4f}</p>
 
         <h2>Feature Importance (Top 10)</h2>
         <table border="1">

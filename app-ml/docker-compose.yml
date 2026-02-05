@@ -9,13 +9,15 @@
 # -----------------------------------------------------------------------------
 
 x-common-env: &common-env
-  # PostgreSQL Environment
-  POSTGRES_USER: airflow
-  POSTGRES_PASSWORD: airflow
+  # PostgreSQL Environment - Use environment variables for security
+  # SECURITY: Never use default credentials in production!
+  # Set these in your .env file before deployment
+  POSTGRES_USER: ${POSTGRES_USER:-airflow}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
   POSTGRES_MULTIPLE_DATABASES: "airflow,mlflow,optuna"
   
-  # Redis Environment
-  REDIS_PASSWORD: redis123
+  # Redis Environment - Use environment variables for security
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
   
   # MinIO Environment
   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -29,7 +31,7 @@ x-airflow-common: &airflow-common
     <<: *common-env
     PYTHONPATH: /opt/airflow/src
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/airflow
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -147,7 +149,7 @@ services:
       - ./mlflow-entrypoint.sh:/opt/airflow/mlflow-entrypoint.sh
     environment:
       <<: *common-env
-      DATABASE_URL: postgresql://airflow:airflow@postgres:5432/mlflow
+      DATABASE_URL: postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
@@ -177,8 +179,8 @@ services:
       <<: *common-env
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
-      _AIRFLOW_WWW_USER_USERNAME: "Cole"
-      _AIRFLOW_WWW_USER_PASSWORD: "admin"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
       _AIRFLOW_WWW_USER_ROLE: "Admin"
     depends_on:
       postgres:
@@ -296,9 +298,8 @@ services:
         /usr/bin/mc mb myminio/demand-forecasting --ignore-existing;
         /usr/bin/mc mb myminio/mlflow-artifacts --ignore-existing;
         /usr/bin/mc mb myminio/airflow-logs --ignore-existing;
-        /usr/bin/mc policy set public myminio/demand-forecasting;
-        /usr/bin/mc policy set public myminio/mlflow-artifacts;
-        /usr/bin/mc policy set public myminio/airflow-logs;
+        /usr/bin/mc mb myminio/drift-reports --ignore-existing;
+        echo 'Buckets created with private access (default). Use IAM policies for production access control.';
         exit 0;
       "
     networks:
@@ -424,7 +425,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     volumes:

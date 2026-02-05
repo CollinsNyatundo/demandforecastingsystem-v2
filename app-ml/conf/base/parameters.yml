@@ -17,16 +17,24 @@ data_processing:
 
 # Feature Engineering Configuration
 feature_engineering:
-  # Target lag values (for cnt/demand column)
-  target_lags: [1, 2, 22, 23]
+  # Demand lag values (matching notebook's cnt_lag: [1, 2, 22, 23])
+  # NOTE: These are lags of CURRENT demand, not target (next hour)
+  demand_lags: [1, 2, 22, 23]
   
   # Feature lag configuration
+  # NOTE: Use RENAMED column names (after column standardization)
+  # Original -> Renamed:
+  #   hr -> hour
+  #   weekday -> day_of_week  
+  #   weathersit -> weather_condition
+  #   hum -> humidity
+  #   temp -> temp (unchanged)
   feature_lags:
-    hr: [1, 2, 3]
-    weekday: [1, 2, 3]
-    weathersit: [1, 2, 3]
+    hour: [1, 2, 3]
+    day_of_week: [1, 2, 3]
+    weather_condition: [1, 2, 3]
     temp: [1, 2, 3]
-    hum: [1, 2, 3]
+    humidity: [1, 2, 3]
   
   # Other parameters
   min_dataset_size: 100
@@ -56,27 +64,41 @@ model_training:
     random_state: 42
 
 # Optuna Hyperparameter Optimization
-optimization:
+# Using 'optuna' key to match validation function expectations
+optuna:
   n_trials: 150
   metric: "rmse"
   direction: "minimize"
-  learning_rate:
-    min: 0.01
-    max: 0.3
-    log: true
-  max_depth:
-    min: 3
-    max: 10
-  iterations:
-    min: 100
-    max: 1000
-  l2_leaf_reg:
-    min: 1e-8
-    max: 10.0
-    log: true
-  border_count:
-    min: 32
-    max: 255
+  primary_model: "catboost"
+  
+  # CatBoost search space configuration
+  catboost_search_space:
+    learning_rate:
+      min: 0.01
+      max: 0.3
+      log: true
+    depth:  # Note: CatBoost uses 'depth', not 'max_depth'
+      min: 3
+      max: 10
+    iterations:
+      min: 100
+      max: 1000
+    l2_leaf_reg:
+      min: 0.1
+      max: 10.0
+      log: true
+    border_count:
+      min: 32
+      max: 255
+
+  # RandomForest search space (alternative model)
+  search_space:
+    n_estimators:
+      min: 50
+      max: 500
+    max_depth:
+      min: 5
+      max: 30
 
 # Explainability Parameters
 explainability:
@@ -97,3 +119,69 @@ monitoring:
   alert_threshold_r2: 0.7
   data_drift_threshold: 0.1
   enable_alerts: true
+  # Drift detection configuration
+  drift_detection:
+    ks_test_threshold: 0.05  # p-value threshold for Kolmogorov-Smirnov test
+    psi_threshold: 0.1  # Population Stability Index threshold
+    min_samples: 30  # Minimum samples required for drift detection
+
+# ==============================================================================
+# ADVANCED FEATURES (Enhancement Options)
+# ==============================================================================
+# Enable these features for advanced optimization and ensemble methods.
+# These are optional and provide additional model training strategies.
+
+advanced_features:
+  # Multi-Objective Optimization
+  # Finds Pareto-optimal solutions balancing multiple metrics
+  enable_multi_objective: false  # Set to true to enable
+  multi_objective_trials: 50
+  multi_objective_targets:
+    - rmse
+    - mae
+    - training_time
+  objective_weights:
+    rmse: 0.5
+    mae: 0.3
+    training_time: 0.2
+
+  # Ensemble Methods
+  # Combines multiple models for improved robustness
+  enable_ensemble: false  # Set to true to enable
+  ensemble_type: "stacking"  # Options: "stacking", "voting"
+  ensemble_models:
+    - catboost
+    - xgboost
+    - lightgbm
+    - random_forest
+  stacking_cv_folds: 5
+
+# ==============================================================================
+# AUTOMATION CONFIGURATION
+# ==============================================================================
+# Settings for automated drift detection and retraining triggers.
+
+automation:
+  # Retraining Triggers
+  time_interval_days: 7  # Retrain every N days (time-based trigger)
+  performance_threshold: 5.0  # Retrain if RMSE degrades by N% (performance trigger)
+  data_volume_threshold: 10000  # Retrain if N new samples available (data trigger)
+  
+  # Drift-Based Retraining
+  drift_threshold: 0.1  # Trigger retraining if drift score exceeds this
+  drift_features_threshold: 30  # Retrain if >N% of features show drift
+  
+  # Alert Configuration
+  enable_email_alerts: true
+  alert_priorities:
+    - CRITICAL  # Data drift or performance degradation
+    - HIGH  # Performance issues
+    - MEDIUM  # Scheduled retraining needed
+    - LOW  # Routine maintenance
+  
+  # Model Registry
+  model_registry_name: "demand_forecasting_catboost"
+  auto_promote_to_production: false  # Set true to auto-promote after successful retraining
+  promotion_validation_threshold:
+    rmse_max: 55.0  # Max RMSE to allow promotion
+    mae_max: 35.0   # Max MAE to allow promotion

@@ -80,14 +80,14 @@ class TestDataProcessing:
         assert self.sample_data["weathersit"].between(1, 4).all()
         assert self.sample_data["holiday"].isin([0, 1]).all()
 
-    @patch("src.demand_forecasting.pipelines.data_processing.nodes.pd.read_csv")
+    @patch("demand_forecasting.pipelines.data_processing.nodes.pd.read_csv")
     def test_preprocess_data_function(self, mock_read_csv):
         """Test the preprocess_data function."""
         mock_read_csv.return_value = self.sample_data
 
         # Import the function (assuming it exists)
         try:
-            from src.demand_forecasting.pipelines.data_processing.nodes import (
+            from demand_forecasting.pipelines.data_processing.nodes import (
                 preprocess_data,
             )
 
@@ -259,16 +259,16 @@ class TestDataProcessing:
         hum_corr = df["hum"].corr(df["cnt"])
         assert not np.isnan(hum_corr)
 
-    @patch("src.demand_forecasting.pipelines.data_processing.nodes.pd.read_parquet")
+    @patch("demand_forecasting.pipelines.data_processing.nodes.pd.read_parquet")
     @patch(
-        "src.demand_forecasting.pipelines.data_processing.nodes.pd.DataFrame.to_parquet"
+        "demand_forecasting.pipelines.data_processing.nodes.pd.DataFrame.to_parquet"
     )
     def test_data_pipeline_integration(self, mock_to_parquet, mock_read_parquet):
         """Test data pipeline integration."""
         mock_read_parquet.return_value = self.sample_data
 
         try:
-            from src.demand_forecasting.pipelines.data_processing.pipeline import (
+            from demand_forecasting.pipelines.data_processing.pipeline import (
                 create_pipeline,
             )
 

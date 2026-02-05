@@ -16,7 +16,9 @@ try:
     PANDAS_PROFILING_AVAILABLE = True
 except ImportError:
     PANDAS_PROFILING_AVAILABLE = False
-    warnings.warn("pandas-profiling not available. Using basic profiling instead.", stacklevel=2)
+    warnings.warn(
+        "pandas-profiling not available. Using basic profiling instead.", stacklevel=2
+    )
 
 
 def safe_data_profile(
@@ -39,7 +41,9 @@ def safe_data_profile(
     # Sample large datasets to prevent resource exhaustion
     if len(df) > sample_size:
         df = df.sample(n=sample_size, random_state=42)
-        warnings.warn(f"Dataset sampled to {sample_size} rows for profiling", stacklevel=2)
+        warnings.warn(
+            f"Dataset sampled to {sample_size} rows for profiling", stacklevel=2
+        )
 
     if PANDAS_PROFILING_AVAILABLE:
         return _pandas_profiling_report(df, output_dir, profile_title)
@@ -106,7 +110,10 @@ def _pandas_profiling_report(
         }
 
     except Exception as e:
-        warnings.warn(f"pandas-profiling failed: {e}. Falling back to basic profiling.", stacklevel=2)
+        warnings.warn(
+            f"pandas-profiling failed: {e}. Falling back to basic profiling.",
+            stacklevel=2,
+        )
         return _basic_profiling_report(df)
 
 

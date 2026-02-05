@@ -18,7 +18,6 @@ mlflow.set_experiment("container_test")
 
 # Start run
 with mlflow.start_run(run_name="container_test_run") as run:
-
     # Simple model
     X = np.random.rand(20, 2)
     y = np.random.rand(20)
@@ -35,5 +34,3 @@ with mlflow.start_run(run_name="container_test_run") as run:
 
     # Log model
     mlflow.sklearn.log_model(model, "model")
-
-

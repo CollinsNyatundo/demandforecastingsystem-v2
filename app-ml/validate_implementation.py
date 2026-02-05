@@ -315,8 +315,6 @@ def main():
     validator = ImplementationValidator()
     results = validator.validate_all()
 
-
-
     if results["issues"]:
         for _i, _issue in enumerate(results["issues"], 1):
             pass
@@ -324,7 +322,6 @@ def main():
     if results["warnings"]:
         for _i, _warning in enumerate(results["warnings"], 1):
             pass
-
 
     # Exit with appropriate code
     if results["status"] == "FAIL":

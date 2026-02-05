@@ -81,7 +81,10 @@ class RetrainingScheduler:
                 return True
 
             last_version = latest_versions[0]
-            last_training_time = last_version.creation_timestamp
+            # creation_timestamp from MLflow is in milliseconds, convert to datetime
+            last_training_time = datetime.fromtimestamp(
+                last_version.creation_timestamp / 1000
+            )
 
             # Calculate days since last training
             days_since = (datetime.now() - last_training_time).days
@@ -234,7 +237,9 @@ class RetrainingScheduler:
 
         return recent_rmse_values
 
-    def _perform_statistical_drift_test(self, recent_rmse_values: list[float]) -> tuple[bool, float, float]:
+    def _perform_statistical_drift_test(
+        self, recent_rmse_values: list[float]
+    ) -> tuple[bool, float, float]:
         """Perform statistical test for performance drift.
 
         Args:
@@ -276,7 +281,8 @@ class RetrainingScheduler:
             p_val_float = 1.0  # Default to no significance
 
         should_trigger = (
-            p_val_float < MIN_PERFORMANCE_THRESHOLD and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
+            p_val_float < MIN_PERFORMANCE_THRESHOLD
+            and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
         )  # Significant degradation
 
         return should_trigger, p_value, cohens_d
@@ -292,7 +298,9 @@ class RetrainingScheduler:
                 return False
 
             # Perform statistical drift test
-            should_trigger, p_value, cohens_d = self._perform_statistical_drift_test(recent_rmse_values)
+            should_trigger, p_value, cohens_d = self._perform_statistical_drift_test(
+                recent_rmse_values
+            )
 
             if should_trigger:
                 logger.info(
@@ -318,7 +326,7 @@ class RetrainingScheduler:
             )
 
             if not experiments:
-                return float('inf')  # Default to worst case RMSE
+                return float("inf")  # Default to worst case RMSE
 
             experiment_id = experiments[0].experiment_id
 
@@ -333,11 +341,11 @@ class RetrainingScheduler:
             if best_runs:
                 return float(best_runs[0].data.metrics.get("rmse", 0.0))
 
-            return float('inf')  # Default to worst case RMSE
+            return float("inf")  # Default to worst case RMSE
 
         except Exception as e:
             logger.error(f"Error getting baseline RMSE: {e}")
-            return float('inf')  # Default to worst case RMSE
+            return float("inf")  # Default to worst case RMSE
 
     def _calculate_priority(self, triggers: list[str]) -> str:
         """Calculate retraining priority based on trigger types."""

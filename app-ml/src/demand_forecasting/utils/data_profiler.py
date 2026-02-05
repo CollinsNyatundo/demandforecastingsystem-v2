@@ -174,7 +174,9 @@ class DataProfiler:
 
         # Keep only last MAX_PROFILES_PER_DATASET profiles per dataset
         if len(existing_metrics[dataset_name]) > MAX_PROFILES_PER_DATASET:
-            existing_metrics[dataset_name] = existing_metrics[dataset_name][-MAX_PROFILES_PER_DATASET:]
+            existing_metrics[dataset_name] = existing_metrics[dataset_name][
+                -MAX_PROFILES_PER_DATASET:
+            ]
 
         # Save updated metrics
         with self.metrics_file.open("w") as f:
@@ -205,7 +207,10 @@ class DataProfiler:
         return all_result
 
     def _compare_shape_drift(
-        self, current_shape: tuple[int, int], baseline_shape: tuple[int, int], threshold: float
+        self,
+        current_shape: tuple[int, int],
+        baseline_shape: tuple[int, int],
+        threshold: float,
     ) -> dict[str, float]:
         """Compare shape drift between current and baseline shapes.
 
@@ -217,19 +222,22 @@ class DataProfiler:
         Returns:
             Dictionary with drift details for rows and columns
         """
-        if len(current_shape) != DATAFRAME_DIMENSIONS or len(baseline_shape) != DATAFRAME_DIMENSIONS:
+        if (
+            len(current_shape) != DATAFRAME_DIMENSIONS
+            or len(baseline_shape) != DATAFRAME_DIMENSIONS
+        ):
             return {}
 
         row_change = abs(current_shape[0] - baseline_shape[0]) / baseline_shape[0]
         col_change = abs(current_shape[1] - baseline_shape[1]) / baseline_shape[1]
 
-        return {
-            "shape_rows": row_change,
-            "shape_cols": col_change
-        }
+        return {"shape_rows": row_change, "shape_cols": col_change}
 
     def _compare_missing_values_drift(
-        self, current_missing: dict[str, Any], baseline_missing: dict[str, Any], threshold: float
+        self,
+        current_missing: dict[str, Any],
+        baseline_missing: dict[str, Any],
+        threshold: float,
     ) -> dict[str, float]:
         """Compare missing values drift between current and baseline.
 
@@ -247,7 +255,9 @@ class DataProfiler:
             if col in baseline_missing:
                 baseline_val = baseline_missing[col]
 
-                if isinstance(current_val, (int, float)) and isinstance(baseline_val, (int, float)):
+                if isinstance(current_val, (int, float)) and isinstance(
+                    baseline_val, (int, float)
+                ):
                     change = abs(current_val - baseline_val) / max(baseline_val, 1)
                     drift_details[f"missing_{col}"] = change
 
@@ -300,7 +310,9 @@ class DataProfiler:
                     if any(change > threshold for change in shape_drift.values()):
                         drift_results["drift_detected"] = True
 
-                elif isinstance(current_metrics[metric], dict) and isinstance(baseline[metric], dict):
+                elif isinstance(current_metrics[metric], dict) and isinstance(
+                    baseline[metric], dict
+                ):
                     # Compare missing values percentage
                     missing_drift = self._compare_missing_values_drift(
                         current_metrics[metric], baseline[metric], threshold

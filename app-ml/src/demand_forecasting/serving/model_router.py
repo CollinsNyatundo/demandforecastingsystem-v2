@@ -81,7 +81,7 @@ class ModelRouter:
                 "model_id": model_id,
                 "confidence": self._calculate_confidence(prediction, data),
                 "timestamp": datetime.now().isoformat(),
-                "traffic_split": f"A:{self.split:.1%}/B:{1-self.split:.1%}",
+                "traffic_split": f"A:{self.split:.1%}/B:{1 - self.split:.1%}",
                 "request_id": self.request_count,
             }
 
@@ -101,7 +101,10 @@ class ModelRouter:
             return float(
                 min(
                     0.95,
-                    max(0.70, 1.0 - abs(prediction - np.mean(features)) / np.std(features)),
+                    max(
+                        0.70,
+                        1.0 - abs(prediction - np.mean(features)) / np.std(features),
+                    ),
                 )
             )
         except Exception:
@@ -146,7 +149,9 @@ class ABTestMetrics:
         self.predictions_a: list[float] = []
         self.predictions_b: list[float] = []
 
-    def log_prediction(self, model_id: str, prediction: float, actual: float | None = None) -> None:
+    def log_prediction(
+        self, model_id: str, prediction: float, actual: float | None = None
+    ) -> None:
         """Log prediction and actual value for metric calculation."""
         if actual is not None:
             error = abs(prediction - actual)
@@ -159,7 +164,10 @@ class ABTestMetrics:
 
     def compute_statistics(self) -> dict[str, Any]:
         """Compute statistical comparison between models."""
-        if len(self.metrics_a) < MIN_SAMPLE_SIZE_THRESHOLD or len(self.metrics_b) < MIN_SAMPLE_SIZE_THRESHOLD:
+        if (
+            len(self.metrics_a) < MIN_SAMPLE_SIZE_THRESHOLD
+            or len(self.metrics_b) < MIN_SAMPLE_SIZE_THRESHOLD
+        ):
             return {
                 "status": "insufficient_data",
                 "min_samples_needed": MIN_SAMPLE_SIZE_THRESHOLD,
@@ -208,9 +216,15 @@ class ABTestMetrics:
         """Generate deployment recommendation based on statistics."""
         if p_value >= STATISTICAL_SIGNIFICANCE_THRESHOLD:
             return "insufficient_evidence"
-        if improvement > CONFIDENCE_INTERVAL_PERCENTAGE and p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD:
+        if (
+            improvement > CONFIDENCE_INTERVAL_PERCENTAGE
+            and p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD
+        ):
             return "deploy_b"
-        if improvement < NEGATIVE_IMPROVEMENT_THRESHOLD and p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD:
+        if (
+            improvement < NEGATIVE_IMPROVEMENT_THRESHOLD
+            and p_value < STATISTICAL_SIGNIFICANCE_THRESHOLD
+        ):
             return "deploy_a"
         return "continue_test"
 
@@ -218,7 +232,10 @@ class ABTestMetrics:
         self, confidence: float = 0.95
     ) -> dict[str, float]:
         """Calculate confidence interval for improvement."""
-        if len(self.metrics_a) < CONFIDENCE_INTERVAL_SAMPLE_SIZE or len(self.metrics_b) < CONFIDENCE_INTERVAL_SAMPLE_SIZE:
+        if (
+            len(self.metrics_a) < CONFIDENCE_INTERVAL_SAMPLE_SIZE
+            or len(self.metrics_b) < CONFIDENCE_INTERVAL_SAMPLE_SIZE
+        ):
             return {"lower": -2.1, "upper": 3.4, "confidence": confidence}
 
         # Use bootstrap method for confidence interval
@@ -345,6 +362,4 @@ class ABTestManager:
                 "No statistically significant difference detected. "
                 "Recommend extending test or deploying based on other factors."
             )
-        return (
-            "Continue testing. More data needed to reach statistical significance."
-        )
+        return "Continue testing. More data needed to reach statistical significance."

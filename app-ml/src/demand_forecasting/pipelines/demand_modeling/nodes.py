@@ -15,22 +15,44 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 _LOGGER = logging.getLogger(__name__)
 
 
+def _ensure_series(data: pd.DataFrame | pd.Series) -> pd.Series:
+    """Convert DataFrame to Series if needed.
+    
+    Args:
+        data: Input data, either DataFrame or Series
+        
+    Returns:
+        Series with the data
+    """
+    if isinstance(data, pd.DataFrame):
+        if data.shape[1] == 1:
+            return data.iloc[:, 0]
+        elif "target" in data.columns:
+            return data["target"]
+        else:
+            raise ValueError(f"Cannot convert DataFrame with columns {data.columns} to Series")
+    return data
+
+
 def train_single_model(
     X_train: pd.DataFrame,
-    y_train: pd.Series,
+    y_train: pd.Series | pd.DataFrame,
     params: dict[str, Any] | None = None,
 ) -> RandomForestRegressor:
     """Train a single Random Forest model for demand forecasting.
 
     Args:
         X_train: Training features
-        y_train: Training target values
+        y_train: Training target values (Series or single-column DataFrame)
         params: Model hyperparameters
 
     Returns:
         Trained RandomForestRegressor model
     """
     _LOGGER.info("Training Random Forest model...")
+    
+    # Convert DataFrame to Series if needed
+    y_train = _ensure_series(y_train)
 
     if params is None:
         params = {
@@ -54,7 +76,7 @@ def compare_demand_models(
     catboost_model: object,
     random_forest_model: object,
     X_test: pd.DataFrame,
-    y_test: pd.Series,
+    y_test: pd.Series | pd.DataFrame,
 ) -> dict[str, Any]:
     """Compare performance of CatBoost and Random Forest models for demand forecasting.
 
@@ -65,7 +87,7 @@ def compare_demand_models(
         catboost_model: Trained CatBoost model from catboost_nodes.train_catboost_model()
         random_forest_model: Trained Random Forest model from train_single_model()
         X_test: Test features for evaluation
-        y_test: Test target values for evaluation
+        y_test: Test target values for evaluation (Series or single-column DataFrame)
 
     Returns:
         Dictionary with comprehensive comparison metrics for each model:
@@ -80,16 +102,23 @@ def compare_demand_models(
         ValueError: If models are invalid or evaluation fails
     """
     _LOGGER.info("Starting model comparison for demand forecasting...")
+    
+    # Convert DataFrame to Series if needed
+    y_test = _ensure_series(y_test)
 
     # Validate model inputs
-    if catboost_model is None or not hasattr(catboost_model, 'predict'):
+    if catboost_model is None or not hasattr(catboost_model, "predict"):
         raise ValueError("Invalid CatBoost model: model must have predict() method")
 
-    if random_forest_model is None or not hasattr(random_forest_model, 'predict'):
-        raise ValueError("Invalid Random Forest model: model must have predict() method")
+    if random_forest_model is None or not hasattr(random_forest_model, "predict"):
+        raise ValueError(
+            "Invalid Random Forest model: model must have predict() method"
+        )
 
     if X_test is None or y_test is None or len(X_test) != len(y_test):
-        raise ValueError("Invalid test data: X_test and y_test must have same length and not be None")
+        raise ValueError(
+            "Invalid test data: X_test and y_test must have same length and not be None"
+        )
 
     try:
         # Get predictions from both models
@@ -127,9 +156,15 @@ def compare_demand_models(
 
         # Comprehensive logging for production monitoring
         _LOGGER.info("Model comparison completed:")
-        _LOGGER.info(f"  CatBoost - RMSE: {cb_rmse:.4f}, R2: {comparison['catboost']['r2']:.4f}, MAE: {comparison['catboost']['mae']:.4f}")
-        _LOGGER.info(f"  Random Forest - RMSE: {rf_rmse:.4f}, R2: {comparison['random_forest']['r2']:.4f}, MAE: {comparison['random_forest']['mae']:.4f}")
-        _LOGGER.info(f"  Best model: {best_model} (RMSE improvement: {abs(cb_rmse - rf_rmse):.4f})")
+        _LOGGER.info(
+            f"  CatBoost - RMSE: {cb_rmse:.4f}, R2: {comparison['catboost']['r2']:.4f}, MAE: {comparison['catboost']['mae']:.4f}"
+        )
+        _LOGGER.info(
+            f"  Random Forest - RMSE: {rf_rmse:.4f}, R2: {comparison['random_forest']['r2']:.4f}, MAE: {comparison['random_forest']['mae']:.4f}"
+        )
+        _LOGGER.info(
+            f"  Best model: {best_model} (RMSE improvement: {abs(cb_rmse - rf_rmse):.4f})"
+        )
 
         # Validate metrics are reasonable (defensive programming)
         for model_name, metrics in comparison.items():
@@ -150,7 +185,7 @@ def compare_demand_models(
 
 def train_final_model(
     X_train: pd.DataFrame,
-    y_train: pd.Series,
+    y_train: pd.Series | pd.DataFrame,
     model_comparison: dict[str, Any],
     catboost_model: object = None,
 ) -> object:
@@ -161,7 +196,7 @@ def train_final_model(
 
     Args:
         X_train: Training features
-        y_train: Training target values
+        y_train: Training target values (Series or single-column DataFrame)
         model_comparison: Results from model comparison with structure validation
         catboost_model: Trained CatBoost model (if available)
 
@@ -172,6 +207,9 @@ def train_final_model(
         ValueError: If model_comparison structure is invalid or metrics are missing
     """
     _LOGGER.info("Training final model with comprehensive validation...")
+    
+    # Convert DataFrame to Series if needed
+    y_train = _ensure_series(y_train)
 
     # Validate model_comparison structure
     required_keys = ["best_model", "catboost", "random_forest"]
@@ -205,7 +243,10 @@ def train_final_model(
         )
 
     # Additional validation: check metrics are reasonable
-    if not isinstance(chosen_metrics["rmse"], (int, float)) or chosen_metrics["rmse"] < 0:
+    if (
+        not isinstance(chosen_metrics["rmse"], (int, float))
+        or chosen_metrics["rmse"] < 0
+    ):
         raise ValueError(
             f"Invalid RMSE value for '{best_model_name}': {chosen_metrics['rmse']}. "
             f"RMSE must be a non-negative number."
@@ -233,7 +274,7 @@ def train_final_model(
             )
 
         # Validate catboost model has predict method
-        if not hasattr(catboost_model, 'predict'):
+        if not hasattr(catboost_model, "predict"):
             raise ValueError(
                 "Provided CatBoost model is invalid - missing predict method. "
                 "Ensure model is properly trained before passing to this function."
@@ -247,7 +288,7 @@ def train_final_model(
         final_model = train_single_model(X_train, y_train)
 
         # Validate trained model
-        if not hasattr(final_model, 'predict'):
+        if not hasattr(final_model, "predict"):
             raise ValueError(
                 "Failed to train valid Random Forest model - missing predict method."
             )

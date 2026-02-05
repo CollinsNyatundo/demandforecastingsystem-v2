@@ -51,9 +51,11 @@ y_test:
   filepath: s3://demand-forecasting/04_features/y_test.parquet
   credentials: dev_s3
 
+# Model Input Table - Full dataset with features AND target for training
+# This is saved by t_feature_engineering and loaded by t_train_optimized_model
 model_input_table:
   type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/04_features/X_test.parquet
+  filepath: s3://demand-forecasting/04_features/model_input_table.parquet
   credentials: dev_s3
 
 # Model Training Outputs
@@ -90,6 +92,13 @@ model_comparison:
 final_model:
   type: kedro_datasets.pickle.PickleDataset
   filepath: s3://demand-forecasting/08_model_output/final_model.pkl
+  credentials: dev_s3
+
+# Regressor Model (latest) - For model serving backward compatibility
+# This is the "latest" model saved by the DAG training task
+regressor_model:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: s3://demand-forecasting/06_models/regressor.pickle
   credentials: dev_s3
 
 # Explainability Outputs

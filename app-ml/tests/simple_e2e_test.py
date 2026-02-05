@@ -257,7 +257,6 @@ def main() -> int:
     time.time() - start_time
     (passed_tests / total_tests) * 100
 
-
     if passed_tests >= 4:
         print_status("\n🎉 SYSTEM IS READY FOR PRODUCTION!", "success")
         return 0

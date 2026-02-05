@@ -58,18 +58,21 @@ class PredictionRequest(BaseModel):
     1. Type validation (Pydantic)
     2. Range validation (domain constraints)
     3. Anomaly detection (statistical bounds)
-    4. Injection protection (extra field validation)
+    4. Injection protection (max features limit)
+
+    Note: The feature set is flexible to accommodate different model versions.
+    The model loaded at runtime determines which features are actually used.
+    Core features (temp, humidity, wind_speed, hour, day_of_week) are always required.
+    Additional features like lag values may be optional depending on model architecture.
     """
 
     features: dict[str, float] = Field(
-        ...,
-        description="Weather and temporal features for demand prediction"
+        ..., description="Weather and temporal features for demand prediction"
     )
 
     model_config = ConfigDict(
-        # Reject extra fields (prevents injection attacks)
+        # Reject extra fields at request level
         extra="forbid",
-
         # Example for documentation (Pydantic v2 compatible)
         json_schema_extra={
             "example": {
@@ -78,40 +81,72 @@ class PredictionRequest(BaseModel):
                     "humidity": 0.65,
                     "wind_speed": 0.15,
                     "hour": 14,
-                    "day_of_week": 3
+                    "day_of_week": 3,
+                    "month": 6,
                 }
             }
-        }
+        },
     )
+
+    # Core features that are always required
+    CORE_FEATURES = {"temp", "humidity", "wind_speed", "hour", "day_of_week"}
+
+    # Optional features that may be provided depending on model requirements
+    OPTIONAL_FEATURES = {
+        "month", "quarter", "day_of_year", "year", "season",
+        "holiday", "workingday", "weather_condition",
+        "feels_like_temp", "casual", "registered",
+        # Demand lag features (matching notebook's cnt_lag naming convention)
+        # These are lags of current demand, not target (next hour)
+        "demand_lag1", "demand_lag2", "demand_lag22", "demand_lag23",
+        # Feature lag features (using renamed column names)
+        "hour_lag1", "hour_lag2", "hour_lag3",
+        "day_of_week_lag1", "day_of_week_lag2", "day_of_week_lag3",
+        "weather_condition_lag1", "weather_condition_lag2", "weather_condition_lag3",
+        "temp_lag1", "temp_lag2", "temp_lag3",
+        "humidity_lag1", "humidity_lag2", "humidity_lag3",
+        # Interaction features
+        "hour_day_interaction",
+        # Raw demand (current hour) - kept as feature per notebook
+        "demand",
+    }
+
+    # Maximum number of features to prevent injection attacks
+    MAX_FEATURES = 50
 
     @field_validator("features")
     @classmethod
     def validate_feature_structure(cls, v: dict[str, float]) -> dict[str, float]:
         """Validate feature keys and basic structure."""
-        required_features = [
-            "temp", "humidity", "wind_speed", "hour", "day_of_week"
-        ]
-
-        # Check for missing features
-        missing = set(required_features) - set(v.keys())
+        # Check for minimum required features
+        missing = cls.CORE_FEATURES - set(v.keys())
         if missing:
             raise ValueError(
-                f"Missing required features: {sorted(missing)}. "
-                f"Required: {sorted(required_features)}"
+                f"Missing required core features: {sorted(missing)}. "
+                f"Required: {sorted(cls.CORE_FEATURES)}"
             )
 
-        # Check for unexpected features (potential injection)
-        extra = set(v.keys()) - set(required_features)
+        # Check for maximum feature count (prevent injection)
+        if len(v) > cls.MAX_FEATURES:
+            raise ValueError(
+                f"Too many features provided ({len(v)}). "
+                f"Maximum allowed: {cls.MAX_FEATURES}"
+            )
+
+        # Check for unknown features (only allow known features)
+        allowed_features = cls.CORE_FEATURES | cls.OPTIONAL_FEATURES
+        extra = set(v.keys()) - allowed_features
         if extra:
             raise ValueError(
-                f"Unexpected features detected: {sorted(extra)}. "
-                f"Only these features are accepted: {sorted(required_features)}"
+                f"Unknown features detected: {sorted(extra)}. "
+                f"Allowed features: core={sorted(cls.CORE_FEATURES)}, "
+                f"optional={sorted(cls.OPTIONAL_FEATURES)}"
             )
 
         return v
 
-    @model_validator(mode='after')
-    def validate_feature_values(self) -> 'PredictionRequest':
+    @model_validator(mode="after")
+    def validate_feature_values(self) -> "PredictionRequest":
         """Validate feature value ranges and quality.
 
         Based on domain knowledge and training data statistics.
@@ -119,12 +154,28 @@ class PredictionRequest(BaseModel):
         features = self.features
 
         # Define validation rules: (min, max, description)
+        # Core features have strict validation
         validations = {
+            # Core features (always required)
             "temp": (0.0, 1.0, "Normalized temperature (0-1)"),
             "humidity": (0.0, 1.0, "Normalized humidity (0-1)"),
             "wind_speed": (0.0, 1.0, "Normalized wind speed (0-1)"),
             "hour": (0, 23, "Hour of day (0-23)"),
-            "day_of_week": (0, 6, "Day of week (0=Mon, 6=Sun)")
+            "day_of_week": (0, 6, "Day of week (0=Mon, 6=Sun)"),
+            # Optional temporal features
+            "month": (1, 12, "Month (1-12)"),
+            "quarter": (1, 4, "Quarter (1-4)"),
+            "day_of_year": (1, 366, "Day of year (1-366)"),
+            "year": (0, 1, "Normalized year (0-1)"),
+            "season": (1, 4, "Season (1-4)"),
+            # Binary features
+            "holiday": (0, 1, "Holiday flag (0 or 1)"),
+            "workingday": (0, 1, "Working day flag (0 or 1)"),
+            # Weather features
+            "weather_condition": (1, 4, "Weather condition (1-4)"),
+            "feels_like_temp": (0.0, 1.0, "Normalized feels-like temp (0-1)"),
+            # Demand features (lag features can have wider ranges)
+            "demand": (-1000, 10000, "Demand/count value"),
         }
 
         errors = []
@@ -137,16 +188,12 @@ class PredictionRequest(BaseModel):
 
             # Type validation (should be caught by Pydantic, but double-check)
             if not isinstance(value, (int, float)):
-                errors.append(
-                    f"{feature}: must be numeric, got {type(value).__name__}"
-                )
+                errors.append(f"{feature}: must be numeric, got {type(value).__name__}")
                 continue
 
             # NaN/Inf check
             if math.isnan(value) or math.isinf(value):
-                errors.append(
-                    f"{feature}: contains invalid value (NaN or Inf)"
-                )
+                errors.append(f"{feature}: contains invalid value (NaN or Inf)")
                 continue
 
             # Range validation
@@ -169,10 +216,7 @@ class PredictionResponse(BaseModel):
 
     prediction: float = Field(..., description="Predicted demand value")
     confidence: float | None = Field(
-        None,
-        description="Model confidence score (0-1)",
-        ge=0.0,
-        le=1.0
+        None, description="Model confidence score (0-1)", ge=0.0, le=1.0
     )
     model_version: str = Field(..., description="Model version used")
     timestamp: str = Field(..., description="Prediction timestamp (ISO 8601)")
@@ -185,7 +229,7 @@ class PredictionResponse(BaseModel):
                 "confidence": 0.87,
                 "model_version": "v2.1.0",
                 "timestamp": "2026-01-31T12:00:00Z",
-                "model_id": "production"
+                "model_id": "production",
             }
         }
     )
@@ -271,17 +315,15 @@ def get_allowed_origins() -> list[str]:
         "production": [
             # Production domains - MUST be configured in environment
             "https://yourdomain.com",
-            "https://api.yourdomain.com"
+            "https://api.yourdomain.com",
         ],
-        "staging": [
-            "https://staging.yourdomain.com"
-        ],
+        "staging": ["https://staging.yourdomain.com"],
         "development": [
             "http://localhost:3000",
             "http://localhost:8000",
             "http://localhost:8080",
-            "http://localhost:8501"  # Streamlit
-        ]
+            "http://localhost:8501",  # Streamlit
+        ],
     }
 
     return origins_map.get(env, origins_map["development"])
@@ -296,7 +338,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Implements defense-in-depth security headers for production deployment.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """Process HTTP request and add security headers.
 
         Args:
@@ -321,8 +365,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Enforce HTTPS in production (HSTS)
         env = os.getenv("ENVIRONMENT", "development")
         if env == "production":
-            response.headers["Strict-Transport-Security"] = \
+            response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains; preload"
+            )
 
         # Content Security Policy - primary XSS defense
         csp_directives = [
@@ -334,7 +379,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "connect-src 'self'",
             "frame-ancestors 'none'",  # Prevent clickjacking
             "base-uri 'self'",
-            "form-action 'self'"
+            "form-action 'self'",
         ]
 
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
@@ -356,7 +401,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "autoplay=()",
             "encrypted-media=()",
             "fullscreen=()",
-            "picture-in-picture=()"
+            "picture-in-picture=()",
         ]
 
         response.headers["Permissions-Policy"] = ", ".join(permissions_directives)
@@ -386,16 +431,15 @@ env = os.getenv("ENVIRONMENT", "development")
 
 # Add 0.0.0.0 only in development for local access (development environment only)
 if env == "development":
-    allowed_hosts.append("0.0.0.0")  # Development: allows local access only  # noqa: S104
+    allowed_hosts.append(
+        "0.0.0.0"
+    )  # Development: allows local access only  # noqa: S104
 if env == "production":
     # Production hosts must be explicitly configured
     production_hosts = os.getenv("ALLOWED_HOSTS", "yourdomain.com,*.yourdomain.com")
     allowed_hosts.extend([host.strip() for host in production_hosts.split(",")])
 
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=allowed_hosts
-)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 # CORS middleware with minimal privileges and environment-based configuration
 app.add_middleware(
@@ -408,12 +452,12 @@ app.add_middleware(
         "X-API-Key",  # Custom API key header
         "Accept",
         "Accept-Language",
-        "Accept-Encoding"
+        "Accept-Encoding",
     ],
     expose_headers=[
         "X-Request-ID",  # For request tracking
         "X-Rate-Limit-Remaining",  # Rate limit information
-        "Retry-After"  # Rate limit retry information
+        "Retry-After",  # Rate limit retry information
     ],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
@@ -428,6 +472,7 @@ class APIKeyManager:
     - FastAPI Security Guide: https://fastapi.tiangolo.com/tutorial/security/
     - NIST SP 800-63B: Digital Authentication Guidelines
     """  # noqa: D205
+
     def __init__(self) -> None:
         """Initialize API key manager."""
         # Load hashed keys from environment
@@ -443,7 +488,9 @@ class APIKeyManager:
         keys = [k.strip() for k in keys_str.split(",") if k.strip()]
 
         if not keys:
-            logger.warning("No VALID_API_KEYS configured. API authentication will fail.")
+            logger.warning(
+                "No VALID_API_KEYS configured. API authentication will fail."
+            )
             return {}
 
         hashed_keys = {}
@@ -452,7 +499,7 @@ class APIKeyManager:
             key_hash = hashlib.sha256(key.encode()).hexdigest()
             hashed_keys[key_hash] = {
                 "hash": key_hash,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.utcnow().isoformat(),
             }
 
         logger.info(f"Loaded {len(hashed_keys)} API key hashes")
@@ -487,8 +534,7 @@ api_key_manager = APIKeyManager()
 
 
 async def verify_api_key_secure(
-    request: Request,
-    x_api_key: str | None = Header(None)
+    request: Request, x_api_key: str | None = Header(None)
 ) -> str:
     """Secure API key verification with rate limiting and constant-time comparison.
 
@@ -530,8 +576,7 @@ async def verify_api_key_secure(
     if not x_api_key:
         logger.warning(f"Missing API key from {client_ip}")
         raise HTTPException(
-            status_code=401,
-            detail="Missing API key. Include X-API-Key header."
+            status_code=401, detail="Missing API key. Include X-API-Key header."
         )
 
     # Rate limiting - prevent brute force attacks
@@ -542,7 +587,7 @@ async def verify_api_key_secure(
         raise HTTPException(
             status_code=429,
             detail="Too many authentication attempts. Try again later.",
-            headers={"Retry-After": "3600"}
+            headers={"Retry-After": "3600"},
         )
 
     # Verify key using constant-time comparison
@@ -555,13 +600,9 @@ async def verify_api_key_secure(
         # Log WITHOUT including any part of the invalid key
         # This prevents sensitive data leakage
         logger.warning(
-            f"Invalid API key attempt from {client_ip}. "
-            f"Attempt {attempts + 1}/10"
+            f"Invalid API key attempt from {client_ip}. Attempt {attempts + 1}/10"
         )
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid API key"
-        )
+        raise HTTPException(status_code=403, detail="Invalid API key")
 
     # Reset rate limit on successful authentication
     if client_ip in rate_limit_cache:
@@ -580,7 +621,9 @@ async def verify_api_key(x_api_key: str = Header(None)) -> str:
     SECURITY WARNING: This function is vulnerable to timing attacks.
     Use verify_api_key_secure instead.
     """
-    logger.warning("Using deprecated verify_api_key function - vulnerable to timing attacks")
+    logger.warning(
+        "Using deprecated verify_api_key function - vulnerable to timing attacks"
+    )
 
     # Load valid API keys from environment variable (comma-separated)
     valid_api_keys = os.environ.get("VALID_API_KEYS", "").split(",")
@@ -610,7 +653,9 @@ async def health_check() -> HealthResponse:
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_key_secure)) -> PredictionResponse:
+async def predict(
+    request: PredictionRequest, api_key: str = Depends(verify_api_key_secure)
+) -> PredictionResponse:
     """Main prediction endpoint with metrics tracking."""
     start_time = time.time()
     model_id = "production"
@@ -671,7 +716,9 @@ async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_
         prediction_requests_total.labels(model_id=model_id, status="error").inc()
         prediction_duration.observe(time.time() - start_time)
         logger.error(f"Prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {e!s}") from None
+        raise HTTPException(
+            status_code=500, detail=f"Prediction failed: {e!s}"
+        ) from None
 
 
 @app.get("/model/info", response_model=ModelInfo)
@@ -702,7 +749,9 @@ async def model_info() -> ModelInfo:
 
 
 @app.post("/model/accuracy")
-async def update_model_accuracy(accuracy: float, model_id: str = "production") -> dict[str, str]:
+async def update_model_accuracy(
+    accuracy: float, model_id: str = "production"
+) -> dict[str, str]:
     """Update model accuracy metric."""
     if not 0.0 <= accuracy <= 1.0:
         raise HTTPException(
@@ -735,5 +784,5 @@ if __name__ == "__main__":
         host=os.getenv("HOST", "127.0.0.1"),
         port=int(os.getenv("PORT", "8000")),
         reload=env == "development",
-        log_level="info"
+        log_level="info",
     )

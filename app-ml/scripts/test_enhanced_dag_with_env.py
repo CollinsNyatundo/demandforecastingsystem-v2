@@ -116,14 +116,12 @@ def main():
         result = test_func()
         results.append((test_name, result))
 
-
     passed = 0
     total = len(results)
 
     for test_name, result in results:
         if result:
             passed += 1
-
 
     if passed == total:
         pass

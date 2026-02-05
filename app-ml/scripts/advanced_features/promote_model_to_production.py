@@ -215,7 +215,6 @@ class ModelPromoter:
                 archive_existing_versions=archive_existing,
             )
 
-
             if archive_existing:
                 pass
 
@@ -281,7 +280,6 @@ class ModelPromoter:
 
         else:
             pass
-
 
 
 def main():

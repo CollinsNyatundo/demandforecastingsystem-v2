@@ -35,7 +35,12 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def objective_multi(  # noqa: PLR0913
-    trial: Trial, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, objectives: list[str] | None = None
+    trial: Trial,
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+    objectives: list[str] | None = None,
 ) -> tuple[float, ...]:
     """Multi-objective optimization function.
 
@@ -200,7 +205,12 @@ class MultiObjectiveOptimizer:
             # Define objective function with data
             def objective(trial: object) -> tuple[float, ...]:
                 return objective_multi(
-                    cast(Trial, trial), X_train, X_test, y_train, y_test, self.objectives
+                    cast(Trial, trial),
+                    X_train,
+                    X_test,
+                    y_train,
+                    y_test,
+                    self.objectives,
                 )
 
             # Run optimization
@@ -262,7 +272,11 @@ class MultiObjectiveOptimizer:
             best_trials_per_objective[obj_name] = {
                 "trial_number": self.best_trials[best_idx].number,
                 "params": self.best_trials[best_idx].params,
-                "values": dict(zip(self.objectives, self.best_trials[best_idx].values, strict=False)),  # type: ignore[attr-defined]
+                "values": dict(
+                    zip(
+                        self.objectives, self.best_trials[best_idx].values, strict=False
+                    )
+                ),  # type: ignore[attr-defined]
             }
 
         return {
@@ -278,7 +292,9 @@ class MultiObjectiveOptimizer:
                 for trial in self.best_trials
             ],
             "total_trials": len(self.study.trials) if self.study is not None else 0,
-            "study_name": self.study.study_name if self.study is not None else "unknown",
+            "study_name": (
+                self.study.study_name if self.study is not None else "unknown"
+            ),
         }
 
     def get_pareto_analysis(self) -> dict[str, Any]:
@@ -304,7 +320,9 @@ class MultiObjectiveOptimizer:
 
         return {
             "pareto_size": len(self.best_trials),
-            "reference_point": dict(zip(self.objectives, reference_point, strict=False)),
+            "reference_point": dict(
+                zip(self.objectives, reference_point, strict=False)
+            ),
             "diversity_metrics": diversity_metrics,
             "convergence_metrics": self._calculate_convergence_metrics(
                 objective_values
@@ -327,9 +345,9 @@ class MultiObjectiveOptimizer:
             }
         except ImportError:
             # Fallback if scipy not available
-            return {"error": float('inf')}  # Return float instead of string
+            return {"error": float("inf")}  # Return float instead of string
         except Exception:
-            return {"error": float('inf')}  # Return float instead of string
+            return {"error": float("inf")}  # Return float instead of string
 
     def _calculate_convergence_metrics(
         self, objective_values: np.ndarray
@@ -346,7 +364,7 @@ class MultiObjectiveOptimizer:
                 "std_distance_to_ideal": np.std(distances_to_ideal),
             }
         except Exception:
-            return {"error": float('inf')}  # Return float instead of string
+            return {"error": float("inf")}  # Return float instead of string
 
     def recommend_solution(
         self, preference_weights: dict[str, float] | None = None
@@ -407,12 +425,20 @@ class MultiObjectiveOptimizer:
                 best_trial = trial
 
         return {
-            "recommended_trial": {
-                "trial_number": best_trial.number if best_trial is not None else -1,
-                "params": best_trial.params if best_trial is not None else {},
-                "values": dict(zip(self.objectives, best_trial.values, strict=False)) if best_trial is not None else {},  # type: ignore[attr-defined]
-                "weighted_score": best_score,
-            } if best_trial is not None else None,
+            "recommended_trial": (
+                {
+                    "trial_number": best_trial.number if best_trial is not None else -1,
+                    "params": best_trial.params if best_trial is not None else {},
+                    "values": (
+                        dict(zip(self.objectives, best_trial.values, strict=False))
+                        if best_trial is not None
+                        else {}
+                    ),  # type: ignore[attr-defined]
+                    "weighted_score": best_score,
+                }
+                if best_trial is not None
+                else None
+            ),
             "preference_weights": normalized_weights,
             "selection_criteria": "weighted_sum",
         }

@@ -12,7 +12,6 @@ mlflow.set_experiment("model_registry_test")
 
 # Start run and register model
 with mlflow.start_run(run_name="registry_test_run") as run:
-
     # Simple model
     X = np.random.rand(20, 2)
     y = np.random.rand(20)
@@ -36,7 +35,6 @@ try:
     models = client.search_registered_models()
 
     for model in models:
-
         for _version in model.latest_versions:
             pass
 

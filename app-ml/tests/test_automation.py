@@ -239,37 +239,43 @@ class TestTriggerDetails:
         self, retraining_scheduler: RetrainingScheduler
     ):
         """Test trigger details when all triggers are inactive."""
-        with patch.object(
-            retraining_scheduler, "_check_time_trigger", return_value=False
-        ), patch.object(
-            retraining_scheduler, "_check_performance_trigger", return_value=False
-        ), patch.object(
-            retraining_scheduler, "_check_data_trigger", return_value=False
-        ), patch.object(
-            retraining_scheduler, "_check_drift_trigger", return_value=False
+        with (
+            patch.object(
+                retraining_scheduler, "_check_time_trigger", return_value=False
+            ),
+            patch.object(
+                retraining_scheduler, "_check_performance_trigger", return_value=False
+            ),
+            patch.object(
+                retraining_scheduler, "_check_data_trigger", return_value=False
+            ),
+            patch.object(
+                retraining_scheduler, "_check_drift_trigger", return_value=False
+            ),
         ):
             details = retraining_scheduler._get_trigger_details()
 
-            assert all(
-                detail["active"] is False for detail in details.values()
-            )
+            assert all(detail["active"] is False for detail in details.values())
             assert "time_since_last_training" in details["TIME_INTERVAL"]
-            assert (
-                "current_performance" in details["PERFORMANCE_DEGRADATION"]
-            )
+            assert "current_performance" in details["PERFORMANCE_DEGRADATION"]
 
     def test_get_trigger_details_mixed_active(
         self, retraining_scheduler: RetrainingScheduler
     ):
         """Test trigger details with mixed active/inactive triggers."""
-        with patch.object(
-            retraining_scheduler, "_check_time_trigger", return_value=True
-        ), patch.object(
-            retraining_scheduler, "_check_performance_trigger", return_value=False
-        ), patch.object(
-            retraining_scheduler, "_check_data_trigger", return_value=True
-        ), patch.object(
-            retraining_scheduler, "_check_drift_trigger", return_value=False
+        with (
+            patch.object(
+                retraining_scheduler, "_check_time_trigger", return_value=True
+            ),
+            patch.object(
+                retraining_scheduler, "_check_performance_trigger", return_value=False
+            ),
+            patch.object(
+                retraining_scheduler, "_check_data_trigger", return_value=True
+            ),
+            patch.object(
+                retraining_scheduler, "_check_drift_trigger", return_value=False
+            ),
         ):
             details = retraining_scheduler._get_trigger_details()
 

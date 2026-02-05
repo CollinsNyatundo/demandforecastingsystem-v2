@@ -116,7 +116,10 @@ class DriftDetector:
         curr_values = current_data[column].dropna()
 
         # Check if we have enough data
-        if len(ref_values) < MIN_SAMPLES_FOR_TEST or len(curr_values) < MIN_SAMPLES_FOR_TEST:
+        if (
+            len(ref_values) < MIN_SAMPLES_FOR_TEST
+            or len(curr_values) < MIN_SAMPLES_FOR_TEST
+        ):
             return {
                 "drift_score": 0.0,
                 "p_value": 1.0,
@@ -349,7 +352,9 @@ class PopulationStabilityIndex:
             else:
                 # For categorical data, use unique values as bins
                 all_categories = set(expected.unique()) | set(actual.unique())
-                expected_binned = pd.Categorical(expected, categories=list(all_categories))
+                expected_binned = pd.Categorical(
+                    expected, categories=list(all_categories)
+                )
                 actual_binned = pd.Categorical(actual, categories=list(all_categories))
 
             # Calculate percentages

@@ -56,7 +56,6 @@ def test_mlflow_simple() -> bool | None:
             # Log model
             mlflow.sklearn.log_model(model, "model")
 
-
             return True
 
     except Exception:
@@ -83,7 +82,6 @@ def test_model_registry() -> bool | None:
                 model, "model", registered_model_name="test_demand_model"
             )
 
-
         # Check registry again
         models = mlflow.search_registered_models()
 
@@ -97,13 +95,11 @@ def test_model_registry() -> bool | None:
 
 
 def main() -> int:
-
     # Test basic functionality
     result1 = test_mlflow_simple()
 
     # Test registry
     result2 = test_model_registry()
-
 
     if result1 and result2:
         return 0

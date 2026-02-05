@@ -136,7 +136,16 @@ def _check_prefix_freshness(
 
 
 # Get alert emails from environment variable
-ALERT_EMAILS = os.getenv("AIRFLOW_ALERT_EMAIL", "cnyagakan@gmail.com").split(",")
+# IMPORTANT: Set AIRFLOW_ALERT_EMAIL in production - no hardcoded fallback
+_alert_email = os.getenv("AIRFLOW_ALERT_EMAIL", "")
+if not _alert_email:
+    logging.warning(
+        "AIRFLOW_ALERT_EMAIL not set. Email alerts will be disabled. "
+        "Set this environment variable to enable email notifications."
+    )
+    ALERT_EMAILS = []
+else:
+    ALERT_EMAILS = [e.strip() for e in _alert_email.split(",") if e.strip()]
 
 default_args = {
     "owner": "data-ops",
@@ -174,8 +183,8 @@ default_args = {
     4. Search space (max age: 24h)
     5. Trained model (critical, max age: 48h)
 
-    **Contact:** cnyagakan@gmail.com
-    **Alerts:** Email on stale critical datasets
+    **Contact:** Set AIRFLOW_ALERT_EMAIL environment variable for alerts
+    **Alerts:** Email on stale critical datasets (requires AIRFLOW_ALERT_EMAIL)
     """,
 )
 def dataset_monitoring_dag():
@@ -467,15 +476,21 @@ def dataset_monitoring_dag():
 
         email_content = "\n".join(email_lines)
 
-        try:
-            send_email(
-                to=["cnyagakan@gmail.com"],
-                subject=f"[AIRFLOW] Daily Dataset Health Report - {datetime.utcnow().strftime('%Y-%m-%d')}",
-                html_content=email_content,
+        # Only send email if ALERT_EMAILS is configured
+        if ALERT_EMAILS:
+            try:
+                send_email(
+                    to=ALERT_EMAILS,
+                    subject=f"[AIRFLOW] Daily Dataset Health Report - {datetime.utcnow().strftime('%Y-%m-%d')}",
+                    html_content=email_content,
+                )
+                logger.info(f"Daily summary email sent to {ALERT_EMAILS}")
+            except Exception as e:
+                logger.error(f"Failed to send daily summary: {e!s}")
+        else:
+            logger.warning(
+                "Skipping daily report email - AIRFLOW_ALERT_EMAIL not configured"
             )
-            logger.info("Daily summary email sent")
-        except Exception as e:
-            logger.error(f"Failed to send daily summary: {e!s}")
 
         return "Daily report sent"
 

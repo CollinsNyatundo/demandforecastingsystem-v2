@@ -79,7 +79,6 @@ class OptimizationMonitor:
                 study_name=self.study_name, storage=self.storage
             )
 
-
             return True
 
         except Exception:
@@ -226,7 +225,6 @@ class OptimizationMonitor:
             max_duration: Maximum monitoring duration in seconds (None for infinite)
         """
         start_time = time.time()
-
 
         try:
             iteration = 0

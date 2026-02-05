@@ -119,7 +119,6 @@ def test_minio_connectivity() -> str | None:
 
 
 def main() -> int:
-
     all_results = {}
 
     # Test service health
@@ -146,7 +145,6 @@ def main() -> int:
         else:
             print_status(f"{service}: {status}", "error")
             failed += 1
-
 
     if failed == 0:
         print_status("\nAll tests passed! System is fully operational.", "success")

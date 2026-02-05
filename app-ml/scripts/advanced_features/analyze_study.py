@@ -91,7 +91,6 @@ class StudyAnalyzer:
                 study_name=self.study_name, storage=self.storage
             )
 
-
             return True
 
         except Exception:
@@ -166,7 +165,6 @@ class StudyAnalyzer:
         """Print study summary."""
         stats = self.get_statistics()
 
-
         if stats["best_value"] is not None:
             for _key, value in stats["best_params"].items():
                 if isinstance(value, float):
@@ -179,7 +177,6 @@ class StudyAnalyzer:
 
         if "mean_duration" in stats:
             pass
-
 
     def create_visualizations(self, output_dir: str = "."):
         """Create study visualizations.
@@ -211,7 +208,6 @@ class StudyAnalyzer:
 
         # 4. Trial Duration Analysis
         self._create_duration_analysis(completed_trials, output_path)
-
 
     def _create_optimization_history(self, trials: list, output_path: Path):
         """Create optimization history plot."""
@@ -384,7 +380,6 @@ class StudyAnalyzer:
         df = pd.DataFrame(data)
         df.to_csv(output_file, index=False)
 
-
     def cleanup_failed_trials(self, dry_run: bool = False) -> int:
         """Clean up failed trials.
 
@@ -400,7 +395,6 @@ class StudyAnalyzer:
 
         if not failed:
             return 0
-
 
         if dry_run:
             for _t in failed[:5]:  # Show first 5
@@ -422,10 +416,8 @@ class StudyAnalyzer:
         """
         summaries = self.storage.get_all_study_summaries()
 
-
         for _summary in summaries:
             pass
-
 
         return [s.study_name for s in summaries]
 
@@ -489,7 +481,6 @@ def compare_studies(study_names: list[str], storage_url: str, output_dir: str = 
     output_path.mkdir(parents=True, exist_ok=True)
     output_file = output_path / "study_comparison.html"
     fig.write_html(str(output_file))
-
 
 
 def main():
