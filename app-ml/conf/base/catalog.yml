@@ -1,130 +1,72 @@
-### D:\Projects\MLOPs\ml-systems\ml-systems\System 1 - demand_forecasting\app-ml\conf\base\catalog.yml
-# Demand Forecasting Catalog Configuration
-# S3 bucket paths for all data artifacts
+# -----------------------------------------------------------------------------
+# Data Catalog - Demand Forecasting
+# -----------------------------------------------------------------------------
+# Raw and intermediate paths are relative to project path (e.g. /opt/airflow in Docker).
+# For S3/MinIO override in conf/local/catalog.yml using credentials.
+# -----------------------------------------------------------------------------
 
-# Raw Data (Local File)
+# Raw input: bike sharing dataset (parquet). Place file at data/01_raw/ or use S3.
 raw_bike_data:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/01_raw/raw_data_full.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/01_raw/raw_bike_data.parquet
+  layer: raw
 
-# Intermediate Data (Local for dev)
+# Preprocessed output from data processing pipeline (saved by DAG)
 preprocessed_bike_data:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/02_intermediate/preprocessed_data.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/preprocessed_bike_data.parquet
+  layer: intermediate
 
-# Feature Engineering
+# Feature engineering outputs (optional; used by Kedro pipeline when run standalone)
 temporal_features:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/03_primary/temporal_features.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/temporal_features.parquet
+  layer: intermediate
 
 engineered_features:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/03_primary/engineered_features.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/engineered_features.parquet
+  layer: intermediate
 
 validated_features:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/03_primary/validated_features.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/validated_features.parquet
+  layer: intermediate
 
-# Model Training Data Splits
+# Model input table (saved by DAG t_feature_eng, loaded by t_train_optimized_model)
+model_input_table:
+  type: pandas.ParquetDataset
+  filepath: data/03_primary/model_input_table.parquet
+  layer: primary
+
+# Train/test splits (when using feature_engineering pipeline standalone)
 X_train:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/04_features/X_train.parquet
-  credentials: dev_s3
-
-y_train:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/04_features/y_train.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/03_primary/X_train.parquet
+  layer: primary
 
 X_test:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/04_features/X_test.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/03_primary/X_test.parquet
+  layer: primary
+
+y_train:
+  type: pandas.ParquetDataset
+  filepath: data/03_primary/y_train.parquet
+  layer: primary
 
 y_test:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/04_features/y_test.parquet
-  credentials: dev_s3
+  type: pandas.ParquetDataset
+  filepath: data/03_primary/y_test.parquet
+  layer: primary
 
-# Model Input Table - Full dataset with features AND target for training
-# This is saved by t_feature_engineering and loaded by t_train_optimized_model
-model_input_table:
-  type: kedro_datasets.pandas.ParquetDataset
-  filepath: s3://demand-forecasting/04_features/model_input_table.parquet
-  credentials: dev_s3
-
-# Model Training Outputs
-random_forest_model:
-  type: kedro_datasets.pickle.PickleDataset
-  filepath: s3://demand-forecasting/08_model_output/random_forest_model.pkl
-  credentials: dev_s3
-
-rf_metrics:
-  type: kedro_datasets.pandas.CSVDataset
-  filepath: s3://demand-forecasting/08_model_output/rf_metrics.csv
-  credentials: dev_s3
-
+# Models and artifacts (optional catalog entries; MLflow is primary for models)
 catboost_model:
-  type: kedro_datasets.pickle.PickleDataset
-  filepath: s3://demand-forecasting/08_model_output/catboost_model.pkl
-  credentials: dev_s3
-
-catboost_metrics:
-  type: kedro_datasets.pandas.CSVDataset
-  filepath: s3://demand-forecasting/08_model_output/catboost_metrics.csv
-  credentials: dev_s3
-
-optimized_params:
-  type: kedro_datasets.pickle.PickleDataset
-  filepath: s3://demand-forecasting/08_model_output/optimized_params.pkl
-  credentials: dev_s3
-
-model_comparison:
-  type: kedro_datasets.json.JSONDataset
-  filepath: s3://demand-forecasting/08_model_output/model_comparison.json
-  credentials: dev_s3
+  type: pickle.PickleDataset
+  filepath: data/06_models/catboost_model.pkl
+  layer: models
 
 final_model:
-  type: kedro_datasets.pickle.PickleDataset
-  filepath: s3://demand-forecasting/08_model_output/final_model.pkl
-  credentials: dev_s3
-
-# Regressor Model (latest) - For model serving backward compatibility
-# This is the "latest" model saved by the DAG training task
-regressor_model:
-  type: kedro_datasets.pickle.PickleDataset
-  filepath: s3://demand-forecasting/06_models/regressor.pickle
-  credentials: dev_s3
-
-# Explainability Outputs
-shap_explanations:
-  type: kedro_datasets.pickle.PickleDataset
-  filepath: s3://demand-forecasting/08_model_output/shap_explanations.pkl
-  credentials: dev_s3
-
-feature_importance:
-  type: kedro_datasets.pandas.CSVDataset
-  filepath: s3://demand-forecasting/08_model_output/feature_importance.csv
-  credentials: dev_s3
-
-artifact_paths:
-  type: kedro_datasets.pickle.PickleDataset
-  filepath: s3://demand-forecasting/08_model_output/artifact_paths.pkl
-  credentials: dev_s3
-
-data_docs_report:
-  type: kedro_datasets.text.TextDataset
-  filepath: s3://demand-forecasting/09_reports/data_docs_report.html
-  credentials: dev_s3
-
-# Catalog Validation Notes
-# All entries should have:
-# - type: (required) - Dataset type from kedro_datasets
-# - filepath: (required) - S3 or local path
-# - credentials: (optional) - S3 credentials reference
-# Validation Status: ✓ All entries have required type and filepath
+  type: pickle.PickleDataset
+  filepath: data/06_models/final_model.pkl
+  layer: models

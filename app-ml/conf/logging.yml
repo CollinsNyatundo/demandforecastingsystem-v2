@@ -1,12 +1,13 @@
-# To enable this custom logging configuration, set KEDRO_LOGGING_CONFIG to the path of this file.
-# More information available at https://docs.kedro.org/en/stable/logging/logging.html
 version: 1
-
-disable_existing_loggers: False
+disable_existing_loggers: false
 
 formatters:
   simple:
     format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+  detailed:
+    format: "%(asctime)s | %(name)s | %(levelname)s | %(filename)s:%(lineno)d | %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
 
 handlers:
   console:
@@ -14,54 +15,52 @@ handlers:
     level: INFO
     formatter: simple
     stream: ext://sys.stdout
-
-  info_file_handler:
+  
+  file_handler:
     class: logging.handlers.RotatingFileHandler
-    level: INFO
-    formatter: simple
-    filename: info.log
-    maxBytes: 10485760 # 10MB
-    backupCount: 20
+    level: DEBUG
+    formatter: detailed
+    filename: logs/info.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
     encoding: utf8
-    delay: True
-
-  rich:
-    class: kedro.logging.RichHandler
-    rich_tracebacks: True
-    # Advance options for customisation.
-    # See https://docs.kedro.org/en/stable/logging/logging.html#project-side-logging-configuration
-    # tracebacks_show_locals: False
-
-loggers:
-  # Suppress verbose Kedro logging
-  kedro:
-    level: ERROR
-    propagate: false
-    
-  kedro.io.docs_decorators:
-    level: ERROR
-    propagate: false
-    
-  # Suppress Great Expectations verbose logging
-  great_expectations:
-    level: ERROR
-    propagate: false
-    
-  great_expectations._docs_decorators:
-    level: ERROR
-    propagate: false
-    
-  great_expectations.datasource.fluent.sources:
-    level: ERROR
-    propagate: false
-    
-  great_expectations.core.metric_registry:
-    level: ERROR
-    propagate: false
-
-  demand_forecasting:
-    level: INFO
 
 root:
   level: INFO
-  handlers: [rich, info_file_handler]
+  handlers: [console]
+
+loggers:
+  kedro:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  
+  kedro.io:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  
+  demand_forecasting:
+    level: INFO
+    handlers: [console]
+    propagate: false
+  
+  # Suppress verbose loggers
+  urllib3:
+    level: WARNING
+  botocore:
+    level: WARNING
+  s3fs:
+    level: WARNING
+  aiobotocore:
+    level: WARNING
+  great_expectations:
+    level: ERROR
+  pandera:
+    level: WARNING
+  mlflow:
+    level: INFO
+  catboost:
+    level: WARNING
+  optuna:
+    level: WARNING

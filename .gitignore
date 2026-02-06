@@ -49,5 +49,5 @@ safety-report.json            # Vulnerability reports (auto-generated)
 
 # Keep important files tracked!
 # models/experiments/ - Trained models (IMPORTANT)
-# data/raw_data/ - Raw datasets (IMPORTANT)  
+# data/raw_data/ - Raw datasets (IMPORTANT)
 # data/prod_data/ - Production data (IMPORTANT)

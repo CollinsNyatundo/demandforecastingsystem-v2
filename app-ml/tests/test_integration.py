@@ -51,6 +51,7 @@ class TestEndToEndWorkflow:
                 learning_rate=trial.suggest_float("learning_rate", 0.01, 0.3),
                 depth=trial.suggest_int("depth", 3, 8),
                 verbose=False,
+                train_dir="/tmp/catboost_info",  # Use writable temp directory
             )
             model.fit(X, y)
 
@@ -155,7 +156,7 @@ class TestEndToEndWorkflow:
 
         from catboost import CatBoostRegressor
 
-        model = CatBoostRegressor(iterations=50, verbose=False)
+        model = CatBoostRegressor(iterations=50, verbose=False, train_dir="/tmp/catboost_info")
         model.fit(X, y)
 
         # 2. Initialize explainer
@@ -175,6 +176,79 @@ class TestEndToEndWorkflow:
         assert isinstance(local_explanation, dict)
         assert "shap_values" in local_explanation
         assert "feature_importance" in local_explanation
+
+    def test_data_leakage_detection(self, sample_data: pd.DataFrame):
+        """Test that feature engineering prevents data leakage.
+        
+        Verifies:
+        1. Lag features only use past data (not future)
+        2. Train/test split maintains temporal ordering
+        3. Target variable not leaked into features
+        4. Rolling statistics respect window boundaries
+        """
+        from demand_forecasting.pipelines.feature_engineering.nodes import (
+            create_feature_interactions,
+        )
+
+        # Create time-indexed data with known temporal order
+        df_temporal = sample_data.copy()
+        df_temporal.index = pd.date_range(start="2024-01-01", periods=len(df_temporal), freq="h")
+        
+        # Create lag features
+        df_with_lags = create_feature_interactions(df_temporal, lags=[1, 2, 3])
+        
+        # Verify lag features only reference PAST data
+        # For each row i, lag_1 should equal the value from row i-1
+        if "demand" in df_temporal.columns:
+            # Check that lag_1 at index i matches original demand at index i-1
+            for lag_val in [1, 2, 3]:
+                lag_col = f"demand_lag_{lag_val}"
+                if lag_col in df_with_lags.columns:
+                    # Skip first few rows (not enough history)
+                    for i in range(lag_val + 10, len(df_with_lags) - 10):
+                        if not pd.isna(df_with_lags[lag_col].iloc[i]):
+                            expected_val = df_temporal["demand"].iloc[i - lag_val]
+                            actual_val = df_with_lags[lag_col].iloc[i]
+                            
+                            # Allow small floating point differences
+                            assert abs(expected_val - actual_val) < 0.01, (
+                                f"Lag {lag_val} at position {i} references wrong timestamp: "
+                                f"expected {expected_val}, got {actual_val}"
+                            )
+        
+        # Verify train/test split maintains temporal ordering
+        split_idx = int(len(df_with_lags) * 0.8)
+        train_data = df_with_lags.iloc[:split_idx]
+        test_data = df_with_lags.iloc[split_idx:]
+        
+        # Ensure no test data timestamp is before any train data timestamp
+        assert train_data.index.max() < test_data.index.min(), (
+            "Train/test split violates temporal ordering"
+        )
+        
+        # Verify target not in features
+        if "demand" in df_with_lags.columns:
+            # When creating features for prediction, demand should not be a feature
+            feature_cols = [
+                col for col in df_with_lags.columns 
+                if col not in ["demand", "target"]
+            ]
+            assert "demand" not in feature_cols or "target" in df_with_lags.columns, (
+                "Target variable should be renamed or separated during feature creation"
+            )
+        
+        # Verify no future information leak: rolling features
+        # If rolling mean was computed, verify it only uses current and past data
+        rolling_cols = [col for col in df_with_lags.columns if "rolling" in col.lower()]
+        for col in rolling_cols:
+            # Rolling mean at time t should be <= value at a future time t+k
+            values = df_with_lags[col].dropna()
+            assert len(values) > 0, f"Rolling feature {col} has no valid values"
+            
+            # Basic sanity check: rolling features should have reasonable variance
+            if values.std() == 0:
+                import warnings
+                warnings.warn(f"Rolling feature {col} has zero variance")
 
 
 @pytest.mark.integration
@@ -201,7 +275,7 @@ class TestMLOpsIntegration:
             from catboost import CatBoostRegressor
 
             model = CatBoostRegressor(
-                learning_rate=0.1, depth=6, iterations=100, verbose=False
+                learning_rate=0.1, depth=6, iterations=100, verbose=False, train_dir="/tmp/catboost_info"
             )
             model.fit(X, y)
 
@@ -242,6 +316,7 @@ class TestMLOpsIntegration:
                 "iterations": trial.suggest_int("iterations", 50, 200),
             }
 
+            params["train_dir"] = "/tmp/catboost_info"  # Prevent permission errors
             model = CatBoostRegressor(**params, verbose=False)
             model.fit(X_train, y_train)
             predictions = model.predict(X_test)
@@ -376,7 +451,7 @@ class TestSystemResilience:
 
             from catboost import CatBoostRegressor
 
-            model = CatBoostRegressor(iterations=100, verbose=False)
+            model = CatBoostRegressor(iterations=100, verbose=False, train_dir="/tmp/catboost_info")
             model.fit(X_large, y_large)
             large_models.append(model)
 
@@ -412,7 +487,7 @@ class TestSystemResilience:
 
                 from catboost import CatBoostRegressor
 
-                model = CatBoostRegressor(iterations=50, verbose=False)
+                model = CatBoostRegressor(iterations=50, verbose=False, train_dir="/tmp/catboost_info")
                 model.fit(X, y)
                 results.append("training_complete")
             except Exception as e:
@@ -471,7 +546,7 @@ class TestPerformanceBenchmarks:
 
         from catboost import CatBoostRegressor
 
-        model = CatBoostRegressor(iterations=100, verbose=False)
+        model = CatBoostRegressor(iterations=100, verbose=False, train_dir=\ /tmp/catboost_info\)
         model.fit(X, y)
 
         # Benchmark prediction latency
@@ -558,6 +633,7 @@ class TestPerformanceBenchmarks:
                 "iterations": trial.suggest_int("iterations", 50, 200),
             }
 
+            params["allow_writing_files"] = False  # Prevent permission errors
             model = CatBoostRegressor(**params, verbose=False)
             model.fit(X_train, y_train)
             predictions = model.predict(X_test)

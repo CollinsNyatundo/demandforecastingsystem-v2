@@ -8,17 +8,18 @@
 # SHARED INFRASTRUCTURE SERVICES
 # -----------------------------------------------------------------------------
 
-x-common-env: &common-env
+x-common-env:
   # PostgreSQL Environment - Use environment variables for security
   # SECURITY: Never use default credentials in production!
   # Set these in your .env file before deployment
+  &common-env
   POSTGRES_USER: ${POSTGRES_USER:-airflow}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
   POSTGRES_MULTIPLE_DATABASES: "airflow,mlflow,optuna"
-  
+
   # Redis Environment - Use environment variables for security
   REDIS_PASSWORD: ${REDIS_PASSWORD}
-  
+
   # MinIO Environment
   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
   MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -62,6 +63,7 @@ x-airflow-common: &airflow-common
     - ./scripts:/opt/airflow/scripts
     - ./conf/local/airflow_passwords.json:/opt/airflow/airflow_passwords.json
     - ./pyproject.toml:/opt/airflow/pyproject.toml
+    - ./tmp/catboost_info:/opt/airflow/catboost_info # Writable directory for CatBoost temp files
   extra_hosts:
     - "host.docker.internal:host-gateway"
   depends_on:
@@ -77,10 +79,14 @@ services:
   # SHARED POSTGRESQL - Single instance with multiple databases
   # -----------------------------------------------------------------------------
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.1-alpine
+    container_name: postgres_container
+    command: postgres -c max_connections=200 -c shared_buffers=256MB -c effective_cache_size=1GB
+    env_file:
+      - .env
     environment:
       <<: *common-env
-      POSTGRES_DB: airflow  # Default database for Airflow
+      POSTGRES_DB: airflow # Default database for Airflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Initialize multiple databases
@@ -88,12 +94,20 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      test: [ "CMD-SHELL", "pg_isready -U airflow" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   # -----------------------------------------------------------------------------
   # SHARED REDIS - Single instance for both MLflow caching and Airflow Celery
@@ -108,12 +122,20 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   # -----------------------------------------------------------------------------
   # SHARED MINIO - Single instance for both MLflow artifacts and Airflow logs
@@ -129,19 +151,27 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   # -----------------------------------------------------------------------------
   # MLFLOW TRACKING SERVER
   # -----------------------------------------------------------------------------
   mlflow:
     image: python:3.11-slim
-    command: ["/bin/bash", "/opt/airflow/mlflow-entrypoint.sh"]
+    command: [ "/bin/bash", "/opt/airflow/mlflow-entrypoint.sh" ]
     ports:
       - "5000:5000"
     volumes:
@@ -159,13 +189,21 @@ services:
       minio:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 5000); conn.request('GET', '/health'); exit(0) if conn.getresponse().status == 200 else exit(1)"]
+      test: [ "CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 5000); conn.request('GET', '/health'); exit(0) if conn.getresponse().status == 200 else exit(1)" ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
   # -----------------------------------------------------------------------------
   # AIRFLOW SERVICES
@@ -195,7 +233,7 @@ services:
     ports:
       - "8081:8080"
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -214,11 +252,7 @@ services:
     <<: *airflow-common
     command: scheduler
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"',
-        ]
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"' ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -234,17 +268,16 @@ services:
     networks:
       - mlops-network
 
-  # Airflow Worker (Celery)
+  # Airflow Worker (Celery) - DISABLED for LocalExecutor
+  # With LocalExecutor, tasks run in the scheduler process, no worker needed
   airflow-worker:
     <<: *airflow-common
-    command: celery worker
+    command: version # Just prints version and exits (placeholder)
+    profiles:
+      - celery # Only starts when 'celery' profile is active
     hostname: ${CELERY_WORKER_HOSTNAME:-airflow-worker}
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@${CELERY_WORKER_HOSTNAME:-airflow-worker}"',
-        ]
+      test: [ "CMD", "echo", "ok" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -263,11 +296,7 @@ services:
     <<: *airflow-common
     command: triggerer
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"',
-        ]
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"' ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -309,7 +338,7 @@ services:
   # MODEL SERVER (FastAPI)
   # -----------------------------------------------------------------------------
   model-server:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.model-server.ultra-optimized
     ports:
@@ -326,13 +355,14 @@ services:
       - ./models:/app/models
       - ./logs:/app/logs
       - ./data:/app/data
+      - ./src:/app/src # Mount source for development hot-reload
     depends_on:
       - postgres
       - redis
       - mlflow
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -354,7 +384,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.model-server.ultra-optimized
-    command: ["python", "-m", "pytest", "tests", "-v", "--tb=short", "--cov=src/demand_forecasting", "--cov-report=html", "--cov-report=term-missing", "--cov-report=json", "--junit-xml=test_results.xml"]
+    command: [ "python", "-m", "pytest", "tests", "-v", "--tb=short", "--cov=src/demand_forecasting", "--cov-report=html", "--cov-report=term-missing", "--cov-report=json", "--junit-xml=test_results.xml" ]
     volumes:
       - ./tests:/app/tests
       - ./src:/app/src
@@ -386,7 +416,7 @@ services:
       - nginx_logs:/var/log/nginx
     depends_on:
       model-server:
-        condition: service_healthy
+        condition: service_started # Changed from service_healthy to allow startup without model
     restart: unless-stopped
     networks:
       - mlops-network
@@ -412,7 +442,7 @@ services:
       - '--web.enable-lifecycle'
     depends_on:
       model-server:
-        condition: service_healthy
+        condition: service_started # Changed from service_healthy
     restart: unless-stopped
     networks:
       - mlops-network

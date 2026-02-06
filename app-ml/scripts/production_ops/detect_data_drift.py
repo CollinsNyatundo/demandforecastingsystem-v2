@@ -641,8 +641,14 @@ def load_data(path: str) -> pd.DataFrame:
             s3_endpoint = os.getenv(
                 "MINIO_ENDPOINT", "http://host.docker.internal:9000"
             )
-            s3_key = os.getenv("MINIO_ROOT_USER", "minioadmin")
-            s3_secret = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
+            s3_key = os.getenv("MINIO_ROOT_USER")
+            s3_secret = os.getenv("MINIO_ROOT_PASSWORD")
+            
+            if not s3_key or not s3_secret:
+                raise ValueError(
+                    "S3 credentials must be provided via environment variables: "
+                    "MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required"
+                )
 
             # Create S3 filesystem
             fs = s3fs.S3FileSystem(

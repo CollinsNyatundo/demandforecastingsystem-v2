@@ -63,6 +63,69 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
         logger.error(f"Missing required columns at {stage_name}: {missing_cols}")
         return False
 
+    # Validate row count - ensure dataset is not empty
+    if len(df) == 0:
+        logger.error(f"Empty dataset detected at {stage_name}")
+        return False
+    
+    if len(df) < 100:
+        logger.warning(
+            f"Dataset at {stage_name} has only {len(df)} rows. "
+            "This may not be sufficient for reliable analysis."
+        )
+
+    # Validate temperature and humidity ranges (outlier detection)
+    if "temp" in df.columns:
+        # Temperature should be normalized (0-1 range typically)
+        temp_min, temp_max = df["temp"].min(), df["temp"].max()
+        if temp_max > 1.0 or temp_min < 0.0:
+            logger.warning(
+                f"Temperature values out of expected range [0, 1] at {stage_name}: "
+                f"min={temp_min:.4f}, max={temp_max:.4f}"
+            )
+        
+        # Check for outliers using IQR method
+        Q1 = df["temp"].quantile(0.25)
+        Q3 = df["temp"].quantile(0.75)
+        IQR = Q3 - Q1
+        outliers = df[(df["temp"] < (Q1 - 1.5 * IQR)) | (df["temp"] > (Q3 + 1.5 * IQR))]
+        if len(outliers) > 0:
+            logger.warning(
+                f"Found {len(outliers)} temperature outliers at {stage_name} "
+                f"({len(outliers)/len(df)*100:.1f}% of data)"
+            )
+
+    if "hum" in df.columns:
+        # Humidity should also be normalized (0-1 range)
+        hum_min, hum_max = df["hum"].min(), df["hum"].max()
+        if hum_max > 1.0 or hum_min < 0.0:
+            logger.warning(
+                f"Humidity values out of expected range [0, 1] at {stage_name}: "
+                f"min={hum_min:.4f}, max={hum_max:.4f}"
+            )
+        
+        # Check for outliers using IQR method
+        Q1 = df["hum"].quantile(0.25)
+        Q3 = df["hum"].quantile(0.75)
+        IQR = Q3 - Q1
+        outliers = df[(df["hum"] < (Q1 - 1.5 * IQR)) | (df["hum"] > (Q3 + 1.5 * IQR))]
+        if len(outliers) > 0:
+            logger.warning(
+                f"Found {len(outliers)} humidity outliers at {stage_name} "
+                f"({len(outliers)/len(df)*100:.1f}% of data)"
+            )
+
+    # Basic distribution validation - check for extreme skewness
+    numeric_cols = ["temp", "hum", "windspeed", "cnt"]
+    for col in numeric_cols:
+        if col in df.columns:
+            skewness = df[col].skew()
+            if abs(skewness) > 2:
+                logger.warning(
+                    f"Column '{col}' at {stage_name} has high skewness: {skewness:.2f}. "
+                    "Consider transformation if this affects model performance."
+                )
+
     return True
 
 

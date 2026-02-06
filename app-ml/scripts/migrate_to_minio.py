@@ -5,12 +5,29 @@ import s3fs
 
 
 def migrate_data():
+    """Migrate local data to MinIO S3 storage.
+    
+    Requires environment variables:
+    - MINIO_ROOT_USER
+    - MINIO_ROOT_PASSWORD
+    - MINIO_ENDPOINT (optional, defaults to http://127.0.0.1:9000)
+    """
+    import os
+    
+    key = os.environ.get("MINIO_ROOT_USER")
+    secret = os.environ.get("MINIO_ROOT_PASSWORD")
+    endpoint = os.environ.get("MINIO_ENDPOINT", "http://127.0.0.1:9000")
+    
+    if not key or not secret:
+        raise ValueError(
+            "MinIO credentials must be provided via environment variables: "
+            "MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required"
+        )
+    
     fs = s3fs.S3FileSystem(
-        client_kwargs={"endpoint_url": "http://127.0.0.1:9000"},
-        # Wait, previous commands used 9000. User specified --console-address ":9001".
-        # So API is likely 9000.
-        key="minioadmin",
-        secret="minioadmin",
+        client_kwargs={"endpoint_url": endpoint},
+        key=key,
+        secret=secret,
     )
 
     # Ensure bucket exists

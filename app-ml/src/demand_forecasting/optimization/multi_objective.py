@@ -75,9 +75,9 @@ def objective_multi(  # noqa: PLR0913
     start_time = time.time()
 
     try:
-        # Train model
+        # Train model - Remove eval_set to prevent CatBoost file writes (GitHub #1051, #2197)
         model = CatBoostRegressor(**params)
-        model.fit(X_train, y_train, eval_set=(X_test, y_test), verbose=False)
+        model.fit(X_train, y_train, verbose=False)
 
         training_time = time.time() - start_time
 

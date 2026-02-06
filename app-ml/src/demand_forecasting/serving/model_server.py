@@ -7,14 +7,18 @@ import os
 import secrets
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, ClassVar, final
 
+import argon2
 import catboost
 import mlflow
 import numpy as np
 from cachetools import TTLCache
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
@@ -40,6 +44,9 @@ MAX_FAILED_ATTEMPTS_PER_HOUR = 10
 
 # Global model storage
 ml_models = {}
+
+# Global feature metadata
+feature_metadata = {}
 
 # Prometheus metrics
 prediction_requests_total = Counter(
@@ -89,10 +96,10 @@ class PredictionRequest(BaseModel):
     )
 
     # Core features that are always required
-    CORE_FEATURES = {"temp", "humidity", "wind_speed", "hour", "day_of_week"}
+    CORE_FEATURES: ClassVar[set[str]] = {"temp", "humidity", "wind_speed", "hour", "day_of_week"}
 
     # Optional features that may be provided depending on model requirements
-    OPTIONAL_FEATURES = {
+    OPTIONAL_FEATURES: ClassVar[set[str]] = {
         "month", "quarter", "day_of_year", "year", "season",
         "holiday", "workingday", "weather_condition",
         "feels_like_temp", "casual", "registered",
@@ -112,7 +119,7 @@ class PredictionRequest(BaseModel):
     }
 
     # Maximum number of features to prevent injection attacks
-    MAX_FEATURES = 50
+    MAX_FEATURES: ClassVar[int] = 50
 
     @field_validator("features")
     @classmethod
@@ -271,7 +278,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.error(f"Failed to load production model from MLflow: {mlflow_error}")
             # Try to load from local path as fallback
             try:
-                ml_models["production"] = catboost.CatBoost().load_model(
+                ml_models["production"] = catboost.CatBoostRegressor().load_model(
                     "models/experiments/final_catboost_model.cbm"
                 )
                 logger.info("Production model loaded successfully from local path")
@@ -287,6 +294,36 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 "models/experiments/final_catboost_model.cbm"
             )
 
+        # Load feature metadata for correct feature engineering
+        try:
+            import json
+            from pathlib import Path
+            
+            metadata_path = Path("models/feature_metadata.json")
+            if metadata_path.exists():
+                with open(metadata_path) as f:
+                    feature_metadata.update(json.load(f))
+                logger.info(
+                    f"Loaded feature metadata: {feature_metadata.get('n_features', 0)} features"
+                )
+            else:
+                logger.warning(
+                    f"Feature metadata not found at {metadata_path}. "
+                    "Using default features. This may cause prediction errors."
+                )
+                # Set default fallback (for backward compatibility)
+                feature_metadata["feature_names"] = [
+                    "temp", "humidity", "wind_speed", "hour", "day_of_week"
+                ]
+                feature_metadata["n_features"] = 5
+        except Exception as e:
+            logger.error(f"Failed to load feature metadata: {e}")
+            # Use minimal fallback
+            feature_metadata["feature_names"] = [
+                "temp", "humidity", "wind_speed", "hour", "day_of_week"
+            ]
+            feature_metadata["n_features"] = 5
+
         # Start metrics server
         metrics_app = make_asgi_app()
         app.mount("/metrics", metrics_app)
@@ -300,6 +337,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         # Clean up resources
         ml_models.clear()
+        feature_metadata.clear()
         logger.info("Model server shutdown complete")
 
 
@@ -478,55 +516,66 @@ class APIKeyManager:
         # Load hashed keys from environment
         self.valid_key_hashes = self._load_api_key_hashes()
 
-    def _load_api_key_hashes(self) -> dict[str, dict]:
+    def _load_api_key_hashes(self) -> dict[str, str]:
         """Load API keys from environment and hash them for secure storage.
 
         In production, load from secure vault (AWS Secrets Manager,
         HashiCorp Vault, Azure Key Vault, etc.)
         """
         keys_str = os.environ.get("VALID_API_KEYS", "")
-        keys = [k.strip() for k in keys_str.split(",") if k.strip()]
 
-        if not keys:
+        if not keys_str:
             logger.warning(
-                "No VALID_API_KEYS configured. API authentication will fail."
+                "No API keys configured in VALID_API_KEYS environment variable. "
+                "All requests will be rejected."
             )
             return {}
 
+        # Initialize Argon2 password hasher with secure defaults
+        ph = argon2.PasswordHasher(
+            time_cost=3,  # Number of iterations (OWASP recommends 2-5)
+            memory_cost=65536,  # Memory usage in KiB (64 MiB, OWASP min 19 MiB)
+            parallelism=4,  # Number of parallel threads
+            hash_len=32,  # Length of the hash in bytes
+            salt_len=16,  # Length of random salt in bytes
+        )
+
         hashed_keys = {}
+        keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+
         for key in keys:
-            # Hash the key for storage using SHA-256
-            key_hash = hashlib.sha256(key.encode()).hexdigest()
-            hashed_keys[key_hash] = {
-                "hash": key_hash,
-                "created_at": datetime.utcnow().isoformat(),
-            }
+            # Hash the key using Argon2id with automatic salting
+            key_hash = ph.hash(key)
+            hashed_keys[key] = key_hash
+            logger.info(f"Hashed API key: {key[:8]}...")
 
         logger.info(f"Loaded {len(hashed_keys)} API key hashes")
         return hashed_keys
 
-    def _hash_api_key(self, api_key: str) -> str:
-        """Hash provided API key for secure comparison."""
-        return hashlib.sha256(api_key.encode()).hexdigest()
+    # This method is no longer needed with Argon2's verify
+    # def _hash_api_key(self, api_key: str) -> str:
+    #     """Hash provided API key for secure comparison."""
+    #     return hashlib.sha256(api_key.encode()).hexdigest()
 
-    def verify_key_constant_time(self, provided_key: str) -> bool:
-        """Verify API key using constant-time comparison to prevent timing attacks.
+    # This method is no longer needed with Argon2's verify
+    # def verify_key_constant_time(self, provided_key: str) -> bool:
+    #     """Verify API key using constant-time comparison to prevent timing attacks.
 
-        Uses secrets.compare_digest() which takes the same amount of time
-        to compare strings regardless of where differences occur.
+    #     Uses secrets.compare_digest() which takes the same amount of time
+    #     to compare strings regardless of where differences occur.
 
-        This is the recommended method per OWASP and FastAPI security guidelines.
-        """
-        provided_hash = self._hash_api_key(provided_key)
+    #     This is the recommended method per OWASP and FastAPI security guidelines.
+    #     """
+    #     provided_hash = self._hash_api_key(provided_key)
 
-        # Use secrets.compare_digest for constant-time comparison
-        # This prevents timing attacks by ensuring comparison time
-        # is independent of key validity
-        for valid_hash in self.valid_key_hashes:
-            if secrets.compare_digest(provided_hash, valid_hash):
-                return True
+    #     # Use secrets.compare_digest for constant-time comparison
+    #     # This prevents timing attacks by ensuring comparison time
+    #     # is independent of key validity
+    #     for valid_hash in self.valid_key_hashes:
+    #         if secrets.compare_digest(provided_hash, valid_hash):
+    #             return True
 
-        return False
+    #     return False
 
 
 # Global API key manager instance
@@ -590,8 +639,48 @@ async def verify_api_key_secure(
             headers={"Retry-After": "3600"},
         )
 
-    # Verify key using constant-time comparison
-    is_valid = api_key_manager.verify_key_constant_time(x_api_key)
+    # Verify key using Argon2id
+    hashed_api_keys = api_key_manager.valid_key_hashes
+    if not hashed_api_keys:
+        logger.error("No valid API keys configured")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API authentication not configured",
+        )
+
+    # Initialize Argon2 hasher for verification
+    ph = argon2.PasswordHasher(
+        time_cost=3,
+        memory_cost=65536,
+        parallelism=4,
+        hash_len=32,
+        salt_len=16,
+    )
+
+    # Check if provided key matches any stored hash using Argon2 verification
+    is_valid = False
+    for original_key, stored_hash in hashed_api_keys.items():
+        try:
+            # Verify the API key against the stored Argon2 hash
+            ph.verify(stored_hash, x_api_key)
+            # Key is valid
+            logger.info(f"Valid API key used: {x_api_key[:8]}...")
+            
+            # Check if hash needs rehashing (parameter updates)
+            if ph.check_needs_rehash(stored_hash):
+                logger.info("API key hash needs rehashing with updated parameters")
+                # In a real application, you would persist this rehashed key
+                # For this example, we just update it in memory
+                api_key_manager.valid_key_hashes[original_key] = ph.hash(x_api_key)
+            
+            is_valid = True
+            break  # Authentication successful
+        except argon2.exceptions.VerifyMismatchError:
+            # This key doesn't match, try next one
+            continue
+        except Exception as e:
+            logger.error(f"Error verifying API key: {e}")
+            continue
 
     if not is_valid:
         # Increment failed attempt counter
@@ -602,7 +691,11 @@ async def verify_api_key_secure(
         logger.warning(
             f"Invalid API key attempt from {client_ip}. Attempt {attempts + 1}/10"
         )
-        raise HTTPException(status_code=403, detail="Invalid API key")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
 
     # Reset rate limit on successful authentication
     if client_ip in rate_limit_cache:
@@ -667,9 +760,39 @@ async def predict(
 
         model = ml_models["production"]
 
-        # Prepare features in the correct order
-        feature_names = ["temp", "humidity", "wind_speed", "hour", "day_of_week"]
-        features = np.array([request.features[f] for f in feature_names])
+        # Get feature names from metadata (loaded at startup)
+        # This ensures we use the same features the model was trained with
+        feature_names = feature_metadata.get("feature_names", [])
+        
+        if not feature_names:
+            logger.error("No feature names found in metadata")
+            prediction_requests_total.labels(model_id=model_id, status="error").inc()
+            raise HTTPException(
+                status_code=500,
+                detail="Feature metadata not loaded. Server misconfigured."
+            )
+        
+        # Check if all required features are present in request
+        missing_features = set(feature_names) - set(request.features.keys())
+        if missing_features:
+            logger.warning(
+                f"Missing {len(missing_features)} features in request: {list(missing_features)[:5]}..."
+            )
+            # Fill missing features with 0 (or could reject the request)
+            for feat in missing_features:
+                request.features[feat] = 0.0
+            logger.info("Filled missing features with 0.0")
+        
+        # Prepare features in the correct order matching training data
+        try:
+            features = np.array([request.features.get(f, 0.0) for f in feature_names])
+        except Exception as e:
+            logger.error(f"Error preparing features: {e}")
+            prediction_requests_total.labels(model_id=model_id, status="error").inc()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid feature format: {str(e)}"
+            )
 
         # Make prediction
         prediction = model.predict(features.reshape(1, -1))[0]

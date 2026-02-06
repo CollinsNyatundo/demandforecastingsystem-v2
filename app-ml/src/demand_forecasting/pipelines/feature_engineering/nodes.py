@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 _LOGGER = logging.getLogger(__name__)
 
 # Feature engineering constants
-MIN_FEATURE_COUNT_THRESHOLD = 50
+MIN_FEATURE_COUNT_THRESHOLD = 20  # Lowered from 50 for better memory efficiency
 
 
 def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:

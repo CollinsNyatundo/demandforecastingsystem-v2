@@ -23,8 +23,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
-from airflow import DAG, Dataset
-from airflow.decorators import task
+import pendulum
+from airflow import Dataset
+from airflow.decorators import dag, task
 from airflow.operators.python import BranchPythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
@@ -47,7 +48,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Constants
+# Constants (use absolute path so config works regardless of task CWD in Docker)
+PROJECT_PATH = os.environ.get("AIRFLOW__CORE__DAGS_FOLDER", "/opt/airflow").rstrip("/dags").rstrip("/dags/") or "/opt/airflow"
+CONF_PATH = os.path.join(PROJECT_PATH, "conf")
 S3_BUCKET = os.environ.get("S3_BUCKET", "demand-forecasting")
 DRIFT_THRESHOLD = float(os.environ.get("DRIFT_THRESHOLD", "0.1"))
 REFERENCE_DATA_PATH = f"s3://{S3_BUCKET}/01_raw/reference_data.parquet"
@@ -75,12 +78,12 @@ def _get_email_recipients() -> list[str]:
     return []
 
 
-@DAG(
+@dag(
     dag_id="automated_drift_detection_retraining",
     default_args=default_args,
     description="Automated drift detection and conditional model retraining",
     schedule="0 */6 * * *",  # Every 6 hours
-    start_date=datetime(2024, 1, 1),
+    start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
     tags=["mlops", "drift-detection", "retraining", "automated", "production"],
     doc_md="""
@@ -115,8 +118,8 @@ def automated_retraining_pipeline():
         logger.info("Loading reference data...")
         
         try:
-            # Load from Kedro catalog
-            conf_loader = OmegaConfigLoader("conf")
+            # Load from Kedro catalog (absolute path for Docker/task CWD)
+            conf_loader = OmegaConfigLoader(CONF_PATH)
             catalog_config = conf_loader["catalog"]
             catalog = DataCatalog.from_config(catalog_config)
             
@@ -243,8 +246,8 @@ def automated_retraining_pipeline():
         logger.info("Checking retraining triggers...")
         
         try:
-            # Load configuration
-            conf_loader = OmegaConfigLoader("conf")
+            # Load configuration (absolute path for Docker/task CWD)
+            conf_loader = OmegaConfigLoader(CONF_PATH)
             params = conf_loader["parameters"]
             
             # Initialize retraining scheduler

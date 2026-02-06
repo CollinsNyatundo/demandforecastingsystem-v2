@@ -372,11 +372,8 @@ def demand_forecasting_dag():
             logger.info("Loading preprocessed data...")
             df = catalog.load("preprocessed_bike_data")
 
-            # Load parameters for feature engineering
-            # Parameters must be loaded from configuration (parameters.yml)
-            from kedro.config import OmegaConfigLoader
-
-            conf_loader = OmegaConfigLoader("conf")
+            # Load parameters for feature engineering (use same conf source as get_catalog)
+            _, conf_loader = get_catalog()
             params = conf_loader["parameters"]
             logger.info("✅ Parameters loaded from configuration")
 

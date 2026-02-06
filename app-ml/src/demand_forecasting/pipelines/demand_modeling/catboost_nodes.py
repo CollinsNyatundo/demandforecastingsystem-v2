@@ -85,14 +85,18 @@ def optimize_catboost_params(
     )
 
     def objective(trial: Trial) -> float:
-        # Search space matching notebook experimentation for best results
-        # Notebook ranges: learning_rate=0.01-0.2, depth=3-8, l2_leaf_reg=0.5-5
-        # These ranges are proven to work well for bike demand forecasting
+        # Expanded search space with additional CatBoost parameters
+        # for better model performance based on research
         params = {
             "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2),
             "depth": trial.suggest_int("depth", 3, 8),
-            "iterations": 1000,  # Fixed iterations, use early stopping to find optimal
+            "iterations": trial.suggest_int("iterations", 500, 2000),  # Now tunable
             "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.5, 5.0),
+            # Additional parameters for better performance
+            "border_count": trial.suggest_int("border_count", 32, 255),
+            "random_strength": trial.suggest_float("random_strength", 0.0, 1.0),
+            "bagging_temperature": trial.suggest_float("bagging_temperature", 0.0, 1.0),
+            "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 1, 100),
             "loss_function": "RMSE",
         }
 

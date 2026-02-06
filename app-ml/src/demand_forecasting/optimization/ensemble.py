@@ -96,7 +96,10 @@ class EnsembleManager:
             xgb_params = {**default_xgb, **(xgb_params or {})}
             lgbm_params = {**default_lgbm, **(lgbm_params or {})}
 
-            # Create base models
+            # Ensure CatBoost verbose is False
+            catboost_params.update({"verbose": False})
+
+            # Create base models for StackingRegressor
             base_models = [
                 ("catboost", CatBoostRegressor(**catboost_params)),
                 ("rf", RandomForestRegressor(**rf_params)),
@@ -104,7 +107,7 @@ class EnsembleManager:
                 ("lgbm", LGBMRegressor(**lgbm_params)),
             ]
 
-            # Store base models for reference
+            # Store base models for reference (these should be identical to the ones in base_models)
             self.base_models = {
                 "catboost": CatBoostRegressor(**catboost_params),
                 "rf": RandomForestRegressor(**rf_params),

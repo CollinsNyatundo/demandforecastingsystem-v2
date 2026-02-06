@@ -1,187 +1,76 @@
-# Demand Forecasting System Parameters
-# Configuration for all pipeline stages
-train_fraction: 0.8
-target_column: "cnt"
-dataset_name: "bike_sharing"
-# Data Profiling Configuration
-enable_data_docs: true
-data_docs_dir: "/opt/airflow/data/docs"
-data_docs_url: "http://localhost:8000"
-data_docs_username: "admin"
-data_docs_password: "admin"
-# Data Processing Parameters
-data_processing:
-  train_test_split: 0.2
-  random_state: 42
-  validation_split: 0.1
+# -----------------------------------------------------------------------------
+# Pipeline Parameters - Demand Forecasting
+# -----------------------------------------------------------------------------
 
-# Feature Engineering Configuration
+# Train/test split
+train_fraction: 0.8
+
+# Data processing
+data_processing:
+  random_state: 42
+
+# Feature engineering (lag features; matches notebook cnt_lag and feature lags)
 feature_engineering:
-  # Demand lag values (matching notebook's cnt_lag: [1, 2, 22, 23])
-  # NOTE: These are lags of CURRENT demand, not target (next hour)
   demand_lags: [1, 2, 22, 23]
-  
-  # Feature lag configuration
-  # NOTE: Use RENAMED column names (after column standardization)
-  # Original -> Renamed:
-  #   hr -> hour
-  #   weekday -> day_of_week  
-  #   weathersit -> weather_condition
-  #   hum -> humidity
-  #   temp -> temp (unchanged)
   feature_lags:
     hour: [1, 2, 3]
     day_of_week: [1, 2, 3]
     weather_condition: [1, 2, 3]
     temp: [1, 2, 3]
     humidity: [1, 2, 3]
-  
-  # Other parameters
-  min_dataset_size: 100
-  max_nan_percentage: 0.05
-  temporal_features:
-    - hour
-    - day_of_week
-    - month
-    - quarter
-    - day_of_year
 
-# Model Training Parameters
-model_training:
-  random_forest:
-    n_estimators: 100
-    max_depth: 20
-    min_samples_split: 5
-    random_state: 42
-  
-  catboost:
-    learning_rate: 0.1
-    max_depth: 6
-    iterations: 1000
-    l2_leaf_reg: 1.0
-    early_stopping_rounds: 50
-    verbose: false
-    random_state: 42
-
-# Optuna Hyperparameter Optimization
-# Using 'optuna' key to match validation function expectations
+# Optuna hyperparameter optimization
 optuna:
   n_trials: 150
-  metric: "rmse"
-  direction: "minimize"
-  primary_model: "catboost"
-  
-  # CatBoost search space configuration
+  primary_model: catboost
   catboost_search_space:
     learning_rate:
       min: 0.01
       max: 0.3
-      log: true
-    depth:  # Note: CatBoost uses 'depth', not 'max_depth'
-      min: 3
-      max: 10
-    iterations:
-      min: 100
-      max: 1000
+    depth:
+      min: 4
+      max: 12
     l2_leaf_reg:
-      min: 0.1
+      min: 1.0
       max: 10.0
-      log: true
-    border_count:
-      min: 32
-      max: 255
-
-  # RandomForest search space (alternative model)
-  search_space:
     n_estimators:
-      min: 50
+      min: 100
       max: 500
-    max_depth:
+    min_data_in_leaf:
       min: 5
-      max: 30
+      max: 50
 
-# Explainability Parameters
-explainability:
-  shap_background_samples: 100
-  feature_importance_top_k: 10
-  mlflow_tracking: true
-
-# API Serving Parameters
-api:
-  batch_size: 32
-  timeout_seconds: 30
-  enable_caching: true
-  cache_ttl_seconds: 300
-
-# Monitoring Parameters
-monitoring:
-  alert_threshold_rmse: 50.0
-  alert_threshold_r2: 0.7
-  data_drift_threshold: 0.1
-  enable_alerts: true
-  # Drift detection configuration
-  drift_detection:
-    ks_test_threshold: 0.05  # p-value threshold for Kolmogorov-Smirnov test
-    psi_threshold: 0.1  # Population Stability Index threshold
-    min_samples: 30  # Minimum samples required for drift detection
-
-# ==============================================================================
-# ADVANCED FEATURES (Enhancement Options)
-# ==============================================================================
-# Enable these features for advanced optimization and ensemble methods.
-# These are optional and provide additional model training strategies.
-
+# Advanced features (multi-objective, ensemble)
 advanced_features:
-  # Multi-Objective Optimization
-  # Finds Pareto-optimal solutions balancing multiple metrics
-  enable_multi_objective: false  # Set to true to enable
+  enable_multi_objective: true
+  enable_ensemble: true
   multi_objective_trials: 50
-  multi_objective_targets:
+  objectives:
     - rmse
     - mae
-    - training_time
-  objective_weights:
-    rmse: 0.5
-    mae: 0.3
-    training_time: 0.2
+  preference_weights:
+    rmse: 0.6
+    mae: 0.4
+  ensemble_type: stacking
 
-  # Ensemble Methods
-  # Combines multiple models for improved robustness
-  enable_ensemble: false  # Set to true to enable
-  ensemble_type: "stacking"  # Options: "stacking", "voting"
-  ensemble_models:
-    - catboost
-    - xgboost
-    - lightgbm
-    - random_forest
-  stacking_cv_folds: 5
+# Model training defaults (for ensemble fallback)
+model_training:
+  catboost:
+    iterations: 500
+    learning_rate: 0.1
+    depth: 6
+    random_state: 42
 
-# ==============================================================================
-# AUTOMATION CONFIGURATION
-# ==============================================================================
-# Settings for automated drift detection and retraining triggers.
+# Dataset / data docs (for pipeline nodes that use params)
+dataset_name: preprocessed_bike_data
+data_docs_dir: data_docs
+enable_data_docs: false
+
+# Monitoring & automation (for automated_retraining_dag)
+monitoring:
+  drift_threshold: 0.1
 
 automation:
-  # Retraining Triggers
-  time_interval_days: 7  # Retrain every N days (time-based trigger)
-  performance_threshold: 5.0  # Retrain if RMSE degrades by N% (performance trigger)
-  data_volume_threshold: 10000  # Retrain if N new samples available (data trigger)
-  
-  # Drift-Based Retraining
-  drift_threshold: 0.1  # Trigger retraining if drift score exceeds this
-  drift_features_threshold: 30  # Retrain if >N% of features show drift
-  
-  # Alert Configuration
-  enable_email_alerts: true
-  alert_priorities:
-    - CRITICAL  # Data drift or performance degradation
-    - HIGH  # Performance issues
-    - MEDIUM  # Scheduled retraining needed
-    - LOW  # Routine maintenance
-  
-  # Model Registry
-  model_registry_name: "demand_forecasting_catboost"
-  auto_promote_to_production: false  # Set true to auto-promote after successful retraining
-  promotion_validation_threshold:
-    rmse_max: 55.0  # Max RMSE to allow promotion
-    mae_max: 35.0   # Max MAE to allow promotion
+  time_interval_days: 7
+  performance_threshold: 5.0
+  data_volume_threshold: 10000
