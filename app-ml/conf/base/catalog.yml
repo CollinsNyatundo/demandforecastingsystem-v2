@@ -3,70 +3,63 @@
 # -----------------------------------------------------------------------------
 # Raw and intermediate paths are relative to project path (e.g. /opt/airflow in Docker).
 # For S3/MinIO override in conf/local/catalog.yml using credentials.
+# Note: 'layer' parameter removed for kedro-datasets compatibility
 # -----------------------------------------------------------------------------
 
 # Raw input: bike sharing dataset (parquet). Place file at data/01_raw/ or use S3.
 raw_bike_data:
   type: pandas.ParquetDataset
   filepath: data/01_raw/raw_bike_data.parquet
-  layer: raw
 
 # Preprocessed output from data processing pipeline (saved by DAG)
 preprocessed_bike_data:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/preprocessed_bike_data.parquet
-  layer: intermediate
 
 # Feature engineering outputs (optional; used by Kedro pipeline when run standalone)
 temporal_features:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/temporal_features.parquet
-  layer: intermediate
 
 engineered_features:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/engineered_features.parquet
-  layer: intermediate
 
 validated_features:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/validated_features.parquet
-  layer: intermediate
 
 # Model input table (saved by DAG t_feature_eng, loaded by t_train_optimized_model)
 model_input_table:
   type: pandas.ParquetDataset
   filepath: data/03_primary/model_input_table.parquet
-  layer: primary
 
 # Train/test splits (when using feature_engineering pipeline standalone)
 X_train:
   type: pandas.ParquetDataset
   filepath: data/03_primary/X_train.parquet
-  layer: primary
 
 X_test:
   type: pandas.ParquetDataset
   filepath: data/03_primary/X_test.parquet
-  layer: primary
 
 y_train:
   type: pandas.ParquetDataset
   filepath: data/03_primary/y_train.parquet
-  layer: primary
 
 y_test:
   type: pandas.ParquetDataset
   filepath: data/03_primary/y_test.parquet
-  layer: primary
 
 # Models and artifacts (optional catalog entries; MLflow is primary for models)
 catboost_model:
   type: pickle.PickleDataset
   filepath: data/06_models/catboost_model.pkl
-  layer: models
 
 final_model:
   type: pickle.PickleDataset
   filepath: data/06_models/final_model.pkl
-  layer: models
+
+regressor_model:
+  type: pickle.PickleDataset
+  filepath: data/06_models/regressor_model.pkl

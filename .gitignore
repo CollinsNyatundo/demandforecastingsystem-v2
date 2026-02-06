@@ -44,10 +44,24 @@ app-ml/test_reports/           # Test reports (auto-generated)
 app-ml/logs/                   # Log files (auto-generated)
 app-ml/plugins/                # Plugin cache (auto-generated)
 app-ml/mlruns.db*              # MLflow local database (auto-generated)
-bandit-report.json            # Security scan reports (auto-generated)
-safety-report.json            # Vulnerability reports (auto-generated)
+
+# Sensitive files - NEVER COMMIT!
+app-ml/secrets/                    # Credentials and secrets
+app-ml/clearml.conf               # ClearML configuration with keys
+app-ml/.env*                      # Environment variables with secrets
+*.key                            # Private keys
+*.pem                            # Certificate files
+*.p12                             # PKCS12 certificates
+.id_rsa                           # SSH private keys
+.secrets                          # Secret directories
+
+# Development artifacts - ignore
+.cursor/plans/                    # Cursor AI plans
+*.plan.md                         # Development planning files
+Demand Forecasting System Audit.pdf  # Local audit documents
+requirements.lock                   # Poetry/uv lock files (use requirements.txt)
 
 # Keep important files tracked!
 # models/experiments/ - Trained models (IMPORTANT)
-# data/raw_data/ - Raw datasets (IMPORTANT)
+# data/raw_data/ - Raw datasets (IMPORTANT)  
 # data/prod_data/ - Production data (IMPORTANT)

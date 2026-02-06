@@ -12,6 +12,18 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+# Optional ClearML integration for experiment tracking
+try:
+    from demand_forecasting.integrations.clearml_integration import (
+        init_clearml_task,
+        log_metrics,
+    )
+    _CLEARML_AVAILABLE = True
+except ImportError:
+    _CLEARML_AVAILABLE = False
+    init_clearml_task = lambda **kwargs: None  # type: ignore[misc]
+    log_metrics = lambda *args: None  # type: ignore[misc]
+
 _LOGGER = logging.getLogger(__name__)
 
 

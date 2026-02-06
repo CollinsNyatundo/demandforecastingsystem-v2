@@ -328,6 +328,7 @@ services:
         /usr/bin/mc mb myminio/mlflow-artifacts --ignore-existing;
         /usr/bin/mc mb myminio/airflow-logs --ignore-existing;
         /usr/bin/mc mb myminio/drift-reports --ignore-existing;
+        /usr/bin/mc mb myminio/clearml-artifacts --ignore-existing;
         echo 'Buckets created with private access (default). Use IAM policies for production access control.';
         exit 0;
       "
@@ -470,6 +471,145 @@ services:
     networks:
       - mlops-network
 
+  # -----------------------------------------------------------------------------
+  # CLEARML SERVER STACK
+  # -----------------------------------------------------------------------------
+
+  clearml-mongo:
+    image: mongo:4.4
+    container_name: clearml-mongo
+    volumes:
+      - clearml_mongo_data:/data/db
+    networks:
+      - mlops-network
+    healthcheck:
+      test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
+  clearml-elastic:
+    image: elasticsearch:7.17.0
+    container_name: clearml-elastic
+    environment:
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    volumes:
+      - clearml_elastic_data:/usr/share/elasticsearch/data
+    networks:
+      - mlops-network
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    restart: unless-stopped
+
+  clearml-apiserver:
+    image: allegroai/clearml:latest
+    container_name: clearml-apiserver
+    ports:
+      - "8008:8008"
+    depends_on:
+      clearml-mongo:
+        condition: service_healthy
+      clearml-elastic:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      CLEARML_HOST_IP: ${CLEARML_HOST_IP:-localhost}
+      CLEARML__MONGODB__HOST: clearml-mongo
+      CLEARML__MONGODB__PORT: 27017
+      CLEARML__ELASTIC__HOST: clearml-elastic
+      CLEARML__ELASTIC__PORT: 9200
+      CLEARML__REDIS__HOST: redis
+      CLEARML__REDIS__PORT: 6379
+      CLEARML__REDIS__DB: 1
+      CLEARML__REDIS__PASSWORD: ${REDIS_PASSWORD}
+      CLEARML__FILESERVER__HOST: http://clearml-fileserver:8081
+      CLEARML__S3__HOST: http://minio:9000
+      CLEARML__S3__BUCKET: clearml-artifacts
+      CLEARML__S3__ACCESS_KEY: ${MINIO_ROOT_USER}
+      CLEARML__S3__SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  clearml-webserver:
+    image: allegroai/clearml:latest
+    container_name: clearml-webserver
+    ports:
+      - "8082:8080"
+    depends_on:
+      - clearml-apiserver
+    environment:
+      CLEARML__APISERVER__HOST: http://clearml-apiserver:8008
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  clearml-fileserver:
+    image: allegroai/clearml:latest
+    container_name: clearml-fileserver
+    ports:
+      - "8083:8081"
+    volumes:
+      - clearml_files:/mnt/fileserver
+    depends_on:
+      - clearml-apiserver
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------------
+  # OPTUNA DASHBOARD
+  # -----------------------------------------------------------------------------
+
+  optuna-dashboard:
+    image: ghcr.io/optuna/optuna-dashboard:latest
+    container_name: optuna-dashboard
+    ports:
+      - "8084:8080"
+    command: [ "postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/optuna" ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------------
+  # NODE EXPORTER (Host Metrics for Grafana)
+  # -----------------------------------------------------------------------------
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
 # -----------------------------------------------------------------------------
 # NAMED VOLUMES
 # -----------------------------------------------------------------------------
@@ -487,6 +627,12 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  clearml_mongo_data:
+    driver: local
+  clearml_elastic_data:
+    driver: local
+  clearml_files:
     driver: local
 
 # -----------------------------------------------------------------------------

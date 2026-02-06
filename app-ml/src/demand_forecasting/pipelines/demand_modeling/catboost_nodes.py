@@ -15,6 +15,20 @@ from optuna.trial import Trial
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 # sklearn.model_selection.train_test_split removed - using time-based split for time series
 
+# Optional ClearML integration for experiment tracking
+try:
+    from demand_forecasting.integrations.clearml_integration import (
+        init_clearml_task,
+        log_metrics,
+        log_optuna_study,
+    )
+    _CLEARML_AVAILABLE = True
+except ImportError:
+    _CLEARML_AVAILABLE = False
+    init_clearml_task = lambda **kwargs: None  # type: ignore[misc]
+    log_metrics = lambda *args: None  # type: ignore[misc]
+    log_optuna_study = lambda *args: None  # type: ignore[misc]
+
 _LOGGER = logging.getLogger(__name__)
 
 # Default constants
@@ -70,6 +84,15 @@ def optimize_catboost_params(
     else:
         _LOGGER.info("Using in-memory storage (study will not persist)")
 
+    # Initialize ClearML task for hyperparameter optimization tracking
+    clearml_task = None
+    if _CLEARML_AVAILABLE:
+        clearml_task = init_clearml_task(
+            project_name="demand_forecasting",
+            task_name=f"hyperopt_{study_name}",
+            task_type="optimizer",
+        )
+
     # TIME-BASED split for hyperparameter optimization: 80% train, 20% validation
     # CRITICAL for time series: validation data must be AFTER training data
     # This mirrors how the model will be used in production (predict future from past)
@@ -87,11 +110,12 @@ def optimize_catboost_params(
     def objective(trial: Trial) -> float:
         # Expanded search space with additional CatBoost parameters
         # for better model performance based on research
+        # Using log-scale for exponential parameters (AUDIT-H1)
         params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),  # Log scale
             "depth": trial.suggest_int("depth", 3, 8),
             "iterations": trial.suggest_int("iterations", 500, 2000),  # Now tunable
-            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.5, 5.0),
+            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.5, 5.0, log=True),  # Log scale
             # Additional parameters for better performance
             "border_count": trial.suggest_int("border_count", 32, 255),
             "random_strength": trial.suggest_float("random_strength", 0.0, 1.0),
@@ -100,7 +124,14 @@ def optimize_catboost_params(
             "loss_function": "RMSE",
         }
 
-        model = CatBoostRegressor(**params, verbose=False, random_seed=42)
+        # train_dir to writable location for Docker permission fix
+        model = CatBoostRegressor(
+            **params,
+            verbose=False,
+            random_seed=42,
+            train_dir="/tmp/catboost_optuna",
+            allow_writing_files=True,
+        )
         # Train with early stopping (matching notebook approach)
         # This prevents overfitting and finds optimal iteration count
         model.fit(
@@ -157,12 +188,21 @@ def optimize_catboost_params(
         _LOGGER.info(f"Best RMSE: {study.best_value:.4f}")
         _LOGGER.info(f"Total trials completed: {len(study.trials)}")
 
+        # Log Optuna study visualizations to ClearML
+        if clearml_task:
+            log_optuna_study(clearml_task, study)
+            log_metrics(clearml_task, {"best_rmse": study.best_value, "n_trials": len(study.trials)})
+            clearml_task.close()
+
         # Return flat params dict for direct use in train_catboost_model
         # Include metadata as underscore-prefixed keys that will be ignored
         return best_params
 
     except Exception as e:
         _LOGGER.error(f"Optuna optimization failed: {e}")
+        # Close ClearML task on failure
+        if clearml_task:
+            clearml_task.mark_failed(status_reason=str(e))
         # Return default parameters on failure
         # Return default parameters matching notebook's best params structure
         return {
@@ -208,6 +248,15 @@ def train_catboost_model(
     if y_test is not None:
         y_test = _ensure_series(y_test)
 
+    # Initialize ClearML task for training tracking
+    clearml_task = None
+    if _CLEARML_AVAILABLE:
+        clearml_task = init_clearml_task(
+            project_name="demand_forecasting",
+            task_name="catboost_training",
+            task_type="training",
+        )
+
     try:
         # Make a copy of params to avoid mutating the input
         params = optimized_params.copy()
@@ -218,9 +267,12 @@ def train_catboost_model(
         _LOGGER.info(f"Final training set size: {len(X_train)} (using 100% of data)")
 
         # CatBoost uses 'random_seed', not 'random_state' (matching notebook)
+        # train_dir set to /tmp to avoid Docker permission errors
         model = CatBoostRegressor(
             iterations=iterations or DEFAULT_ITERATIONS,
             random_seed=42,
+            train_dir="/tmp/catboost_info",  # Writable directory for Docker
+            allow_writing_files=True,
             **params,
         )
 
@@ -276,13 +328,27 @@ def train_catboost_model(
             _LOGGER.info(f"   RMSE: {metrics['rmse']:.4f}")
             _LOGGER.info(f"   MAE: {metrics['mae']:.4f}")
             _LOGGER.info(f"   MAPE: {metrics['mape']:.4f}%")
+
+            # Log metrics to ClearML
+            if clearml_task:
+                log_metrics(clearml_task, {
+                    "rmse": metrics["rmse"],
+                    "mae": metrics["mae"],
+                    "mape": metrics["mape"],
+                })
         else:
             _LOGGER.warning(
                 "No test set provided - returning model without evaluation metrics"
             )
 
+        # Close ClearML task after successful training
+        if clearml_task:
+            clearml_task.close()
+
         return model, metrics
 
     except Exception as e:
         _LOGGER.error(f"Failed to train CatBoost model: {e}")
+        if clearml_task:
+            clearml_task.mark_failed(status_reason=str(e))
         raise

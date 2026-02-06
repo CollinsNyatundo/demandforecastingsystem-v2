@@ -57,6 +57,15 @@ except ImportError:
     OPTUNA_PERSISTENCE_AVAILABLE = False
     logging.warning("Optuna RDBStorage not available. Study persistence disabled.")
 
+# ClearML Integration (complements MLflow)
+try:
+    from clearml import Task as ClearMLTask
+    CLEARML_AVAILABLE = True
+except ImportError:
+    CLEARML_AVAILABLE = False
+    ClearMLTask = None  # type: ignore[misc, assignment]
+    logging.warning("ClearML not installed. ClearML experiment tracking disabled.")
+
 # CONSTANTS
 PROJECT_PATH = "/opt/airflow"
 CONF_SOURCE = "conf"
@@ -448,6 +457,21 @@ def demand_forecasting_dag():
             catalog, conf_loader = get_catalog()
             logger.info("✅ Catalog loaded")
 
+            # Initialize ClearML task (complements MLflow)
+            clearml_task = None
+            if CLEARML_AVAILABLE:
+                try:
+                    clearml_task = ClearMLTask.init(
+                        project_name="demand_forecasting",
+                        task_name="catboost_training_dag",
+                        task_type="training",
+                        auto_connect_frameworks=True,  # Auto-capture CatBoost, Optuna
+                    )
+                    logger.info(f"✅ ClearML task initialized: {clearml_task.id}")
+                except Exception as e:
+                    logger.warning(f"ClearML init failed (non-fatal): {e}")
+                    clearml_task = None
+
             params = conf_loader["parameters"]
             logger.info("✅ Parameters loaded")
 
@@ -686,6 +710,11 @@ def demand_forecasting_dag():
             if MLFLOW_AVAILABLE:
                 mlflow.end_run()
 
+            # Close ClearML task
+            if clearml_task:
+                clearml_task.close()
+                logger.info("✅ ClearML task closed")
+
             # Return summary
             return {
                 "model_type": "CatBoost",
@@ -704,6 +733,8 @@ def demand_forecasting_dag():
             if MLFLOW_AVAILABLE:
                 mlflow.log_param("training_status", "failed")
                 mlflow.end_run(status="FAILED")
+            if clearml_task:
+                clearml_task.mark_failed(status_reason=str(e))
             raise
 
     @task
