@@ -39,8 +39,14 @@ logger = logging.getLogger(__name__)
 # Rate limiting cache (IP -> attempt count)
 rate_limit_cache = TTLCache(maxsize=10000, ttl=3600)  # 1 hour TTL
 
+# Request rate limiting cache (IP -> request timestamps)
+# Comprehensive rate limiting for all endpoints
+request_rate_cache: dict[str, list[float]] = {}
+
 # Rate limiting constants
 MAX_FAILED_ATTEMPTS_PER_HOUR = 10
+MAX_REQUESTS_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "60"))
+RATE_LIMIT_WINDOW_SECONDS = 60
 
 # Global model storage
 ml_models = {}
@@ -269,10 +275,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         model_loaded = False
 
         # Load production model from MLflow with proper error handling
+        # AUDIT-M4: Model versioning support for rollbacks and A/B testing
+        # Use MODEL_VERSION env var for specific version, MODEL_STAGE for stage (default: Production)
         try:
-            model_uri = "models:/demand_forecasting/Production"
+            model_name = os.environ.get("MODEL_NAME", "demand_forecasting")
+            model_version = os.environ.get("MODEL_VERSION")  # Specific version number
+            model_stage = os.environ.get("MODEL_STAGE", "Production")  # Stage: Production, Staging, etc.
+            
+            if model_version:
+                # Load specific version (for rollbacks)
+                model_uri = f"models:/{model_name}/{model_version}"
+                logger.info(f"Loading model version {model_version} from MLflow registry")
+            else:
+                # Load by stage (default: Production)
+                model_uri = f"models:/{model_name}/{model_stage}"
+                logger.info(f"Loading model stage '{model_stage}' from MLflow registry")
+            
             ml_models["production"] = mlflow.pyfunc.load_model(model_uri)
-            logger.info("Production model loaded successfully from MLflow registry")
+            logger.info(f"Model loaded successfully from: {model_uri}")
             model_loaded = True
         except Exception as mlflow_error:
             logger.error(f"Failed to load production model from MLflow: {mlflow_error}")
@@ -442,10 +462,85 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "picture-in-picture=()",
         ]
 
-        response.headers["Permissions-Policy"] = ", ".join(permissions_directives)
+        response.headers[\"Permissions-Policy\"] = \", \".join(permissions_directives)
 
         # Remove server information
-        response.headers["Server"] = "Demand-Forecasting-API"
+        response.headers[\"Server\"] = \"Demand-Forecasting-API\"
+
+        return response
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Rate limiting middleware for API endpoints.
+    
+    Implements IP-based rate limiting to prevent abuse and ensure fair usage.
+    (Rate limiting on model server)
+    
+    Configuration via environment variables:
+    - RATE_LIMIT_PER_MINUTE: Max requests per minute per IP (default: 60)
+    - RATE_LIMIT_ENABLED: Enable/disable rate limiting (default: true)
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Process HTTP request with rate limiting.
+
+        Args:
+            request: Incoming HTTP request
+            call_next: Next middleware in the chain
+
+        Returns:
+            HTTP response or 429 Too Many Requests if rate limited
+        """
+        # Skip rate limiting if disabled
+        if os.environ.get("RATE_LIMIT_ENABLED", "true").lower() != "true":
+            return await call_next(request)
+
+        # Get client IP (handle proxies)
+        client_ip = request.client.host if request.client else "unknown"
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            client_ip = forwarded_for.split(",")[0].strip()
+
+        # Get current time
+        current_time = time.time()
+
+        # Clean old requests from cache
+        if client_ip in request_rate_cache:
+            request_rate_cache[client_ip] = [
+                t for t in request_rate_cache[client_ip]
+                if current_time - t < RATE_LIMIT_WINDOW_SECONDS
+            ]
+        else:
+            request_rate_cache[client_ip] = []
+
+        # Check rate limit
+        if len(request_rate_cache[client_ip]) >= MAX_REQUESTS_PER_MINUTE:
+            logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+            return Response(
+                content='{"detail": "Rate limit exceeded. Please retry after 60 seconds."}',
+                status_code=429,
+                media_type="application/json",
+                headers={
+                    "Retry-After": "60",
+                    "X-RateLimit-Limit": str(MAX_REQUESTS_PER_MINUTE),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(int(current_time + RATE_LIMIT_WINDOW_SECONDS)),
+                }
+            )
+
+        # Record this request
+        request_rate_cache[client_ip].append(current_time)
+
+        # Process request
+        response = await call_next(request)
+
+        # Add rate limit headers
+        remaining = MAX_REQUESTS_PER_MINUTE - len(request_rate_cache[client_ip])
+        response.headers["X-RateLimit-Limit"] = str(MAX_REQUESTS_PER_MINUTE)
+        response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
+        response.headers["X-RateLimit-Reset"] = str(int(current_time + RATE_LIMIT_WINDOW_SECONDS))
 
         return response
 
@@ -462,6 +557,9 @@ app = FastAPI(
 
 # Apply security headers middleware first (highest priority)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Rate limiting middleware (Protect endpoints from abuse)
+app.add_middleware(RateLimitMiddleware)
 
 # Trusted host middleware - prevent Host header attacks
 allowed_hosts = ["localhost", "127.0.0.1"]

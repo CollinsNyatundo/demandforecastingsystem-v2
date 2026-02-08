@@ -200,6 +200,7 @@ def train_final_model(
     y_train: pd.Series | pd.DataFrame,
     model_comparison: dict[str, Any],
     catboost_model: object = None,
+    random_forest_model: object = None,  # Added for model reuse
 ) -> object:
     """Train the final model based on validated comparison results.
 
@@ -211,6 +212,7 @@ def train_final_model(
         y_train: Training target values (Series or single-column DataFrame)
         model_comparison: Results from model comparison with structure validation
         catboost_model: Trained CatBoost model (if available)
+        random_forest_model: Trained Random Forest model from comparison (for reuse)
 
     Returns:
         Trained final model object (for Kedro catalog persistence)
@@ -296,14 +298,20 @@ def train_final_model(
         _LOGGER.info("Using validated CatBoost model as final model")
 
     else:  # random_forest
-        _LOGGER.info("Training new Random Forest as final model")
-        final_model = train_single_model(X_train, y_train)
+        # Reuse the Random Forest model from comparison instead of retraining
+        # This saves ~30-60 seconds per run (RF Model Reuse)
+        if random_forest_model is not None and hasattr(random_forest_model, "predict"):
+            _LOGGER.info("Reusing validated Random Forest model from comparison (avoiding redundant retraining)")
+            final_model = random_forest_model
+        else:
+            _LOGGER.warning("Random Forest model not provided, retraining (this should be avoided for efficiency)")
+            final_model = train_single_model(X_train, y_train)
 
-        # Validate trained model
-        if not hasattr(final_model, "predict"):
-            raise ValueError(
-                "Failed to train valid Random Forest model - missing predict method."
-            )
+            # Validate trained model
+            if not hasattr(final_model, "predict"):
+                raise ValueError(
+                    "Failed to train valid Random Forest model - missing predict method."
+                )
 
     _LOGGER.info(f"Final model trained and validated successfully ({best_model_name})")
     return final_model

@@ -48,6 +48,9 @@ app-ml/mlruns.db*              # MLflow local database (auto-generated)
 # Sensitive files - NEVER COMMIT!
 app-ml/secrets/                    # Credentials and secrets
 app-ml/clearml.conf               # ClearML configuration with keys
+app-ml/clearml_config/              # ClearML server configuration with passwords
+app-ml/src/demand_forecasting/utils/secrets_manager.py # Secrets management utility
+app-ml/verify_clearml.py           # ClearML verification script with credentials
 app-ml/.env*                      # Environment variables with secrets
 *.key                            # Private keys
 *.pem                            # Certificate files

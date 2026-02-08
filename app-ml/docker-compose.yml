@@ -517,8 +517,9 @@ services:
     restart: unless-stopped
 
   clearml-apiserver:
-    image: allegroai/clearml:latest
+    image: clearml/server:latest
     container_name: clearml-apiserver
+    command: apiserver
     ports:
       - "8008:8008"
     depends_on:
@@ -532,28 +533,28 @@ services:
         condition: service_started
     environment:
       CLEARML_HOST_IP: ${CLEARML_HOST_IP:-localhost}
-      CLEARML__MONGODB__HOST: clearml-mongo
-      CLEARML__MONGODB__PORT: 27017
-      CLEARML__ELASTIC__HOST: clearml-elastic
-      CLEARML__ELASTIC__PORT: 9200
-      CLEARML__REDIS__HOST: redis
-      CLEARML__REDIS__PORT: 6379
-      CLEARML__REDIS__DB: 1
-      CLEARML__REDIS__PASSWORD: ${REDIS_PASSWORD}
-      CLEARML__FILESERVER__HOST: http://clearml-fileserver:8081
-      CLEARML__S3__HOST: http://minio:9000
-      CLEARML__S3__BUCKET: clearml-artifacts
-      CLEARML__S3__ACCESS_KEY: ${MINIO_ROOT_USER}
-      CLEARML__S3__SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      CLEARML_MONGODB_SERVICE_HOST: clearml-mongo
+      CLEARML_MONGODB_SERVICE_PORT: 27017
+      CLEARML_ELASTIC_SERVICE_HOST: clearml-elastic
+      CLEARML_ELASTIC_SERVICE_PORT: 9200
+      CLEARML_REDIS_SERVICE_HOST: redis
+      CLEARML_REDIS_SERVICE_PORT: 6379
+      CLEARML_REDIS_SERVICE_PASSWORD: ${REDIS_PASSWORD}
+      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
+    volumes:
+      - ./clearml_config:/opt/clearml/config
     networks:
-      - mlops-network
+      mlops-network:
+        aliases:
+          - apiserver
     restart: unless-stopped
 
   clearml-webserver:
-    image: allegroai/clearml:latest
+    image: clearml/server:latest
     container_name: clearml-webserver
+    command: webserver
     ports:
-      - "8082:8080"
+      - "8082:80"
     depends_on:
       - clearml-apiserver
     environment:
@@ -563,8 +564,9 @@ services:
     restart: unless-stopped
 
   clearml-fileserver:
-    image: allegroai/clearml:latest
+    image: clearml/server:latest
     container_name: clearml-fileserver
+    command: fileserver
     ports:
       - "8083:8081"
     volumes:
@@ -572,7 +574,9 @@ services:
     depends_on:
       - clearml-apiserver
     networks:
-      - mlops-network
+      mlops-network:
+        aliases:
+          - fileserver
     restart: unless-stopped
 
   # -----------------------------------------------------------------------------
