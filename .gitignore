@@ -30,6 +30,10 @@ wheels/
 # Virtual Env
 venv/
 ENV/
+app-ui/.venv/
+app-ui/venv/
+app-ui/env/
+app-ui/.env/
 
 # IDEs
 .vscode/

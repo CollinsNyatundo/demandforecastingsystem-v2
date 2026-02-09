@@ -1,8 +1,52 @@
-/* Global Styles */
+/* =========================================
+   Modern Dark Mode Dashboard Theme
+   ========================================= */
+
+:root {
+    /* Color Palette - Neon Cyberpunk/Enterprise Hybrid */
+    --bg-primary: #0f1724;
+    /* Deep Navy/Charcoal */
+    --bg-secondary: #1e293b;
+    /* Slate 800 */
+    --surface-glass: rgba(30, 41, 59, 0.7);
+    --surface-glass-hover: rgba(51, 65, 85, 0.8);
+
+    /* Neon Accents */
+    --neon-cyan: #00d9ff;
+    --neon-green: #00ff88;
+    --neon-purple: #8b5cf6;
+    --neon-coral: #ff6b6b;
+    --neon-orange: #f97316;
+
+    /* Text Colors */
+    --text-primary: #f8fafc;
+    /* Slate 50 */
+    --text-secondary: #94a3b8;
+    /* Slate 400 */
+    --text-muted: #64748b;
+    /* Slate 500 */
+
+    /* Borders & Effects */
+    --border-glass: 1px solid rgba(255, 255, 255, 0.08);
+    --shadow-neon-cyan: 0 0 10px rgba(0, 217, 255, 0.3);
+    --shadow-neon-green: 0 0 10px rgba(0, 255, 136, 0.3);
+    --backdrop-blur: blur(12px);
+
+    /* Transitions */
+    --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Global Reset & Typography */
 body {
-    background-color: #f4f6f9;
-    font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-    color: #343a40;
+    background-color: var(--bg-primary);
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(0, 217, 255, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-primary);
+    overflow-x: hidden;
+    min-height: 100vh;
 }
 
 h1,
@@ -11,127 +55,234 @@ h3,
 h4,
 h5,
 h6 {
-    color: #2c3e50;
+    color: var(--text-primary);
     font-weight: 600;
+    letter-spacing: -0.025em;
 }
 
-/* Material Design Card Style */
-.pro-card {
-    background: #ffffff;
-    border: none;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    /* Subtle shadow */
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    overflow: hidden;
-    /* For hero image containment */
+/* Glassmorphism Utilities */
+.glass-panel {
+    background: var(--surface-glass);
+    -webkit-backdrop-filter: var(--backdrop-blur);
+    backdrop-filter: var(--backdrop-blur);
+    border: var(--border-glass);
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: var(--transition-smooth);
 }
 
-.pro-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-}
-
-.card-header {
-    background-color: white;
-    border-bottom: 2px solid #f0f2f5;
-    color: #2E7D32;
-    /* Forest Green Accent */
-    font-weight: 700;
-    text-transform: uppercase;
-    font-size: 0.9rem;
-    letter-spacing: 0.5px;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-}
-
-.card-body h3 {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #37474F;
-}
-
-/* Navbar Style */
-.custom-navbar {
-    background: white !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-}
-
-.navbar-brand {
-    font-weight: 700;
-    font-size: 1.5rem;
-    color: #2E7D32 !important;
-    /* Forest Green Brand */
-}
-
-/* Hero Section */
-.hero-container {
-    position: relative;
-    width: 100%;
-    height: 350px;
-    background-image: url('hero_bicycle.png');
-    background-size: cover;
-    background-position: center;
+.glass-card {
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 36, 0.8) 100%);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 12px;
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: var(--transition-fast);
+}
+
+.glass-card:hover {
+    transform: translateY(-4px);
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 36, 0.9) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+}
+
+/* Navbar Styling */
+.navbar-custom {
+    background: rgba(15, 23, 36, 0.8) !important;
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.brand-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, #fff, #94a3b8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 0.75rem;
 }
 
-.hero-overlay {
-    background: rgba(0, 0, 0, 0.4);
-    /* Dark overlay for text readability */
-    color: white;
-    padding: 2rem;
-    border-radius: 8px;
-    backdrop-filter: blur(2px);
-    text-align: center;
+/* Status Indicators */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
 }
 
-.hero-title {
-    font-size: 3rem;
-    font-weight: 800;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    color: white;
-    margin-bottom: 0px;
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+    box-shadow: 0 0 8px currentColor;
+    animation: pulse 2s infinite;
 }
 
-.hero-subtitle {
-    font-size: 1.2rem;
-    color: #f8f9fa;
-    font-weight: 500;
+/* KPI Cards */
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
+    letter-spacing: -0.05em;
+    color: var(--text-primary);
 }
 
-
-/* Custom Text Colors */
-.text-forest {
-    color: #2E7D32 !important;
+.kpi-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
-.text-science-blue {
-    color: #0288D1 !important;
+.kpi-trend {
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
-.text-slate {
-    color: #455A64 !important;
+/* Glow Utilities */
+.glow-text-cyan {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px rgba(0, 217, 255, 0.4);
 }
 
-/* Chart Container */
-.dash-graph {
-    border-radius: 8px;
+.glow-text-green {
+    color: var(--neon-green);
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+}
+
+.glow-text-purple {
+    color: var(--neon-purple);
+    text-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
+
+.glow-text-orange {
+    color: var(--neon-orange);
+    text-shadow: 0 0 10px rgba(249, 115, 22, 0.4);
+}
+
+.border-top-cyan {
+    border-top: 2px solid var(--neon-cyan);
+}
+
+.border-top-green {
+    border-top: 2px solid var(--neon-green);
+}
+
+.border-top-purple {
+    border-top: 2px solid var(--neon-purple);
+}
+
+.border-top-orange {
+    border-top: 2px solid var(--neon-orange);
+}
+
+/* Charts Area */
+.chart-container {
+    border-radius: 12px;
     overflow: hidden;
+    position: relative;
+    min-height: 350px;
 }
 
-/* DatePicker Customization */
+.metric-gauge {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto;
+}
+
+/* Data Table Customization */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+    background-color: rgba(30, 41, 59, 0.9) !important;
+    color: var(--text-secondary) !important;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+    background-color: transparent !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Animations */
+@keyframes pulse {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes float {
+    0% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-5px);
+    }
+
+    100% {
+        transform: translateY(0px);
+    }
+}
+
+.animate-float {
+    animation: float 4s ease-in-out infinite;
+}
+
+/* Input Overrides */
 .DateInput_input {
-    font-family: inherit;
-    font-weight: 500;
-    color: #495057;
+    background-color: transparent !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid var(--neon-cyan) !important;
 }
 
-/* Dropdown Customization */
-/* Dash Dropdown styles can be tricky, relying on Bootstrap classes mostly */
+.Select-control {
+    background-color: rgba(30, 41, 59, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: white !important;
+}
+
+.Select-menu-outer {
+    background-color: var(--bg-secondary) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.Select-value-label {
+    color: var(--text-primary) !important;
+}
