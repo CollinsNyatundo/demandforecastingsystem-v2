@@ -13,15 +13,21 @@ import pandas as pd
 _LOGGER = logging.getLogger(__name__)
 
 try:
-    from evidently import ColumnMapping
-    from evidently.metric_preset import DataDriftPreset, DataQualityPreset
-    from evidently.metrics import DataDriftTable, DatasetDriftMetric
-    from evidently.report import Report
+    # Evidently v0.7.x API (paths changed significantly from v0.4.x)
+    from evidently import Report
+    from evidently.presets import DataDriftPreset, DataSummaryPreset
+    from evidently.metrics import ValueDrift, DriftedColumnsCount
+    from evidently.legacy.pipeline.column_mapping import ColumnMapping
+
+    # Compatibility aliases so rest of module keeps working unchanged
+    DataDriftTable = ValueDrift
+    DatasetDriftMetric = DriftedColumnsCount
+    DataQualityPreset = DataSummaryPreset  # renamed in v0.7.x
 
     EVIDENTLY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     EVIDENTLY_AVAILABLE = False
-    _LOGGER.warning("Evidently not installed. Drift monitoring disabled.")
+    _LOGGER.warning(f"Evidently not available - drift monitoring disabled: {e}")
 
 
 def generate_drift_report(
@@ -78,24 +84,16 @@ def generate_drift_report(
     report.save_html(str(output_path))
     _LOGGER.info(f"Drift report saved to {output_path}")
 
-    # Extract metrics
-    result_dict = report.as_dict()
-    metrics = result_dict.get("metrics", [])
-
+    # Extract metrics via v0.7.x direct attribute access on metric objects
     dataset_drift = False
     drift_share = 0.0
     drifted_columns: list[str] = []
 
-    for metric in metrics:
-        metric_result = metric.get("result", {})
-        if "dataset_drift" in metric_result:
-            dataset_drift = metric_result.get("dataset_drift", False)
-            drift_share = metric_result.get("drift_share", 0.0)
-            drifted_columns = [
-                col
-                for col, info in metric_result.get("drift_by_columns", {}).items()
-                if info.get("drift_detected", False)
-            ]
+    for metric in report.items():
+        drift_share_val = getattr(metric, 'drift_share', None)
+        if drift_share_val is not None:
+            drift_share = float(drift_share_val)
+            dataset_drift = drift_share > 0.0
             break
 
     return {
@@ -128,14 +126,28 @@ def get_drift_metrics_for_prometheus(
     report = Report(metrics=[DatasetDriftMetric()])
     report.run(reference_data=reference_data, current_data=current_data)
 
-    result = report.as_dict()
-    metrics = result.get("metrics", [{}])[0].get("result", {})
+    result = report
+    drift_share = 0.0
+    dataset_drift = False
+    n_total = 0
+    n_drifted = 0
+    for metric in result.items():
+        ds = getattr(metric, 'drift_share', None)
+        cnt = getattr(metric, 'count', None)
+        shr = getattr(metric, 'share', None)
+        if ds is not None:
+            drift_share = float(ds)
+            dataset_drift = drift_share > 0.0
+        if cnt is not None:
+            n_drifted = int(cnt)
+        if shr is not None and n_drifted > 0 and drift_share > 0:
+            n_total = int(n_drifted / drift_share) if drift_share else 0
 
     return {
-        "evidently_dataset_drift": 1.0 if metrics.get("dataset_drift") else 0.0,
-        "evidently_drift_share": metrics.get("drift_share", 0.0),
-        "evidently_columns_total": float(metrics.get("number_of_columns", 0)),
-        "evidently_columns_drifted": float(metrics.get("number_of_drifted_columns", 0)),
+        "evidently_dataset_drift": 1.0 if dataset_drift else 0.0,
+        "evidently_drift_share": drift_share,
+        "evidently_columns_total": float(n_total),
+        "evidently_columns_drifted": float(n_drifted),
     }
 
 
@@ -160,10 +172,13 @@ def check_drift_threshold(
     report = Report(metrics=[DatasetDriftMetric()])
     report.run(reference_data=reference_data, current_data=current_data)
 
-    result = report.as_dict()
-    metrics = result.get("metrics", [{}])[0].get("result", {})
+    drift_share = 0.0
+    for metric in report.items():
+        ds = getattr(metric, 'drift_share', None)
+        if ds is not None:
+            drift_share = float(ds)
+            break
 
-    drift_share = metrics.get("drift_share", 0.0)
     exceeds_threshold = drift_share > threshold
 
     return exceeds_threshold, {
