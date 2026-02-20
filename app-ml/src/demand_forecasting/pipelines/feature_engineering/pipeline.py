@@ -43,12 +43,12 @@ def create_pipeline(**kwargs: object) -> Pipeline:
             node(
                 func=split_features,
                 inputs=["validated_features"],
-                outputs=dict(
-                    X_train="X_train",
-                    X_test="X_test",
-                    y_train="y_train",
-                    y_test="y_test",
-                ),
+                outputs={
+                    "X_train": "X_train",
+                    "X_test": "X_test",
+                    "y_train": "y_train",
+                    "y_test": "y_test",
+                },
                 name="split_features",
             ),
         ]

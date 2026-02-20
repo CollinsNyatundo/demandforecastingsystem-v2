@@ -261,6 +261,9 @@ class DriftDetector:
         recent_history = self.drift_history[-window_size:]
         recent_scores = [h.get("overall_drift_score", 0) for h in recent_history]
 
+        # Issue 3 fix: pre-assign slope so it is always bound in the return dict
+        # even when the else branch (trend = "unknown") is taken.
+        slope = 0.0
         # Calculate trend
         if len(recent_scores) >= MIN_TREND_SAMPLES:
             slope = np.polyfit(range(len(recent_scores)), recent_scores, 1)[0]
@@ -275,7 +278,7 @@ class DriftDetector:
 
         return {
             "trend": trend,
-            "slope": slope if len(recent_scores) >= MIN_TREND_SAMPLES else 0,
+            "slope": slope,
             "recent_scores": recent_scores,
             "avg_score": np.mean(recent_scores),
             "max_score": np.max(recent_scores),

@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -111,7 +110,7 @@ def create_feature_interactions(  # noqa: C901, PLR0912
         # that indicates a strong daily seasonality."
         if lags is None:
             lags = [1, 2, 22, 23]  # Demand lags based on autocorrelation analysis
-        
+
         # Default feature lags matching notebook:
         # lag_feats = ['hr', 'weekday', 'weathersit', 'temp', 'hum']
         # for feat in lag_feats: for i in range(1, n+1): df[f'{feat}_lag_{i}'] = ...
@@ -127,13 +126,13 @@ def create_feature_interactions(  # noqa: C901, PLR0912
         # Standardize column names from raw data format
         # This ensures consistency across the pipeline
         column_mapping = {
-            "cnt": "demand",       # Total bike count -> demand (target source)
-            "hr": "hour",          # Hour of day
-            "hum": "humidity",     # Humidity
+            "cnt": "demand",  # Total bike count -> demand (target source)
+            "hr": "hour",  # Hour of day
+            "hum": "humidity",  # Humidity
             "windspeed": "wind_speed",  # Wind speed
-            "weekday": "day_of_week",   # Day of week
-            "mnth": "month",       # Month
-            "yr": "year",          # Year
+            "weekday": "day_of_week",  # Day of week
+            "mnth": "month",  # Month
+            "yr": "year",  # Year
             "atemp": "feels_like_temp",  # Feels like temperature
             "weathersit": "weather_condition",  # Weather situation
         }
@@ -141,19 +140,19 @@ def create_feature_interactions(  # noqa: C901, PLR0912
         # Apply column renaming (only for columns that exist AND target name doesn't exist)
         # This prevents duplicate columns when temporal features already exist
         existing_renames = {
-            k: v for k, v in column_mapping.items() 
+            k: v
+            for k, v in column_mapping.items()
             if k in df.columns and v not in df.columns
         }
-        
+
         # For columns where target already exists, drop the source column instead
         cols_to_drop = [
-            k for k, v in column_mapping.items() 
-            if k in df.columns and v in df.columns
+            k for k, v in column_mapping.items() if k in df.columns and v in df.columns
         ]
         if cols_to_drop:
             df = df.drop(columns=cols_to_drop)
             _LOGGER.info(f"Dropped duplicate source columns: {cols_to_drop}")
-        
+
         if existing_renames:
             df = df.rename(columns=existing_renames)
             _LOGGER.info(f"Standardized column names: {list(existing_renames.keys())}")
@@ -188,7 +187,9 @@ def create_feature_interactions(  # noqa: C901, PLR0912
             # Using demand_lag naming to match notebook's cnt_lag semantics
             for lag in lags:
                 df[f"demand_lag{lag}"] = df[demand_col].shift(lag)
-            _LOGGER.info(f"Created demand lag features: {[f'demand_lag{l}' for l in lags]}")
+            _LOGGER.info(
+                f"Created demand lag features: {[f'demand_lag{l}' for l in lags]}"
+            )
 
         # Create feature lags matching notebook experimentation
         # Notebook: for feat in lag_feats: for i in range(1, n+1): df[f'{feat}_lag_{i}'] = df[feat].shift(i)
@@ -199,9 +200,11 @@ def create_feature_interactions(  # noqa: C901, PLR0912
                     col_name = f"{feature}_lag{lag}"
                     df[col_name] = df[feature].shift(lag)
                     created_feature_lags.append(col_name)
-        
+
         if created_feature_lags:
-            _LOGGER.info(f"Created {len(created_feature_lags)} feature lag columns: {created_feature_lags[:5]}...")
+            _LOGGER.info(
+                f"Created {len(created_feature_lags)} feature lag columns: {created_feature_lags[:5]}..."
+            )
 
         # Optimize memory usage by downcasting numeric columns
         # Skip columns that can't be downcasted safely
@@ -307,7 +310,9 @@ def split_features(
     Returns:
         Dictionary with X_train, X_test, y_train, y_test DataFrames/Series
     """
-    _LOGGER.info(f"Splitting features into train/test sets (train_fraction={train_fraction})...")
+    _LOGGER.info(
+        f"Splitting features into train/test sets (train_fraction={train_fraction})..."
+    )
 
     try:
         # Ensure target column exists
@@ -329,7 +334,7 @@ def split_features(
         # Notebook: train_size = int(train_fraction * df.shape[0])
         #           x_train, x_test = x[:train_size], x[train_size:]
         train_size = int(train_fraction * len(df))
-        
+
         X_train = X.iloc[:train_size]
         X_test = X.iloc[train_size:]
         y_train = y.iloc[:train_size]

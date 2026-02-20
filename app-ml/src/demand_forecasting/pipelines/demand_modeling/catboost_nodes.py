@@ -13,6 +13,7 @@ from catboost import CatBoostRegressor
 from optuna.samplers import TPESampler
 from optuna.trial import Trial
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+
 # sklearn.model_selection.train_test_split removed - using time-based split for time series
 
 # Optional ClearML integration for experiment tracking
@@ -22,12 +23,16 @@ try:
         log_metrics,
         log_optuna_study,
     )
+
     _CLEARML_AVAILABLE = True
 except ImportError:
     _CLEARML_AVAILABLE = False
-    init_clearml_task = lambda **kwargs: None  # type: ignore[misc]
-    log_metrics = lambda *args: None  # type: ignore[misc]
-    log_optuna_study = lambda *args: None  # type: ignore[misc]
+    def init_clearml_task(**kwargs):
+        return None  # type: ignore[misc]
+    def log_metrics(*args):
+        return None  # type: ignore[misc]
+    def log_optuna_study(*args):
+        return None  # type: ignore[misc]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,20 +43,21 @@ DEFAULT_LEARNING_RATE = 0.1
 
 def _ensure_series(data: pd.DataFrame | pd.Series) -> pd.Series:
     """Convert DataFrame to Series if needed.
-    
+
     Args:
         data: Input data, either DataFrame or Series
-        
+
     Returns:
         Series with the data
     """
     if isinstance(data, pd.DataFrame):
         if data.shape[1] == 1:
             return data.iloc[:, 0]
-        elif "target" in data.columns:
+        if "target" in data.columns:
             return data["target"]
-        else:
-            raise ValueError(f"Cannot convert DataFrame with columns {data.columns} to Series")
+        raise ValueError(
+            f"Cannot convert DataFrame with columns {data.columns} to Series"
+        )
     return data
 
 
@@ -76,7 +82,7 @@ def optimize_catboost_params(
     """
     # Convert DataFrame to Series if needed
     y_train = _ensure_series(y_train)
-    
+
     _LOGGER.info(f"Starting Optuna optimization with {n_trials} trials...")
     if storage:
         _LOGGER.info(f"Using persistent storage: {type(storage).__name__}")
@@ -112,10 +118,14 @@ def optimize_catboost_params(
         # for better model performance based on research
         # Using log-scale for exponential parameters (AUDIT-H1)
         params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),  # Log scale
+            "learning_rate": trial.suggest_float(
+                "learning_rate", 0.01, 0.2, log=True
+            ),  # Log scale
             "depth": trial.suggest_int("depth", 3, 8),
             "iterations": trial.suggest_int("iterations", 500, 2000),  # Now tunable
-            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 0.5, 5.0, log=True),  # Log scale
+            "l2_leaf_reg": trial.suggest_float(
+                "l2_leaf_reg", 0.5, 5.0, log=True
+            ),  # Log scale
             # Additional parameters for better performance
             "border_count": trial.suggest_int("border_count", 32, 255),
             "random_strength": trial.suggest_float("random_strength", 0.0, 1.0),
@@ -191,7 +201,10 @@ def optimize_catboost_params(
         # Log Optuna study visualizations to ClearML
         if clearml_task:
             log_optuna_study(clearml_task, study)
-            log_metrics(clearml_task, {"best_rmse": study.best_value, "n_trials": len(study.trials)})
+            log_metrics(
+                clearml_task,
+                {"best_rmse": study.best_value, "n_trials": len(study.trials)},
+            )
             clearml_task.close()
 
         # Return flat params dict for direct use in train_catboost_model
@@ -242,7 +255,7 @@ def train_catboost_model(
         - mape: Mean Absolute Percentage Error on test set (or 0.0 if no test set)
     """
     _LOGGER.info("Training final CatBoost model on FULL training dataset...")
-    
+
     # Convert DataFrame to Series if needed
     y_train = _ensure_series(y_train)
     if y_test is not None:
@@ -331,11 +344,14 @@ def train_catboost_model(
 
             # Log metrics to ClearML
             if clearml_task:
-                log_metrics(clearml_task, {
-                    "rmse": metrics["rmse"],
-                    "mae": metrics["mae"],
-                    "mape": metrics["mape"],
-                })
+                log_metrics(
+                    clearml_task,
+                    {
+                        "rmse": metrics["rmse"],
+                        "mae": metrics["mae"],
+                        "mape": metrics["mape"],
+                    },
+                )
         else:
             _LOGGER.warning(
                 "No test set provided - returning model without evaluation metrics"

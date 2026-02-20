@@ -3,7 +3,6 @@
 Data drift and model performance monitoring for production.
 """
 
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -15,9 +14,10 @@ _LOGGER = logging.getLogger(__name__)
 
 try:
     from evidently import ColumnMapping
-    from evidently.report import Report
     from evidently.metric_preset import DataDriftPreset, DataQualityPreset
     from evidently.metrics import DataDriftTable, DatasetDriftMetric
+    from evidently.report import Report
+
     EVIDENTLY_AVAILABLE = True
 except ImportError:
     EVIDENTLY_AVAILABLE = False
@@ -58,11 +58,13 @@ def generate_drift_report(
     mapping = ColumnMapping(**mapping_kwargs) if mapping_kwargs else None
 
     # Create report with drift metrics
-    report = Report(metrics=[
-        DatasetDriftMetric(),
-        DataDriftPreset(),
-        DataQualityPreset(),
-    ])
+    report = Report(
+        metrics=[
+            DatasetDriftMetric(),
+            DataDriftPreset(),
+            DataQualityPreset(),
+        ]
+    )
 
     report.run(
         reference_data=reference_data,
@@ -90,7 +92,8 @@ def generate_drift_report(
             dataset_drift = metric_result.get("dataset_drift", False)
             drift_share = metric_result.get("drift_share", 0.0)
             drifted_columns = [
-                col for col, info in metric_result.get("drift_by_columns", {}).items()
+                col
+                for col, info in metric_result.get("drift_by_columns", {}).items()
                 if info.get("drift_detected", False)
             ]
             break

@@ -12,7 +12,7 @@ BUCKET = "demand-forecasting"
 
 def upload_data() -> None:
     """Upload data to MinIO S3 storage.
-    
+
     Requires environment variables:
     - MINIO_ROOT_USER
     - MINIO_ROOT_PASSWORD
@@ -23,7 +23,7 @@ def upload_data() -> None:
             "MinIO credentials must be provided via environment variables: "
             "MINIO_ROOT_USER and MINIO_ROOT_PASSWORD are required"
         )
-    
+
     fs = s3fs.S3FileSystem(
         client_kwargs={"endpoint_url": ENDPOINT}, key=KEY, secret=SECRET
     )
@@ -42,4 +42,3 @@ def upload_data() -> None:
 
 if __name__ == "__main__":
     upload_data()
-

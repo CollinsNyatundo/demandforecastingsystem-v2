@@ -48,8 +48,14 @@ class DatasetMonitor:
         # S3 filesystem for actual file timestamp checking
         self.s3_endpoint = s3_endpoint
         # Load credentials from environment - NO hardcoded defaults for security
-        self.s3_key = s3_key or os.getenv("MINIO_ACCESS_KEY") or os.getenv("MINIO_ROOT_USER")
-        self.s3_secret = s3_secret or os.getenv("MINIO_SECRET_KEY") or os.getenv("MINIO_ROOT_PASSWORD")
+        self.s3_key = (
+            s3_key or os.getenv("MINIO_ACCESS_KEY") or os.getenv("MINIO_ROOT_USER")
+        )
+        self.s3_secret = (
+            s3_secret
+            or os.getenv("MINIO_SECRET_KEY")
+            or os.getenv("MINIO_ROOT_PASSWORD")
+        )
         self.s3_bucket = s3_bucket
 
         if not self.s3_key or not self.s3_secret:

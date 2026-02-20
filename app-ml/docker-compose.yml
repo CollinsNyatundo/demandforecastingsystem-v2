@@ -169,17 +169,30 @@ services:
   # -----------------------------------------------------------------------------
   # MLFLOW TRACKING SERVER
   # -----------------------------------------------------------------------------
+  # Issue C fix: use official ghcr.io/mlflow/mlflow image (MLflow pre-installed)
+  # instead of python:3.11-slim + pip-at-startup (which was slow and unpredictable).
+  # mlflow-entrypoint.sh is kept as documentation but is no longer used at runtime.
   mlflow:
-    image: python:3.11-slim
-    command: [ "/bin/bash", "/opt/airflow/mlflow-entrypoint.sh" ]
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      - --default-artifact-root=s3://mlflow-artifacts/
+      - --serve-artifacts
+      # MLflow 3.x added security middleware that defaults to localhost-only.
+      # --allowed-hosts=* is required for Docker container networking.
+      - --allowed-hosts=*
     ports:
       - "5000:5000"
     volumes:
       - mlflow_data:/mlflow
-      - ./mlflow-entrypoint.sh:/opt/airflow/mlflow-entrypoint.sh
     environment:
       <<: *common-env
-      DATABASE_URL: postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
@@ -193,7 +206,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 45s
     networks:
       - mlops-network
     deploy:
@@ -247,7 +260,6 @@ services:
     networks:
       - mlops-network
 
-  # Airflow Scheduler
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
@@ -263,8 +275,8 @@ services:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
-      airflow-webserver:
-        condition: service_healthy
+        # Note: airflow-webserver dependency removed — scheduler has no runtime dep on webserver
+        # and the old dependency added 2-5 minutes to scheduler startup time
     networks:
       - mlops-network
 
@@ -342,6 +354,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.model-server.ultra-optimized
+    env_file:
+      - .env
     ports:
       - "8000:8000"
       - "8001:8001"
@@ -352,7 +366,17 @@ services:
       METRICS_PORT: "8001"
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
       LOG_LEVEL: "INFO"
+      # CRITICAL: Override PYTHONPATH from .env (which has /opt/airflow/src for airflow containers)
+      # The model-server src lives at /app/src, not /opt/airflow/src
+      PYTHONPATH: "/app/src"
+      # API Authentication (loaded from .env but also set explicitly for clarity)
+      VALID_API_KEYS: ${VALID_API_KEYS:-dev-key-123,test-key-456}
+      MODEL_NAME: ${MODEL_NAME:-demand_forecasting_catboost}
+      MODEL_STAGE: ${MODEL_STAGE:-Production}
+      # Path to the actual model file (lives in experiments/ subdirectory)
+      MODEL_PATH: "/app/models/experiments/final_catboost_model.cbm"
     volumes:
+      # Mount full models dir; model lives at models/experiments/final_catboost_model.cbm
       - ./models:/app/models
       - ./logs:/app/logs
       - ./data:/app/data
@@ -411,7 +435,7 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
-      - "8080:8080"
+      - "8888:8080" # Status page on 8888 to avoid confusion with Airflow (8081)
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - nginx_logs:/var/log/nginx
@@ -476,14 +500,17 @@ services:
   # -----------------------------------------------------------------------------
 
   clearml-mongo:
-    image: mongo:4.4
+    # Issue 2 fix: mongo:4.4 reached EOL February 2024.
+    # Updated to mongo:7.0 which is the version ClearML supports in 2024+.
+    # The healthcheck also uses mongosh (mongo shell was removed in MongoDB 6+).
+    image: mongo:7.0
     container_name: clearml-mongo
     volumes:
       - clearml_mongo_data:/data/db
     networks:
       - mlops-network
     healthcheck:
-      test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -588,7 +615,14 @@ services:
     container_name: optuna-dashboard
     ports:
       - "8084:8080"
-    command: [ "postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/optuna" ]
+    # Storage DSN is a positional argument (official optuna-dashboard docker image format)
+    # postgresql+psycopg2:// is required — plain postgresql:// is not supported by the image
+    command:
+      - "postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/optuna"
+      - "--port"
+      - "8080"
+    environment:
+      OPTUNA_STORAGE: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/optuna
     depends_on:
       postgres:
         condition: service_healthy
@@ -606,10 +640,59 @@ services:
     ports:
       - "9100:9100"
     command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--path.rootfs=/rootfs'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--no-collector.filesystem'
+      - '--no-collector.diskstats'
+      - '--no-collector.netdev'
+      - '--no-collector.hwmon'
+      - '--collector.cpu'
+      - '--collector.meminfo'
+      - '--collector.loadavg'
+    networks:
+      - mlops-network
+    restart: unless-stopped
+    # Only works on Linux hosts — skip on Windows/macOS (Docker Desktop)
+    # To enable: docker compose --profile linux-host up
+    profiles:
+      - linux-host
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # -----------------------------------------------------------------------------
+  # DASH WEB UI
+  # -----------------------------------------------------------------------------
+  app-ui:
+    build:
+      context: ../app-ui
+      dockerfile: Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      - MODEL_SERVER_URL=http://model-server:8000
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AIRFLOW_URL=http://airflow-webserver:8080
+      - MINIO_URL=http://minio:9000
+      - GRAFANA_URL=http://grafana:3000
+      - API_KEY=${UI_API_KEY:-dev-key}
+      # PROJECT_ROOT tells app.py where to find data and shared modules in Docker
+      - PROJECT_ROOT=/project
+    volumes:
+      - ../app-ui:/app
+      - ../common:/app/common
+      - ../config:/app/config
+      # Mount app-ml/data so UI can find raw_data_full.parquet
+      - ./data:/project/app-ml/data:ro
+      - ../data:/project/data:ro
+    depends_on:
+      model-server:
+        condition: service_started
+    command: python app.py
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8050" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - mlops-network
     restart: unless-stopped

@@ -1,5 +1,4 @@
-"""
-Custom exceptions for the demand forecasting system.
+"""Custom exceptions for the demand forecasting system.
 
 This module provides a hierarchy of exceptions for different failure modes,
 following best practices for exception design:
@@ -30,8 +29,7 @@ from typing import Any
 
 
 class DemandForecastingError(Exception):
-    """
-    Base exception for all demand forecasting errors.
+    """Base exception for all demand forecasting errors.
 
     Attributes:
         message: Human-readable error description
@@ -46,8 +44,7 @@ class DemandForecastingError(Exception):
         context: dict[str, Any] | None = None,
         error_code: str | None = None,
     ) -> None:
-        """
-        Initialize the exception.
+        """Initialize the exception.
 
         Args:
             message: Human-readable error description
@@ -82,8 +79,7 @@ class DemandForecastingError(Exception):
 
 
 class DataValidationError(DemandForecastingError):
-    """
-    Raised when data validation fails.
+    """Raised when data validation fails.
 
     Use this for schema validation failures, type mismatches,
     or constraint violations in input data.
@@ -102,8 +98,7 @@ class DataValidationError(DemandForecastingError):
         invalid_columns: list[str] | None = None,
         validation_errors: list[str] | None = None,
     ) -> None:
-        """
-        Initialize DataValidationError.
+        """Initialize DataValidationError.
 
         Args:
             message: Error description
@@ -120,8 +115,7 @@ class DataValidationError(DemandForecastingError):
 
 
 class DataQualityError(DemandForecastingError):
-    """
-    Raised when data quality issues are detected.
+    """Raised when data quality issues are detected.
 
     Use this for data quality problems that don't necessarily
     violate the schema but indicate potential issues.
@@ -141,8 +135,7 @@ class DataQualityError(DemandForecastingError):
         quality_score: float | None = None,
         affected_columns: list[str] | None = None,
     ) -> None:
-        """
-        Initialize DataQualityError.
+        """Initialize DataQualityError.
 
         Args:
             message: Error description
@@ -159,8 +152,7 @@ class DataQualityError(DemandForecastingError):
 
 
 class ModelTrainingError(DemandForecastingError):
-    """
-    Raised when model training fails.
+    """Raised when model training fails.
 
     Use this for errors during the model training process.
 
@@ -179,8 +171,7 @@ class ModelTrainingError(DemandForecastingError):
         model_type: str | None = None,
         training_stage: str | None = None,
     ) -> None:
-        """
-        Initialize ModelTrainingError.
+        """Initialize ModelTrainingError.
 
         Args:
             message: Error description
@@ -197,8 +188,7 @@ class ModelTrainingError(DemandForecastingError):
 
 
 class ModelServingError(DemandForecastingError):
-    """
-    Raised when model prediction/serving fails.
+    """Raised when model prediction/serving fails.
 
     Use this for errors during model inference.
 
@@ -217,8 +207,7 @@ class ModelServingError(DemandForecastingError):
         model_version: str | None = None,
         request_id: str | None = None,
     ) -> None:
-        """
-        Initialize ModelServingError.
+        """Initialize ModelServingError.
 
         Args:
             message: Error description
@@ -235,8 +224,7 @@ class ModelServingError(DemandForecastingError):
 
 
 class PipelineError(DemandForecastingError):
-    """
-    Raised when Kedro pipeline execution fails.
+    """Raised when Kedro pipeline execution fails.
 
     Use this for errors in pipeline orchestration.
 
@@ -254,8 +242,7 @@ class PipelineError(DemandForecastingError):
         pipeline_name: str | None = None,
         node_name: str | None = None,
     ) -> None:
-        """
-        Initialize PipelineError.
+        """Initialize PipelineError.
 
         Args:
             message: Error description
@@ -272,8 +259,7 @@ class PipelineError(DemandForecastingError):
 
 
 class ConfigurationError(DemandForecastingError):
-    """
-    Raised when configuration is invalid or missing.
+    """Raised when configuration is invalid or missing.
 
     Use this for configuration-related errors.
 
@@ -291,8 +277,7 @@ class ConfigurationError(DemandForecastingError):
         config_key: str | None = None,
         config_file: str | None = None,
     ) -> None:
-        """
-        Initialize ConfigurationError.
+        """Initialize ConfigurationError.
 
         Args:
             message: Error description

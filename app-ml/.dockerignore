@@ -1,70 +1,20 @@
-# Git and Python
-.git
-.gitignore
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Pythonenv
-pip-log.txt
-pip-selfcheck.json
+*.py[cod]
+*$py.class
 
-# Docker
-.dockerignore
-# Exclude files and directories that are not needed in the build context
-.git
-.gitignore
-README.md
-.env
-.env.*
-.vscode/
-.idea/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-test_reports/
-logs/
-models/
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Project Specific
 data/
-
-# Node modules (if any)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Documentation
-docs/
-*.md
-!docs/README.md
-
-# IDE
-.vscode/
-.idea/
-
-# OS generated files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
 logs/
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
-
-# Build artifacts
-build/
-dist/
-
-# MinIO and MLflow artifacts
-mlflow-artifacts/
-mlruns/
-
-# Airflow specific
-airflow-logs/
-airflow.cfg
-airflow-webserver.pid
+notebooks/
+tests/
+docs/
+.pytest_cache/
+.mypy_cache/
+.git/
+.gitignore

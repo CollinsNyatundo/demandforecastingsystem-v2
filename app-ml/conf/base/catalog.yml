@@ -3,7 +3,10 @@
 # -----------------------------------------------------------------------------
 # Raw and intermediate paths are relative to project path (e.g. /opt/airflow in Docker).
 # For S3/MinIO override in conf/local/catalog.yml using credentials.
-# Note: 'layer' parameter removed for kedro-datasets compatibility
+#
+# IMPORTANT: All dataset types use lowercase 's' suffix (kedro-datasets 3.x+).
+# The old PascalCase aliases (ParquetDataSet, PickleDataSet, JSONDataSet) were
+# removed in kedro-datasets 3.0. Using them causes ImportError at DAG startup.
 # -----------------------------------------------------------------------------
 
 # Raw input: bike sharing dataset (parquet). Place file at data/01_raw/ or use S3.
@@ -31,25 +34,48 @@ validated_features:
 
 # Model input table (saved by DAG t_feature_eng, loaded by t_train_optimized_model)
 model_input_table:
-  type: pandas.ParquetDataset
+  type: pandas.ParquetDataset   # ← was ParquetDataSet (capital S, removed in kedro-datasets 3.x)
   filepath: data/03_primary/model_input_table.parquet
 
 # Train/test splits (when using feature_engineering pipeline standalone)
+# NOTE: actual split files live in data/04_features/ (not 03_primary)
 X_train:
-  type: pandas.ParquetDataset
-  filepath: data/03_primary/X_train.parquet
+  type: pandas.ParquetDataset   # ← was ParquetDataSet
+  filepath: data/04_features/X_train.parquet
 
 X_test:
-  type: pandas.ParquetDataset
-  filepath: data/03_primary/X_test.parquet
+  type: pandas.ParquetDataset   # ← was ParquetDataSet
+  filepath: data/04_features/X_test.parquet
 
 y_train:
-  type: pandas.ParquetDataset
-  filepath: data/03_primary/y_train.parquet
+  type: pandas.ParquetDataset   # ← was ParquetDataSet
+  filepath: data/04_features/y_train.parquet
 
 y_test:
-  type: pandas.ParquetDataset
-  filepath: data/03_primary/y_test.parquet
+  type: pandas.ParquetDataset   # ← was ParquetDataSet
+  filepath: data/04_features/y_test.parquet
+
+# Model outputs
+trained_model:
+  type: pickle.PickleDataset    # ← was PickleDataSet
+  filepath: data/06_models/trained_model.pkl
+
+model_metrics:
+  type: json.JSONDataset        # ← was JSONDataSet
+  filepath: data/06_models/model_metrics.json
+
+feature_importance:
+  type: json.JSONDataset        # ← was JSONDataSet
+  filepath: data/06_models/feature_importance.json
+
+# Explainability outputs
+shap_values:
+  type: pickle.PickleDataset    # ← was PickleDataSet
+  filepath: data/06_models/shap_values.pkl
+
+prediction_explanation:
+  type: json.JSONDataset        # ← was JSONDataSet
+  filepath: data/06_models/prediction_explanation.json
 
 # Models and artifacts (optional catalog entries; MLflow is primary for models)
 catboost_model:

@@ -331,7 +331,7 @@ def dataset_monitoring_dag():
                 "<li>Review Airflow logs for errors</li>",
                 "<li>Check MinIO bucket for data presence</li>",
                 "</ul>",
-                "<p><strong>Airflow UI:</strong> <a href='http://localhost:8080'>http://localhost:8080</a></p>",
+                "<p><strong>Airflow UI:</strong> <a href='http://localhost:8081'>http://localhost:8081</a></p>",  # host port 8081 maps to container 8080
             ]
         )
 

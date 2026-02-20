@@ -1,137 +1,41 @@
-services:
-  # MinIO for S3-compatible storage (development)
-  minio:
-    image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+# =============================================================================
+# DEMAND FORECASTING MLOPS — ROOT COMPOSE WRAPPER
+# =============================================================================
+#
+# This file is a convenience entry point. The CANONICAL docker-compose
+# configuration lives in app-ml/docker-compose.yml
+#
+# USAGE:
+#   1. Copy .env from example:
+#      cp app-ml/.env.example app-ml/.env
+#
+#   2. Start the full stack (from this root directory):
+#      docker compose -f app-ml/docker-compose.yml --env-file app-ml/.env up -d
+#
+#   3. Or from the app-ml directory (recommended):
+#      cd app-ml && docker compose up -d
+#
+# PROFILES:
+#   --profile linux-host   Enable node-exporter (Linux hosts only)
+#   --profile celery       Enable Celery-based Airflow workers (scaling)
+#   --profile clearml      Enable ClearML experiment tracking stack
+#
+# SERVICE PORTS QUICK-REFERENCE:
+#   Airflow:     http://localhost:8081   (admin / check .env)
+#   MLflow:      http://localhost:5000
+#   App UI:      http://localhost:8050
+#   Model API:   http://localhost:8000
+#   MinIO:       http://localhost:9001   (console)
+#   Grafana:     http://localhost:3000
+#   Prometheus:  http://localhost:9090
+#   Optuna:      http://localhost:8085
+#   Nginx:       http://localhost:80
+# =============================================================================
+#
+# NOTE: This file deliberately delegates to app-ml/docker-compose.yml.
+# Do NOT add services here directly — edit app-ml/docker-compose.yml instead.
+#
+# The 'include' directive below (Compose v2.20+) imports the canonical file:
 
-  # PostgreSQL for Airflow metadata
-  postgres:
-    image: postgres:13
-    environment:
-      POSTGRES_DB: airflow
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airflow"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Airflow webserver and scheduler (ML Pipeline)
-  airflow:
-    build:
-      context: ./app-ml
-      dockerfile: Dockerfile
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW__CORE__FERNET_KEY=${FERNET_KEY:-your-fernet-key-here}
-      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=false
-      - AIRFLOW__CORE__LOAD_EXAMPLES=false
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./app-ml:/opt/airflow
-      - ./models:/opt/airflow/models
-      - ./data:/opt/airflow/data
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-    command: >
-      bash -c "
-        airflow db upgrade &&
-        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin ||
-        echo 'User already exists' &&
-        airflow scheduler &
-        airflow webserver
-      "
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-
-  # ML Model Inference Service (separate from training)
-  ml-inference:
-    build:
-      context: ./app-ml
-      dockerfile: Dockerfile.model-server
-    ports:
-      - "8000:8000"
-    environment:
-      - MODEL_PATH=/models/final_catboost_model.cbm
-      - ENVIRONMENT=production
-      - VALID_API_KEYS=${API_KEYS:-dev-key}
-      - LOG_LEVEL=INFO
-      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
-    volumes:
-      - ./models:/models:ro
-      - ./app-ml/src:/app/src
-    depends_on:
-      - airflow
-    command: uvicorn demand_forecasting.serving.model_server:app --host 0.0.0.0 --port 8000
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
-
-  # Dash Web UI Service
-  app-ui:
-    build:
-      context: ./app-ui
-      dockerfile: Dockerfile
-    ports:
-      - "8050:8050"
-    environment:
-      - API_URL=http://ml-inference:8000
-      - API_KEY=${UI_API_KEY:-dev-key}
-    volumes:
-      - ./app-ui:/app
-      - ./common:/app/common
-      - ./config:/app/config
-      - ./data:/app/data
-    depends_on:
-      ml-inference:
-        condition: service_healthy
-    command: python app.py
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8050"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-
-volumes:
-  minio_data:
-  postgres_data:
-
-networks:
-  default:
-    driver: bridge
+include:
+  - app-ml/docker-compose.yml

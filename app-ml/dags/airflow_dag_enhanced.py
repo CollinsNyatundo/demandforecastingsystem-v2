@@ -12,6 +12,8 @@ Version: 2.1.0
 
 import logging
 import os
+import socket
+import subprocess
 from datetime import datetime, timedelta
 
 import pendulum
@@ -77,9 +79,11 @@ MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000"
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "demand_forecasting")
 
 # Optuna Persistence Configuration
-OPTUNA_STORAGE_URL = os.environ.get(
-    "OPTUNA_STORAGE_URL", "postgresql://airflow:airflow@postgres:5432/optuna"
-)
+# Build fallback from real credentials rather than hardcoding 'airflow:airflow'
+_pg_user = os.environ.get("POSTGRES_USER", "airflow")
+_pg_pass = os.environ.get("POSTGRES_PASSWORD", "")
+_default_optuna_url = f"postgresql://{_pg_user}:{_pg_pass}@postgres:5432/optuna"
+OPTUNA_STORAGE_URL = os.environ.get("OPTUNA_STORAGE_URL", _default_optuna_url)
 OPTUNA_STUDY_NAME = os.environ.get("OPTUNA_STUDY_NAME", "demand_forecasting_study")
 
 # Dataset Declarations
@@ -166,6 +170,20 @@ def setup_mlflow() -> str | None:
         mlflow.set_tag("pipeline_version", "2.1.0")
         mlflow.set_tag("model_type", "CatBoost")
         mlflow.set_tag("optimization", "Optuna_TPESampler")
+        mlflow.set_tag("environment", os.environ.get("ENVIRONMENT", "production"))
+        mlflow.set_tag("host", socket.gethostname())
+        mlflow.set_tag("optuna_study_name", OPTUNA_STUDY_NAME)
+
+        # Try to capture git commit for reproducibility
+        try:
+            git_commit = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=PROJECT_PATH,
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            mlflow.set_tag("git_commit", git_commit)
+        except Exception:
+            mlflow.set_tag("git_commit", "unknown")
 
         logger.info(f"✅ MLflow tracking enabled. Run ID: {run.info.run_id}")
         return run.info.run_id
@@ -311,6 +329,13 @@ def demand_forecasting_dag():
                         "data_missing_pct": stats["missing_pct"],
                     }
                 )
+                # Log data version tag (hash of shape + first/last rows for reproducibility)
+                import hashlib
+                data_hash = hashlib.md5(
+                    f"{len(df)}_{df.columns.tolist()}_{df.iloc[0].values.tolist()}".encode()
+                ).hexdigest()[:8]
+                mlflow.set_tag("data_version", data_hash)
+                mlflow.set_tag("dataset_size", str(len(df)))
 
             logger.info(
                 f"✅ Raw data validated: {len(df)} rows, {len(df.columns)} columns"
@@ -375,14 +400,14 @@ def demand_forecasting_dag():
         Produces: MODEL_INPUT_DATASET
         """
         try:
-            catalog, _ = get_catalog()
+            # Issue 5 fix: call get_catalog() once — it bootstraps Kedro and returns
+            # both the DataCatalog and the OmegaConfigLoader in a single call.
+            catalog, conf_loader = get_catalog()
 
             # Load preprocessed data
             logger.info("Loading preprocessed data...")
             df = catalog.load("preprocessed_bike_data")
 
-            # Load parameters for feature engineering (use same conf source as get_catalog)
-            _, conf_loader = get_catalog()
             params = conf_loader["parameters"]
             logger.info("✅ Parameters loaded from configuration")
 
@@ -650,12 +675,20 @@ def demand_forecasting_dag():
 
                 # Log model to MLflow
                 try:
+                    # Log model with input signature for schema validation
+                    try:
+                        from mlflow.models.signature import infer_signature
+                        signature = infer_signature(X_test, catboost_model.predict(X_test))
+                    except Exception:
+                        signature = None
+
                     mlflow.catboost.log_model(
                         catboost_model,
                         "model",
                         registered_model_name="demand_forecasting_catboost",
+                        signature=signature,
                     )
-                    logger.info("✅ Model logged to MLflow")
+                    logger.info("✅ Model logged to MLflow with signature")
                 except Exception as e:
                     logger.error(f"❌ Failed to log model to MLflow: {e}")
                     raise
@@ -704,6 +737,8 @@ def demand_forecasting_dag():
             if MLFLOW_AVAILABLE:
                 mlflow.set_tag("model_version", timestamp)
                 mlflow.set_tag("model_path", versioned_model_path)
+                mlflow.set_tag("feature_count", str(len(X_train.columns)))
+                mlflow.set_tag("dataset_size", str(len(X_train)))
                 mlflow.log_param("model_timestamp", timestamp)
 
             # End MLflow run
@@ -805,7 +840,9 @@ def demand_forecasting_dag():
 
             # Log to MLflow
             if MLFLOW_AVAILABLE:
-                with mlflow.start_run(run_name="multi_objective_optimization"):
+                # Issue 8 fix: nested=True creates a child run under the active main
+                # training run instead of a separate top-level run.
+                with mlflow.start_run(run_name="multi_objective_optimization", nested=True):
                     mlflow.log_params({
                         "objectives": ",".join(objectives),
                         "n_trials": n_trials,
@@ -909,7 +946,8 @@ def demand_forecasting_dag():
 
             # Log to MLflow
             if MLFLOW_AVAILABLE:
-                with mlflow.start_run(run_name="ensemble_training"):
+                # Issue 8 fix: nested=True — child run under the active main run.
+                with mlflow.start_run(run_name="ensemble_training", nested=True):
                     mlflow.log_params({
                         "ensemble_type": ensemble_type,
                         "base_models": list(ensemble_manager.base_models.keys()),

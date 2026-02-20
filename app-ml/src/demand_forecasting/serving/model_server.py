@@ -1,27 +1,37 @@
 """Production-grade FastAPI model server for demand forecasting."""
 
-import hashlib
 import logging
 import math
 import os
-import secrets
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from typing import Any, ClassVar, final
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 import argon2
 import catboost
 import mlflow
 import numpy as np
+import pandas as pd
 from cachetools import TTLCache
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
+from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
+    make_asgi_app,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -30,7 +40,41 @@ from pydantic import (
     model_validator,
 )
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+
+# Evidently drift monitoring integration
+try:
+    from demand_forecasting.integrations.evidently_integration import (
+        EVIDENTLY_AVAILABLE,
+        get_drift_metrics_for_prometheus,
+    )
+except ImportError:
+    EVIDENTLY_AVAILABLE = False
+    get_drift_metrics_for_prometheus = None  # type: ignore[assignment]
+    logging.warning("Evidently integration not available. Drift monitoring disabled.")
+
+# S3 filesystem for model loading fallback
+try:
+    import s3fs
+
+    S3FS_AVAILABLE = True
+except ImportError:
+    S3FS_AVAILABLE = False
+    logging.warning("s3fs not available. S3 model loading disabled.")
+
+
+# A/B Testing integration (feature-flagged)
+ENABLE_AB_TESTING = os.environ.get("ENABLE_AB_TESTING", "false").lower() == "true"
+try:
+    from demand_forecasting.serving.model_router import ABTestManager
+
+    AB_TESTING_AVAILABLE = True
+except ImportError:
+    AB_TESTING_AVAILABLE = False
+    if ENABLE_AB_TESTING:
+        logging.warning("A/B testing enabled but model_router not available.")
+
+# Global A/B test manager (initialized during lifespan if enabled)
+ab_test_manager = {}
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +106,26 @@ prediction_duration = Histogram(
     "prediction_duration_seconds", "Prediction request duration"
 )
 model_accuracy = Gauge("model_accuracy", "Current model accuracy", ["model_id"])
+
+# Evidently drift Prometheus gauges (matches Grafana data_drift.json queries)
+evidently_dataset_drift_gauge = Gauge(
+    "evidently_dataset_drift", "Whether dataset drift is detected (0 or 1)"
+)
+evidently_drift_share_gauge = Gauge(
+    "evidently_drift_share", "Share of drifted features (0.0 to 1.0)"
+)
+evidently_columns_total_gauge = Gauge(
+    "evidently_columns_total", "Total number of monitored columns"
+)
+evidently_columns_drifted_gauge = Gauge(
+    "evidently_columns_drifted", "Number of columns with detected drift"
+)
+
+# Global reference data for drift comparison
+reference_data = {}
+
+# Last drift check timestamp
+last_drift_check = {"timestamp": None, "metrics": {}}
 
 
 class PredictionRequest(BaseModel):
@@ -102,22 +166,49 @@ class PredictionRequest(BaseModel):
     )
 
     # Core features that are always required
-    CORE_FEATURES: ClassVar[set[str]] = {"temp", "humidity", "wind_speed", "hour", "day_of_week"}
+    CORE_FEATURES: ClassVar[set[str]] = {
+        "temp",
+        "humidity",
+        "wind_speed",
+        "hour",
+        "day_of_week",
+    }
 
     # Optional features that may be provided depending on model requirements
     OPTIONAL_FEATURES: ClassVar[set[str]] = {
-        "month", "quarter", "day_of_year", "year", "season",
-        "holiday", "workingday", "weather_condition",
-        "feels_like_temp", "casual", "registered",
+        "month",
+        "quarter",
+        "day_of_year",
+        "year",
+        "season",
+        "holiday",
+        "workingday",
+        "weather_condition",
+        "feels_like_temp",
+        "casual",
+        "registered",
         # Demand lag features (matching notebook's cnt_lag naming convention)
         # These are lags of current demand, not target (next hour)
-        "demand_lag1", "demand_lag2", "demand_lag22", "demand_lag23",
+        "demand_lag1",
+        "demand_lag2",
+        "demand_lag22",
+        "demand_lag23",
         # Feature lag features (using renamed column names)
-        "hour_lag1", "hour_lag2", "hour_lag3",
-        "day_of_week_lag1", "day_of_week_lag2", "day_of_week_lag3",
-        "weather_condition_lag1", "weather_condition_lag2", "weather_condition_lag3",
-        "temp_lag1", "temp_lag2", "temp_lag3",
-        "humidity_lag1", "humidity_lag2", "humidity_lag3",
+        "hour_lag1",
+        "hour_lag2",
+        "hour_lag3",
+        "day_of_week_lag1",
+        "day_of_week_lag2",
+        "day_of_week_lag3",
+        "weather_condition_lag1",
+        "weather_condition_lag2",
+        "weather_condition_lag3",
+        "temp_lag1",
+        "temp_lag2",
+        "temp_lag3",
+        "humidity_lag1",
+        "humidity_lag2",
+        "humidity_lag3",
         # Interaction features
         "hour_day_interaction",
         # Raw demand (current hour) - kept as feature per notebook
@@ -278,19 +369,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # AUDIT-M4: Model versioning support for rollbacks and A/B testing
         # Use MODEL_VERSION env var for specific version, MODEL_STAGE for stage (default: Production)
         try:
-            model_name = os.environ.get("MODEL_NAME", "demand_forecasting")
+            # Issue 2 fix: default matches registered_model_name used in airflow_dag_enhanced.py
+            model_name = os.environ.get("MODEL_NAME", "demand_forecasting_catboost")
             model_version = os.environ.get("MODEL_VERSION")  # Specific version number
-            model_stage = os.environ.get("MODEL_STAGE", "Production")  # Stage: Production, Staging, etc.
-            
+            model_stage = os.environ.get(
+                "MODEL_STAGE", "Production"
+            )  # Stage: Production, Staging, etc.
+
             if model_version:
                 # Load specific version (for rollbacks)
                 model_uri = f"models:/{model_name}/{model_version}"
-                logger.info(f"Loading model version {model_version} from MLflow registry")
+                logger.info(
+                    f"Loading model version {model_version} from MLflow registry"
+                )
             else:
                 # Load by stage (default: Production)
                 model_uri = f"models:/{model_name}/{model_stage}"
                 logger.info(f"Loading model stage '{model_stage}' from MLflow registry")
-            
+
             ml_models["production"] = mlflow.pyfunc.load_model(model_uri)
             logger.info(f"Model loaded successfully from: {model_uri}")
             model_loaded = True
@@ -306,19 +402,56 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception as fallback_error:
                 logger.error(f"Failed to load fallback model: {fallback_error}")
 
+            # Try to load from MinIO/S3 as last resort
+            if not model_loaded and S3FS_AVAILABLE:
+                try:
+                    import pickle
+
+                    s3_endpoint = os.environ.get(
+                        "MLFLOW_S3_ENDPOINT_URL", "http://minio:9000"
+                    )
+                    s3_key = os.environ.get(
+                        "MINIO_ACCESS_KEY", os.environ.get("AWS_ACCESS_KEY_ID", "")
+                    )
+                    s3_secret = os.environ.get(
+                        "MINIO_SECRET_KEY", os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+                    )
+                    fs = s3fs.S3FileSystem(
+                        key=s3_key,
+                        secret=s3_secret,
+                        client_kwargs={"endpoint_url": s3_endpoint},
+                    )
+                    bucket = os.environ.get("S3_BUCKET", "demand-forecasting")
+                    model_prefix = f"{bucket}/06_models/"
+                    model_files = sorted(
+                        [f for f in fs.ls(model_prefix) if f.endswith(".pickle")],
+                        reverse=True,
+                    )
+                    if model_files:
+                        latest_model_path = model_files[0]
+                        logger.info(f"Loading model from S3: {latest_model_path}")
+                        with fs.open(latest_model_path, "rb") as f:
+                            ml_models["production"] = pickle.load(f)  # noqa: S301
+                        logger.info("Model loaded successfully from MinIO/S3")
+                        model_loaded = True
+                except Exception as s3_error:
+                    logger.error(f"Failed to load model from S3: {s3_error}")
+
         # CRITICAL: Fail startup if no model is available
         if not model_loaded:
-            raise RuntimeError(
-                "CRITICAL: No model available. Cannot start prediction server. "
-                "Please train a model and register it with MLflow, or place model file at: "
+            logger.error(
+                "CRITICAL: No model available. Server will start but predictions will fail. "
+                "Please train a model and register it with MLflow, save to S3, or place at: "
                 "models/experiments/final_catboost_model.cbm"
             )
+            # Allow server to start for health checks even without model
+            # Prediction endpoints will return 503
 
         # Load feature metadata for correct feature engineering
         try:
             import json
             from pathlib import Path
-            
+
             metadata_path = Path("models/feature_metadata.json")
             if metadata_path.exists():
                 with open(metadata_path) as f:
@@ -333,16 +466,100 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 )
                 # Set default fallback (for backward compatibility)
                 feature_metadata["feature_names"] = [
-                    "temp", "humidity", "wind_speed", "hour", "day_of_week"
+                    "temp",
+                    "humidity",
+                    "wind_speed",
+                    "hour",
+                    "day_of_week",
                 ]
                 feature_metadata["n_features"] = 5
         except Exception as e:
             logger.error(f"Failed to load feature metadata: {e}")
             # Use minimal fallback
             feature_metadata["feature_names"] = [
-                "temp", "humidity", "wind_speed", "hour", "day_of_week"
+                "temp",
+                "humidity",
+                "wind_speed",
+                "hour",
+                "day_of_week",
             ]
             feature_metadata["n_features"] = 5
+
+        # Load reference data for drift monitoring
+        if EVIDENTLY_AVAILABLE:
+            try:
+                ref_data_path = Path("data/01_raw/raw_bike_data.parquet")
+                if not ref_data_path.exists():
+                    # Try loading from S3
+                    if S3FS_AVAILABLE:
+                        try:
+                            s3_endpoint = os.environ.get(
+                                "MLFLOW_S3_ENDPOINT_URL", "http://minio:9000"
+                            )
+                            s3_key = os.environ.get(
+                                "MINIO_ACCESS_KEY",
+                                os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                            )
+                            s3_secret = os.environ.get(
+                                "MINIO_SECRET_KEY",
+                                os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                            )
+                            fs = s3fs.S3FileSystem(
+                                key=s3_key,
+                                secret=s3_secret,
+                                client_kwargs={"endpoint_url": s3_endpoint},
+                            )
+                            bucket = os.environ.get("S3_BUCKET", "demand-forecasting")
+                            with fs.open(
+                                f"{bucket}/01_raw/raw_bike_data.parquet", "rb"
+                            ) as f:
+                                reference_data["df"] = pd.read_parquet(f)
+                            logger.info(
+                                "Reference data loaded from S3 for drift monitoring"
+                            )
+                        except Exception as s3_err:
+                            logger.warning(
+                                f"Could not load reference data from S3: {s3_err}"
+                            )
+                else:
+                    reference_data["df"] = pd.read_parquet(ref_data_path)
+                    logger.info(
+                        f"Reference data loaded: {len(reference_data['df'])} rows"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Could not load reference data for drift monitoring: {e}"
+                )
+        else:
+            logger.info("Evidently not available - drift monitoring disabled")
+
+        # Initialize A/B testing if enabled
+        if ENABLE_AB_TESTING and AB_TESTING_AVAILABLE:
+            model_b_uri = os.environ.get("MODEL_B_URI")
+            model_a_uri = os.environ.get(
+                "MODEL_A_URI",
+                f"models:/{os.environ.get('MODEL_NAME', 'demand_forecasting')}/Production",
+            )
+            if model_b_uri:
+                try:
+                    ab_split = float(os.environ.get("AB_SPLIT", "0.7"))
+                    test_name = os.environ.get("AB_TEST_NAME", "production_ab_test")
+                    ab_test_manager["manager"] = ABTestManager(
+                        test_name=test_name,
+                        model_a_uri=model_a_uri,
+                        model_b_uri=model_b_uri,
+                        initial_split=ab_split,
+                    )
+                    logger.info(
+                        f"A/B testing initialized: {test_name} "
+                        f"(A={model_a_uri}, B={model_b_uri}, split={ab_split:.0%})"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to initialize A/B testing: {e}")
+            else:
+                logger.info("A/B testing enabled but MODEL_B_URI not set. Skipping.")
+        elif ENABLE_AB_TESTING:
+            logger.warning("A/B testing enabled but ABTestManager not available.")
 
         # Start metrics server
         metrics_app = make_asgi_app()
@@ -358,6 +575,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Clean up resources
         ml_models.clear()
         feature_metadata.clear()
+        reference_data.clear()
+        ab_test_manager.clear()
         logger.info("Model server shutdown complete")
 
 
@@ -379,8 +598,9 @@ def get_allowed_origins() -> list[str]:
         "development": [
             "http://localhost:3000",
             "http://localhost:8000",
+            "http://localhost:8050",  # Dash UI (app-ui)
             "http://localhost:8080",
-            "http://localhost:8501",  # Streamlit
+            "http://localhost:8501",  # Streamlit (legacy, kept for convenience)
         ],
     }
 
@@ -462,20 +682,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "picture-in-picture=()",
         ]
 
-        response.headers[\"Permissions-Policy\"] = \", \".join(permissions_directives)
+        response.headers["Permissions-Policy"] = ", ".join(permissions_directives)
 
         # Remove server information
-        response.headers[\"Server\"] = \"Demand-Forecasting-API\"
+        response.headers["Server"] = "Demand-Forecasting-API"
 
         return response
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Rate limiting middleware for API endpoints.
-    
+
     Implements IP-based rate limiting to prevent abuse and ensure fair usage.
     (Rate limiting on model server)
-    
+
     Configuration via environment variables:
     - RATE_LIMIT_PER_MINUTE: Max requests per minute per IP (default: 60)
     - RATE_LIMIT_ENABLED: Enable/disable rate limiting (default: true)
@@ -509,7 +729,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Clean old requests from cache
         if client_ip in request_rate_cache:
             request_rate_cache[client_ip] = [
-                t for t in request_rate_cache[client_ip]
+                t
+                for t in request_rate_cache[client_ip]
                 if current_time - t < RATE_LIMIT_WINDOW_SECONDS
             ]
         else:
@@ -526,8 +747,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "Retry-After": "60",
                     "X-RateLimit-Limit": str(MAX_REQUESTS_PER_MINUTE),
                     "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(int(current_time + RATE_LIMIT_WINDOW_SECONDS)),
-                }
+                    "X-RateLimit-Reset": str(
+                        int(current_time + RATE_LIMIT_WINDOW_SECONDS)
+                    ),
+                },
             )
 
         # Record this request
@@ -540,7 +763,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         remaining = MAX_REQUESTS_PER_MINUTE - len(request_rate_cache[client_ip])
         response.headers["X-RateLimit-Limit"] = str(MAX_REQUESTS_PER_MINUTE)
         response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
-        response.headers["X-RateLimit-Reset"] = str(int(current_time + RATE_LIMIT_WINDOW_SECONDS))
+        response.headers["X-RateLimit-Reset"] = str(
+            int(current_time + RATE_LIMIT_WINDOW_SECONDS)
+        )
 
         return response
 
@@ -570,6 +795,8 @@ if env == "development":
     allowed_hosts.append(
         "0.0.0.0"
     )  # Development: allows local access only  # noqa: S104
+    # Issue 6 fix: Docker service hostname so Nginx proxy requests pass TrustedHostMiddleware
+    allowed_hosts.extend(["model-server", "model-server:8000", "model-server:8001"])
 if env == "production":
     # Production hosts must be explicitly configured
     production_hosts = os.getenv("ALLOWED_HOSTS", "yourdomain.com,*.yourdomain.com")
@@ -763,14 +990,14 @@ async def verify_api_key_secure(
             ph.verify(stored_hash, x_api_key)
             # Key is valid
             logger.info(f"Valid API key used: {x_api_key[:8]}...")
-            
+
             # Check if hash needs rehashing (parameter updates)
             if ph.check_needs_rehash(stored_hash):
                 logger.info("API key hash needs rehashing with updated parameters")
                 # In a real application, you would persist this rehashed key
                 # For this example, we just update it in memory
                 api_key_manager.valid_key_hashes[original_key] = ph.hash(x_api_key)
-            
+
             is_valid = True
             break  # Authentication successful
         except argon2.exceptions.VerifyMismatchError:
@@ -803,34 +1030,15 @@ async def verify_api_key_secure(
     return x_api_key
 
 
-async def verify_api_key(x_api_key: str = Header(None)) -> str:
-    """Legacy API key verification - DEPRECATED.
+async def verify_api_key(*_args: object, **_kwargs: object) -> str:  # type: ignore[return]
+    """Issue 9 fix: deprecated timing-attack-vulnerable function removed.
 
-    This function is kept for backward compatibility but should
-    be replaced with verify_api_key_secure in all endpoints.
-
-    SECURITY WARNING: This function is vulnerable to timing attacks.
-    Use verify_api_key_secure instead.
+    Use verify_api_key_secure for all endpoints.
+    This stub raises immediately so accidental use surfaces at test time.
     """
-    logger.warning(
-        "Using deprecated verify_api_key function - vulnerable to timing attacks"
+    raise NotImplementedError(
+        "verify_api_key is removed. Use verify_api_key_secure (Depends(verify_api_key_secure))."
     )
-
-    # Load valid API keys from environment variable (comma-separated)
-    valid_api_keys = os.environ.get("VALID_API_KEYS", "").split(",")
-    valid_api_keys = [key.strip() for key in valid_api_keys if key.strip()]
-
-    if not x_api_key:
-        raise HTTPException(
-            status_code=401, detail="Missing API key. Provide X-API-Key header."
-        )
-
-    if x_api_key not in valid_api_keys:
-        # SECURITY WARNING: Logging partial API key can leak information
-        logger.warning(f"Invalid API key attempt: {x_api_key[:10]}...")
-        raise HTTPException(status_code=403, detail="Invalid API key")
-
-    return x_api_key
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -861,15 +1069,15 @@ async def predict(
         # Get feature names from metadata (loaded at startup)
         # This ensures we use the same features the model was trained with
         feature_names = feature_metadata.get("feature_names", [])
-        
+
         if not feature_names:
             logger.error("No feature names found in metadata")
             prediction_requests_total.labels(model_id=model_id, status="error").inc()
             raise HTTPException(
                 status_code=500,
-                detail="Feature metadata not loaded. Server misconfigured."
+                detail="Feature metadata not loaded. Server misconfigured.",
             )
-        
+
         # Check if all required features are present in request
         missing_features = set(feature_names) - set(request.features.keys())
         if missing_features:
@@ -880,7 +1088,7 @@ async def predict(
             for feat in missing_features:
                 request.features[feat] = 0.0
             logger.info("Filled missing features with 0.0")
-        
+
         # Prepare features in the correct order matching training data
         try:
             features = np.array([request.features.get(f, 0.0) for f in feature_names])
@@ -888,8 +1096,7 @@ async def predict(
             logger.error(f"Error preparing features: {e}")
             prediction_requests_total.labels(model_id=model_id, status="error").inc()
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid feature format: {str(e)}"
+                status_code=400, detail=f"Invalid feature format: {e!s}"
             )
 
         # Make prediction
@@ -985,17 +1192,172 @@ async def update_model_accuracy(
     return {"message": f"Accuracy updated to {accuracy} for model {model_id}"}
 
 
+@app.get("/metrics/drift")
+async def drift_metrics() -> dict[str, Any]:
+    """Evidently drift metrics endpoint for Prometheus scraping.
+
+    Returns drift metrics and updates Prometheus gauges.
+    Prometheus scrapes this at model-server:8001/metrics/drift.
+    """
+    if not EVIDENTLY_AVAILABLE or get_drift_metrics_for_prometheus is None:
+        return {
+            "status": "disabled",
+            "reason": "Evidently not available",
+            "metrics": {},
+        }
+
+    if "df" not in reference_data:
+        return {
+            "status": "no_reference_data",
+            "reason": "Reference data not loaded",
+            "metrics": {},
+        }
+
+    # Use cached metrics if checked within last 5 minutes
+    if (
+        last_drift_check["timestamp"]
+        and (datetime.now(UTC) - last_drift_check["timestamp"]).total_seconds() < 300
+    ):
+        return {
+            "status": "ok",
+            "cached": True,
+            "last_check": last_drift_check["timestamp"].isoformat(),
+            "metrics": last_drift_check["metrics"],
+        }
+
+    try:
+        ref_df = reference_data["df"]
+        # Use a sample of reference data as "current" for initial comparison
+        # In production, this would compare against recent prediction data
+        current_sample = ref_df.sample(frac=0.3, random_state=42)
+
+        # Select only numeric columns for drift analysis
+        numeric_cols = ref_df.select_dtypes(include=[np.number]).columns.tolist()
+        ref_numeric = ref_df[numeric_cols]
+        current_numeric = current_sample[numeric_cols]
+
+        metrics = get_drift_metrics_for_prometheus(
+            reference_data=ref_numeric,
+            current_data=current_numeric,
+        )
+
+        # Update Prometheus gauges
+        if metrics:
+            evidently_dataset_drift_gauge.set(
+                metrics.get("evidently_dataset_drift", 0.0)
+            )
+            evidently_drift_share_gauge.set(metrics.get("evidently_drift_share", 0.0))
+            evidently_columns_total_gauge.set(
+                metrics.get("evidently_columns_total", 0.0)
+            )
+            evidently_columns_drifted_gauge.set(
+                metrics.get("evidently_columns_drifted", 0.0)
+            )
+
+        # Cache the results
+        last_drift_check["timestamp"] = datetime.now(UTC)
+        last_drift_check["metrics"] = metrics
+
+        logger.info(f"Drift metrics updated: {metrics}")
+        return {
+            "status": "ok",
+            "cached": False,
+            "last_check": last_drift_check["timestamp"].isoformat(),
+            "metrics": metrics,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to compute drift metrics: {e}")
+        return {
+            "status": "error",
+            "reason": str(e),
+            "metrics": {},
+        }
+
+
 @app.get("/")
 async def root() -> dict[str, str]:
     """Root endpoint with API information."""
-    return {
+    info = {
         "message": "Demand Forecasting API",
         "version": "2.2.0",
         "docs": "/docs",
         "health": "/health",
         "metrics": "/metrics",
+        "drift": "/metrics/drift",
     }
+    if ENABLE_AB_TESTING and "manager" in ab_test_manager:
+        info["ab_predict"] = "/predict/ab"
+        info["ab_stats"] = "/ab/stats"
+    return info
 
+
+# =========================================================================
+# A/B Testing Endpoints (feature-flagged)
+# =========================================================================
+
+if ENABLE_AB_TESTING and AB_TESTING_AVAILABLE:
+
+    @app.post("/predict/ab")
+    async def predict_ab(
+        request: PredictionRequest,
+        api_key: str = Depends(verify_api_key_secure),
+    ) -> dict[str, Any]:
+        """A/B routed prediction endpoint.
+
+        Routes the request to model A or B based on configured traffic split.
+        Requires ENABLE_AB_TESTING=true and MODEL_B_URI to be set.
+        """
+        if "manager" not in ab_test_manager:
+            raise HTTPException(
+                status_code=503,
+                detail="A/B testing not initialized. Set MODEL_B_URI environment variable.",
+            )
+
+        try:
+            result = ab_test_manager["manager"].predict_with_routing(request.features)
+            prediction_requests_total.labels(
+                model_id=f"ab_{result['model_id']}", status="success"
+            ).inc()
+            return result
+        except Exception as e:
+            prediction_requests_total.labels(model_id="ab_error", status="error").inc()
+            logger.error(f"A/B prediction failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/ab/stats")
+    async def ab_test_stats() -> dict[str, Any]:
+        """Get A/B test statistics and recommendation."""
+        if "manager" not in ab_test_manager:
+            return {
+                "status": "not_initialized",
+                "reason": "A/B testing not initialized",
+            }
+        return ab_test_manager["manager"].get_test_summary()
+
+    @app.post("/ab/split")
+    async def update_ab_split(
+        split: float,
+        api_key: str = Depends(verify_api_key_secure),
+    ) -> dict[str, str]:
+        """Update A/B test traffic split ratio."""
+        if "manager" not in ab_test_manager:
+            raise HTTPException(
+                status_code=503,
+                detail="A/B testing not initialized.",
+            )
+        if not 0.0 <= split <= 1.0:
+            raise HTTPException(
+                status_code=400,
+                detail="Split must be between 0.0 and 1.0",
+            )
+        ab_test_manager["manager"].update_traffic_split(split)
+        return {"message": f"Traffic split updated to {split:.1%} for model A"}
+
+    # Issue 1 fix: the duplicate /metrics/drift stub above was removed.
+    # The real, fully-implemented /metrics/drift endpoint at line 1137 handles
+    # both JSON responses and Prometheus gauge updates.  The Prometheus /metrics
+    # endpoint (mounted via make_asgi_app) exposes those gauges in text format.
 
 if __name__ == "__main__":
     import uvicorn

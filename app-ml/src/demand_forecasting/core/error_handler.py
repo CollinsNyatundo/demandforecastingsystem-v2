@@ -1,5 +1,4 @@
-"""
-Centralized error handling and logging for demand forecasting system.
+"""Centralized error handling and logging for demand forecasting system.
 
 This module provides utilities for consistent error handling,
 structured logging, and error tracking across the application.
@@ -37,8 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorHandler:
-    """
-    Centralized error handling with structured logging.
+    """Centralized error handling with structured logging.
 
     Provides consistent error handling, categorization, and tracking
     across the demand forecasting system.
@@ -50,8 +48,7 @@ class ErrorHandler:
         context: dict[str, Any] | None = None,
         reraise: bool = True,
     ) -> str:
-        """
-        Handle pipeline errors with structured logging.
+        """Handle pipeline errors with structured logging.
 
         Args:
             error: The exception that occurred
@@ -125,8 +122,7 @@ class ErrorHandler:
         context: dict[str, Any],
         error_class: type[DemandForecastingError] | None = None,
     ) -> DemandForecastingError:
-        """
-        Wrap an exception with additional context.
+        """Wrap an exception with additional context.
 
         Args:
             error: Original exception
@@ -156,8 +152,7 @@ class ErrorHandler:
         error: Exception,
         include_trace: bool = False,
     ) -> dict[str, Any]:
-        """
-        Format an error for API response.
+        """Format an error for API response.
 
         Args:
             error: The exception to format

@@ -45,7 +45,13 @@ def create_pipeline(**kwargs: object) -> Pipeline:
             node(
                 func=train_final_model,
                 # Pass random_forest_model for reuse (avoids ~30-60s redundant retraining)
-                inputs=["X_train", "y_train", "model_comparison", "catboost_model", "random_forest_model"],
+                inputs=[
+                    "X_train",
+                    "y_train",
+                    "model_comparison",
+                    "catboost_model",
+                    "random_forest_model",
+                ],
                 outputs="final_model",
                 name="train_final_model",
             ),

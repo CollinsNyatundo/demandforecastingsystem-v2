@@ -5,14 +5,15 @@ optimization visualization, and resource monitoring.
 """
 
 import logging
-import os
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
 try:
     from clearml import Task
+
     CLEARML_AVAILABLE = True
 except ImportError:
     CLEARML_AVAILABLE = False
@@ -131,7 +132,9 @@ def log_model_artifact(
         _LOGGER.warning(f"Failed to log model artifact: {e}")
 
 
-def log_metrics(task: "Task | None", metrics: dict[str, float], iteration: int = 0) -> None:
+def log_metrics(
+    task: "Task | None", metrics: dict[str, float], iteration: int = 0
+) -> None:
     """Log metrics to ClearML.
 
     Args:
@@ -145,7 +148,9 @@ def log_metrics(task: "Task | None", metrics: dict[str, float], iteration: int =
     try:
         logger = task.get_logger()
         for name, value in metrics.items():
-            logger.report_scalar(title="Metrics", series=name, value=value, iteration=iteration)
+            logger.report_scalar(
+                title="Metrics", series=name, value=value, iteration=iteration
+            )
     except Exception as e:
         _LOGGER.warning(f"Failed to log metrics: {e}")
 
@@ -165,6 +170,7 @@ def with_clearml_tracking(
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -182,5 +188,7 @@ def with_clearml_tracking(
                 if task:
                     task.mark_failed(status_reason=str(e))
                 raise
+
         return wrapper
+
     return decorator

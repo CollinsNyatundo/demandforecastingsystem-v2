@@ -67,7 +67,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
     if len(df) == 0:
         logger.error(f"Empty dataset detected at {stage_name}")
         return False
-    
+
     if len(df) < 100:
         logger.warning(
             f"Dataset at {stage_name} has only {len(df)} rows. "
@@ -83,7 +83,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
                 f"Temperature values out of expected range [0, 1] at {stage_name}: "
                 f"min={temp_min:.4f}, max={temp_max:.4f}"
             )
-        
+
         # Check for outliers using IQR method
         Q1 = df["temp"].quantile(0.25)
         Q3 = df["temp"].quantile(0.75)
@@ -92,7 +92,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
         if len(outliers) > 0:
             logger.warning(
                 f"Found {len(outliers)} temperature outliers at {stage_name} "
-                f"({len(outliers)/len(df)*100:.1f}% of data)"
+                f"({len(outliers) / len(df) * 100:.1f}% of data)"
             )
 
     if "hum" in df.columns:
@@ -103,7 +103,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
                 f"Humidity values out of expected range [0, 1] at {stage_name}: "
                 f"min={hum_min:.4f}, max={hum_max:.4f}"
             )
-        
+
         # Check for outliers using IQR method
         Q1 = df["hum"].quantile(0.25)
         Q3 = df["hum"].quantile(0.75)
@@ -112,7 +112,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
         if len(outliers) > 0:
             logger.warning(
                 f"Found {len(outliers)} humidity outliers at {stage_name} "
-                f"({len(outliers)/len(df)*100:.1f}% of data)"
+                f"({len(outliers) / len(df) * 100:.1f}% of data)"
             )
 
     # Basic distribution validation - check for extreme skewness

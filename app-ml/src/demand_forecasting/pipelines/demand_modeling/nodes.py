@@ -18,31 +18,35 @@ try:
         init_clearml_task,
         log_metrics,
     )
+
     _CLEARML_AVAILABLE = True
 except ImportError:
     _CLEARML_AVAILABLE = False
-    init_clearml_task = lambda **kwargs: None  # type: ignore[misc]
-    log_metrics = lambda *args: None  # type: ignore[misc]
+    def init_clearml_task(**kwargs):
+        return None  # type: ignore[misc]
+    def log_metrics(*args):
+        return None  # type: ignore[misc]
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _ensure_series(data: pd.DataFrame | pd.Series) -> pd.Series:
     """Convert DataFrame to Series if needed.
-    
+
     Args:
         data: Input data, either DataFrame or Series
-        
+
     Returns:
         Series with the data
     """
     if isinstance(data, pd.DataFrame):
         if data.shape[1] == 1:
             return data.iloc[:, 0]
-        elif "target" in data.columns:
+        if "target" in data.columns:
             return data["target"]
-        else:
-            raise ValueError(f"Cannot convert DataFrame with columns {data.columns} to Series")
+        raise ValueError(
+            f"Cannot convert DataFrame with columns {data.columns} to Series"
+        )
     return data
 
 
@@ -62,7 +66,7 @@ def train_single_model(
         Trained RandomForestRegressor model
     """
     _LOGGER.info("Training Random Forest model...")
-    
+
     # Convert DataFrame to Series if needed
     y_train = _ensure_series(y_train)
 
@@ -114,7 +118,7 @@ def compare_demand_models(
         ValueError: If models are invalid or evaluation fails
     """
     _LOGGER.info("Starting model comparison for demand forecasting...")
-    
+
     # Convert DataFrame to Series if needed
     y_test = _ensure_series(y_test)
 
@@ -221,7 +225,7 @@ def train_final_model(
         ValueError: If model_comparison structure is invalid or metrics are missing
     """
     _LOGGER.info("Training final model with comprehensive validation...")
-    
+
     # Convert DataFrame to Series if needed
     y_train = _ensure_series(y_train)
 
@@ -297,21 +301,24 @@ def train_final_model(
         final_model = catboost_model
         _LOGGER.info("Using validated CatBoost model as final model")
 
-    else:  # random_forest
-        # Reuse the Random Forest model from comparison instead of retraining
-        # This saves ~30-60 seconds per run (RF Model Reuse)
-        if random_forest_model is not None and hasattr(random_forest_model, "predict"):
-            _LOGGER.info("Reusing validated Random Forest model from comparison (avoiding redundant retraining)")
-            final_model = random_forest_model
-        else:
-            _LOGGER.warning("Random Forest model not provided, retraining (this should be avoided for efficiency)")
-            final_model = train_single_model(X_train, y_train)
+    # Reuse the Random Forest model from comparison instead of retraining
+    # This saves ~30-60 seconds per run (RF Model Reuse)
+    elif random_forest_model is not None and hasattr(random_forest_model, "predict"):
+        _LOGGER.info(
+            "Reusing validated Random Forest model from comparison (avoiding redundant retraining)"
+        )
+        final_model = random_forest_model
+    else:
+        _LOGGER.warning(
+            "Random Forest model not provided, retraining (this should be avoided for efficiency)"
+        )
+        final_model = train_single_model(X_train, y_train)
 
-            # Validate trained model
-            if not hasattr(final_model, "predict"):
-                raise ValueError(
-                    "Failed to train valid Random Forest model - missing predict method."
-                )
+        # Validate trained model
+        if not hasattr(final_model, "predict"):
+            raise ValueError(
+                "Failed to train valid Random Forest model - missing predict method."
+            )
 
     _LOGGER.info(f"Final model trained and validated successfully ({best_model_name})")
     return final_model

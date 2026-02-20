@@ -1,0 +1,14 @@
+# Dockerfile.mlflow
+# Extends the official MLflow image with PostgreSQL and S3/MinIO support.
+# The base ghcr.io/mlflow/mlflow image does NOT bundle psycopg2 or boto3,
+# so we add them here to support:
+#   --backend-store-uri postgresql://...   (needs psycopg2)
+#   --default-artifact-root s3://...       (needs boto3)
+#
+# IMPORTANT: Use the same major.minor version as the mlflow client in the Airflow
+# container (currently 3.9.0) to avoid API endpoint mismatch (e.g. /logged-models 404).
+
+FROM ghcr.io/mlflow/mlflow:v3.9.0
+
+# Install PostgreSQL adapter and S3/MinIO boto3 support
+RUN pip install --no-cache-dir psycopg2-binary boto3
