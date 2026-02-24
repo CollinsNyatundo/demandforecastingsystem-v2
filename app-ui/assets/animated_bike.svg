@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60" width="100" height="60">
+  <defs>
+    <!-- Define the glowing teal gradient for the frame -->
+    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    
+    <!-- Define a wheel -->
+    <g id="wheel">
+      <circle cx="20" cy="40" r="14" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+      <circle cx="20" cy="40" r="1" fill="#fff" />
+      <!-- Spokes -->
+      <line x1="20" y1="26" x2="20" y2="54" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+      <line x1="6" y1="40" x2="34" y2="40" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+      <line x1="10" y1="30" x2="30" y2="50" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+      <line x1="10" y1="50" x2="30" y2="30" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+      <!-- Wheel Animation -->
+      <animateTransform attributeName="transform" type="rotate" from="0 20 40" to="360 20 40" dur="1.5s" repeatCount="indefinite" />
+    </g>
+  </defs>
+
+  <!-- Left Wheel -->
+  <use href="#wheel" x="0" y="0" />
+  
+  <!-- Right Wheel -->
+  <use href="#wheel" x="60" y="0" />
+
+  <!-- Bike Frame (Connecting points) -->
+  <path d="M 20 40 L 40 20 L 70 20 L 80 40 L 50 40 Z" fill="none" stroke="url(#frameGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Front fork -->
+  <path d="M 80 40 L 70 15 L 75 12" fill="none" stroke="url(#frameGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Seat post and Seat -->
+  <path d="M 40 20 L 35 10" fill="none" stroke="url(#frameGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 30 10 L 42 10" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Handlebars -->
+  <path d="M 70 15 L 65 15 L 65 10" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Pedals Group -->
+  <g>
+    <!-- Rotate around pedal at 50, 40 -->
+    <animateTransform attributeName="transform" type="rotate" from="0 50 40" to="360 50 40" dur="1.5s" repeatCount="indefinite" />
+    <circle cx="50" cy="40" r="4" fill="none" stroke="#fff" stroke-width="1.5"/>
+    <line x1="50" y1="40" x2="55" y2="30" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+    <line x1="50" y1="40" x2="45" y2="50" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

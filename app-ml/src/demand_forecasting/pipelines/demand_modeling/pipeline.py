@@ -6,7 +6,10 @@ random forest, XGBoost, and CatBoost with hyperparameter optimization.
 
 from kedro.pipeline import Pipeline, node
 
-from .catboost_nodes import optimize_catboost_params, train_catboost_model
+from .catboost_nodes_enhanced import (
+    optimize_catboost_hyperparameters_enhanced as optimize_catboost_params,
+    train_catboost_model,
+)
 from .nodes import compare_demand_models, train_final_model, train_single_model
 
 

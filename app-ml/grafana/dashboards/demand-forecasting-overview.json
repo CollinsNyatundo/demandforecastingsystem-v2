@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -13,18 +16,13 @@
     ]
   },
   "editable": true,
-  "gnetId": null,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "panels": [
     {
-      "aliasColors": [],
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "Prometheus",
-      "fill": 1,
+      "title": "Prediction Request Rate",
+      "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -32,69 +30,43 @@
         "y": 0
       },
       "id": 1,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
       "targets": [
         {
           "expr": "rate(prediction_requests_total[5m])",
-          "format": "time_series",
-          "intervalFactor": 2,
-          "legendFormat": "{{status}} - {{model_id}}",
-          "refId": "A",
-          "step": 10
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Prediction Request Rate",
-      "tooltip": {
-        "msResolution": false,
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "show": true
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": "Requests/sec",
-          "logBase": 1,
-          "max": null,
-          "min": 0,
-          "show": true
+          "legendFormat": "{{status}} — {{model_id}}",
+          "refId": "A"
         }
       ]
     },
     {
-      "aliasColors": [],
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "Prometheus",
-      "fill": 1,
+      "title": "Error Rate",
+      "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -102,72 +74,59 @@
         "y": 0
       },
       "id": 2,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
       "targets": [
         {
-          "expr": "rate(prediction_requests_total{status=\"error\"}[5m]) / rate(prediction_requests_total[5m])",
-          "format": "time_series",
-          "intervalFactor": 2,
+          "expr": "rate(prediction_requests_total{status=\"error\"}[5m]) / clamp_min(rate(prediction_requests_total[5m]), 0.0001)",
           "legendFormat": "Error Rate",
-          "refId": "B",
-          "step": 10
-        }
-      ],
-      "thresholds": [
-        {
-          "colorMode": "critical",
-          "fill": true,
-          "line": true,
-          "op": "gt",
-          "value": 0.05
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Error Rate",
-      "tooltip": {
-        "msResolution": false,
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "show": true
-      },
-      "yaxes": [
-        {
-          "format": "percentunit",
-          "label": "Error Rate",
-          "logBase": 1,
-          "max": 1,
-          "min": 0,
-          "show": true
+          "refId": "B"
         }
       ]
     },
     {
-      "datasource": "Prometheus",
+      "title": "Model Accuracy",
+      "type": "stat",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -175,39 +134,55 @@
         "y": 8
       },
       "id": 3,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": [
-          {
-            "calcs": [
-              "lastNotNull"
-            ],
-            "fields": "",
-            "values": false
-          }
-        ],
-        "textMode": "auto"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "pluginVersion": "6.7.3",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.8
+              },
+              {
+                "color": "green",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "mappings": []
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "targets": [
         {
           "expr": "model_accuracy{model_id=\"production\"}",
-          "format": "time_series",
-          "intervalFactor": 2,
           "legendFormat": "Model Accuracy",
-          "refId": "C",
-          "step": 10
+          "refId": "C"
         }
-      ],
-      "title": "Model Accuracy",
-      "type": "stat",
-      "unit": "percentunit"
+      ]
     },
     {
-      "datasource": "Prometheus",
+      "title": "95th Percentile Latency",
+      "type": "stat",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -215,39 +190,54 @@
         "y": 8
       },
       "id": 4,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": [
-          {
-            "calcs": [
-              "lastNotNull"
-            ],
-            "fields": "",
-            "values": false
-          }
-        ],
-        "textMode": "auto"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "pluginVersion": "6.7.3",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, rate(prediction_duration_seconds_bucket[5m]))",
-          "format": "time_series",
-          "intervalFactor": 2,
-          "legendFormat": "95th Percentile",
-          "refId": "D",
-          "step": 10
+          "legendFormat": "p95 Latency",
+          "refId": "D"
         }
-      ],
-      "title": "95th Percentile Latency",
-      "type": "stat",
-      "unit": "s"
+      ]
     },
     {
-      "datasource": "Prometheus",
+      "title": "50th Percentile Latency",
+      "type": "stat",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -255,44 +245,54 @@
         "y": 8
       },
       "id": 5,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": [
-          {
-            "calcs": [
-              "lastNotNull"
-            ],
-            "fields": "",
-            "values": false
-          }
-        ],
-        "textMode": "auto"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "pluginVersion": "6.7.3",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.2
+              }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, rate(prediction_duration_seconds_bucket[5m]))",
-          "format": "time_series",
-          "intervalFactor": 2,
-          "legendFormat": "50th Percentile",
-          "refId": "E",
-          "step": 10
+          "legendFormat": "p50 Latency",
+          "refId": "E"
         }
-      ],
-      "title": "50th Percentile Latency",
-      "type": "stat",
-      "unit": "s"
+      ]
     },
     {
-      "aliasColors": [],
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "Prometheus",
-      "fill": 1,
+      "title": "Request Status Breakdown",
+      "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -300,73 +300,47 @@
         "y": 16
       },
       "id": 6,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20
+          },
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
       "targets": [
         {
           "expr": "rate(prediction_requests_total{status=\"success\"}[5m])",
-          "format": "time_series",
-          "intervalFactor": 2,
-          "legendFormat": "Success Rate",
-          "refId": "F",
-          "step": 10
+          "legendFormat": "Success",
+          "refId": "F"
         },
         {
           "expr": "rate(prediction_requests_total{status=\"error\"}[5m])",
-          "format": "time_series",
-          "intervalFactor": 2,
-          "legendFormat": "Error Rate",
-          "refId": "G",
-          "step": 10
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Request Status Breakdown",
-      "tooltip": {
-        "msResolution": false,
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "show": true
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": "Requests/sec",
-          "logBase": 1,
-          "max": null,
-          "min": 0,
-          "show": true
+          "legendFormat": "Error",
+          "refId": "G"
         }
       ]
     }
   ],
   "refresh": "15s",
-  "schemaVersion": 14,
+  "schemaVersion": 38,
   "style": "dark",
   "tags": [
     "demand-forecasting",
@@ -392,21 +366,10 @@
       "1h",
       "2h",
       "1d"
-    ],
-    "time_options": [
-      "5m",
-      "15m",
-      "1h",
-      "6h",
-      "12h",
-      "24h",
-      "2d",
-      "7d",
-      "30d"
     ]
   },
   "timezone": "browser",
   "title": "Demand Forecasting Overview",
   "uid": "demand-forecasting-overview",
-  "version": 1
+  "version": 2
 }

@@ -4,7 +4,7 @@
     },
     "editable": true,
     "fiscalYearStartMonth": 0,
-    "graphTooltip": 0,
+    "graphTooltip": 1,
     "id": null,
     "links": [],
     "liveNow": false,
@@ -18,6 +18,7 @@
                 "x": 0,
                 "y": 0
             },
+            "id": 1,
             "datasource": {
                 "type": "prometheus",
                 "uid": "prometheus"
@@ -46,18 +47,23 @@
                                 "0": {
                                     "text": "No Drift",
                                     "color": "green"
-                                }
-                            }
-                        },
-                        {
-                            "type": "value",
-                            "options": {
+                                },
                                 "1": {
                                     "text": "DRIFT DETECTED",
                                     "color": "red"
                                 }
                             }
                         }
+                    ],
+                    "unit": "short"
+                }
+            },
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
                     ]
                 }
             },
@@ -78,6 +84,7 @@
                 "x": 6,
                 "y": 0
             },
+            "id": 2,
             "datasource": {
                 "type": "prometheus",
                 "uid": "prometheus"
@@ -109,6 +116,13 @@
                     "max": 1
                 }
             },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
             "targets": [
                 {
                     "expr": "evidently_drift_share",
@@ -118,7 +132,7 @@
             ]
         },
         {
-            "title": "Columns Status",
+            "title": "Columns — Drifted / Total",
             "type": "stat",
             "gridPos": {
                 "h": 6,
@@ -126,9 +140,27 @@
                 "x": 12,
                 "y": 0
             },
+            "id": 3,
             "datasource": {
                 "type": "prometheus",
                 "uid": "prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "unit": "short"
+                }
+            },
+            "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
             },
             "targets": [
                 {
@@ -144,8 +176,8 @@
             ]
         },
         {
-            "title": "Alert Threshold",
-            "description": "Current drift threshold for triggering retraining",
+            "title": "Alert Threshold (10%)",
+            "description": "Drift share above this triggers retraining",
             "type": "stat",
             "gridPos": {
                 "h": 6,
@@ -153,18 +185,32 @@
                 "x": 18,
                 "y": 0
             },
+            "id": 4,
             "datasource": {
                 "type": "prometheus",
                 "uid": "prometheus"
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "percentunit"
+                    "unit": "percentunit",
+                    "color": {
+                        "mode": "fixed",
+                        "fixedColor": "blue"
+                    }
+                }
+            },
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
                 }
             },
             "targets": [
                 {
-                    "expr": "0.1",
+                    "expr": "vector(0.1)",
                     "legendFormat": "Threshold",
                     "refId": "A"
                 }
@@ -179,6 +225,7 @@
                 "x": 0,
                 "y": 6
             },
+            "id": 5,
             "datasource": {
                 "type": "prometheus",
                 "uid": "prometheus"
@@ -212,6 +259,15 @@
                     }
                 }
             },
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
             "targets": [
                 {
                     "expr": "evidently_drift_share",
@@ -229,6 +285,7 @@
                 "x": 0,
                 "y": 14
             },
+            "id": 6,
             "datasource": {
                 "type": "prometheus",
                 "uid": "prometheus"
@@ -238,7 +295,16 @@
                     "color": {
                         "mode": "palette-classic"
                     },
+                    "custom": {
+                        "lineWidth": 2
+                    },
                     "unit": "short"
+                }
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
                 }
             },
             "targets": [
@@ -255,7 +321,7 @@
             ]
         },
         {
-            "title": "Drift Alerts",
+            "title": "Drift Alerts Table",
             "type": "table",
             "gridPos": {
                 "h": 8,
@@ -263,6 +329,7 @@
                 "x": 12,
                 "y": 14
             },
+            "id": 7,
             "datasource": {
                 "type": "prometheus",
                 "uid": "prometheus"
@@ -271,16 +338,46 @@
                 "defaults": {
                     "color": {
                         "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
                     }
                 }
             },
+            "options": {
+                "sortBy": [
+                    {
+                        "desc": true,
+                        "displayName": "Time"
+                    }
+                ]
+            },
             "targets": [
                 {
-                    "expr": "evidently_dataset_drift == 1",
-                    "legendFormat": "Drift Alert",
+                    "expr": "evidently_dataset_drift",
+                    "legendFormat": "Drift",
                     "refId": "A",
                     "format": "table",
                     "instant": true
+                }
+            ],
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "__name__": true
+                        }
+                    }
                 }
             ]
         }
@@ -304,6 +401,6 @@
     "timezone": "browser",
     "title": "Data Drift Monitoring",
     "uid": "data-drift-monitoring",
-    "version": 1,
+    "version": 2,
     "weekStart": ""
 }

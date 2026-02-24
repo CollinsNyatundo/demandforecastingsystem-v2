@@ -22,10 +22,13 @@ try:
     _CLEARML_AVAILABLE = True
 except ImportError:
     _CLEARML_AVAILABLE = False
+
     def init_clearml_task(**kwargs):
         return None  # type: ignore[misc]
+
     def log_metrics(*args):
         return None  # type: ignore[misc]
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -186,10 +189,16 @@ def compare_demand_models(
         for model_name, metrics in comparison.items():
             if model_name in ["catboost", "random_forest"]:
                 for metric_name, value in metrics.items():
-                    if not isinstance(value, (int, float)) or value < 0:
+                    if not isinstance(value, (int, float)):
                         raise ValueError(
                             f"Invalid {metric_name} for {model_name}: {value}. "
-                            f"Metrics must be non-negative numbers."
+                            f"Metrics must be numbers."
+                        )
+                    # R2 can legitimately be negative; only enforce >= 0 for RMSE/MAE.
+                    if metric_name != "r2" and value < 0:
+                        raise ValueError(
+                            f"Invalid {metric_name} for {model_name}: {value}. "
+                            f"{metric_name.upper()} must be a non-negative number."
                         )
 
         return comparison

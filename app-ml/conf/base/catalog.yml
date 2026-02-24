@@ -89,3 +89,19 @@ final_model:
 regressor_model:
   type: pickle.PickleDataset
   filepath: data/06_models/regressor_model.pkl
+
+optimized_params:
+  type: json.JSONDataset
+  filepath: data/06_models/optimized_params.json
+
+catboost_metrics:
+  type: json.JSONDataset
+  filepath: data/06_models/catboost_metrics.json
+
+model_comparison:
+  type: json.JSONDataset
+  filepath: data/06_models/model_comparison.json
+
+random_forest_model:
+  type: pickle.PickleDataset
+  filepath: data/06_models/random_forest_model.pkl

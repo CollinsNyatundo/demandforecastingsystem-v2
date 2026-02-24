@@ -41,6 +41,9 @@ from pydantic import (
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 
+# Chatbot Multi-Agent SSE Router
+from demand_forecasting.serving.chat_router import chat_router
+
 # Evidently drift monitoring integration
 try:
     from demand_forecasting.integrations.evidently_integration import (
@@ -143,7 +146,7 @@ class PredictionRequest(BaseModel):
     Additional features like lag values may be optional depending on model architecture.
     """
 
-    features: dict[str, float] = Field(
+    features: dict[str, float | int] = Field(
         ..., description="Weather and temporal features for demand prediction"
     )
 
@@ -220,7 +223,7 @@ class PredictionRequest(BaseModel):
 
     @field_validator("features")
     @classmethod
-    def validate_feature_structure(cls, v: dict[str, float]) -> dict[str, float]:
+    def validate_feature_structure(cls, v: dict[str, float | int]) -> dict[str, float | int]:
         """Validate feature keys and basic structure."""
         # Check for minimum required features
         missing = cls.CORE_FEATURES - set(v.keys())
@@ -1091,7 +1094,20 @@ async def predict(
 
         # Prepare features in the correct order matching training data
         try:
-            features = np.array([request.features.get(f, 0.0) for f in feature_names])
+            # Create a dictionary for DataFrame creation (fills missing with 0.0)
+            feature_dict = {f: [float(request.features.get(f, 0.0))] for f in feature_names}
+            features_df = pd.DataFrame(feature_dict)
+            
+            # CatBoost strictly enforces types for categorical features.
+            # Convert known categorical features to integers.
+            categorical_cols = [
+                "season", "year", "month", "hour", "holiday", 
+                "day_of_week", "workingday", "weather_condition"
+            ]
+            for col in categorical_cols:
+                if col in features_df.columns:
+                    features_df[col] = features_df[col].astype(int)
+                    
         except Exception as e:
             logger.error(f"Error preparing features: {e}")
             prediction_requests_total.labels(model_id=model_id, status="error").inc()
@@ -1099,8 +1115,24 @@ async def predict(
                 status_code=400, detail=f"Invalid feature format: {e!s}"
             )
 
-        # Make prediction
-        prediction = model.predict(features.reshape(1, -1))[0]
+        # Bypass MLflow PyFunc signature casting which coerces ints back to floats
+        try:
+            # Try to get the underlying model to preserve pandas dtypes
+            base_model = getattr(model, "unwrap_python_model", lambda: model)()
+            # MLflow's CatboostModelWrapper uses 'cb_model'
+            if hasattr(base_model, "cb_model"):
+                cb_model = base_model.cb_model
+            elif hasattr(getattr(model, "_model_impl", None), "cb_model"):
+                cb_model = model._model_impl.cb_model
+            # Fallback if the unwrapped model is already the native model
+            else:
+                cb_model = base_model
+                
+            prediction = cb_model.predict(features_df)[0]
+        except Exception as bypass_err:
+            logger.warning(f"Failed to bypass pyfunc, falling back to standard prediction: {bypass_err}")
+            # Make prediction using standard PyFunc (might fail with categorical error)
+            prediction = model.predict(features_df)[0]
 
         # Calculate confidence based on prediction variance and feature uncertainty
         # For CatBoost models, use leaf value variance as proxy for model uncertainty
@@ -1174,6 +1206,35 @@ async def model_info() -> ModelInfo:
         last_updated=datetime.now().isoformat(),
         model_id="production",
     )
+
+@app.get("/explain/summary", tags=["Explainability"])
+async def explain_summary() -> dict:
+    """Return SHAP summary plot as a JSON serialized Plotly figure."""
+    if "production" not in ml_models:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    try:
+        from demand_forecasting.explainability.shap_explainer import ModelExplainer
+        import pandas as pd
+        import json
+        import plotly.io as pio
+
+        model = ml_models["production"]
+        
+        # Explainer needs a DataFrame, if reference_data is empty, use empty DF
+        if not reference_data:
+            df_ref = pd.DataFrame(columns=["temp", "humidity", "wind_speed", "hour", "day_of_week", "month"])
+        else:
+            df_ref = pd.DataFrame(reference_data)
+            
+        explainer = ModelExplainer(model, df_ref)
+        fig = explainer.create_summary_plot(plot_type="bar")
+        return json.loads(pio.to_json(fig))
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to generate SHAP summary: {e}")
+        import plotly.graph_objects as go
+        return json.loads(pio.to_json(go.Figure()))
 
 
 @app.post("/model/accuracy")
@@ -1285,11 +1346,20 @@ async def root() -> dict[str, str]:
         "health": "/health",
         "metrics": "/metrics",
         "drift": "/metrics/drift",
+        "chat": "/chat/stream"
     }
     if ENABLE_AB_TESTING and "manager" in ab_test_manager:
         info["ab_predict"] = "/predict/ab"
         info["ab_stats"] = "/ab/stats"
     return info
+
+
+# =========================================================================
+# Chatbot Router Integration
+# =========================================================================
+
+# Securely bind the LangGraph streaming endpoints to the Argon2 API Key middleware
+app.include_router(chat_router, prefix="/chat", dependencies=[Depends(verify_api_key_secure)])
 
 
 # =========================================================================

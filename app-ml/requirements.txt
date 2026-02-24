@@ -63,3 +63,15 @@ scipy>=1.11.0
 
 # SHAP for model explainability
 shap>=0.50.0
+
+# AI Orchestrator (LangGraph Multi-Agent Chatbot)
+langchain-openai>=0.1.0
+langchain-groq>=0.1.0
+langgraph>=0.2.0
+langgraph-supervisor
+langgraph-checkpoint-redis
+
+# Backend Drivers for AI Tools
+redis>=5.0.0
+minio>=7.2.0
+requests>=2.31.0

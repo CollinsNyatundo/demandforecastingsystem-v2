@@ -62,6 +62,7 @@ except ImportError:
 # ClearML Integration (complements MLflow)
 try:
     from clearml import Task as ClearMLTask
+
     CLEARML_AVAILABLE = True
 except ImportError:
     CLEARML_AVAILABLE = False
@@ -176,11 +177,15 @@ def setup_mlflow() -> str | None:
 
         # Try to capture git commit for reproducibility
         try:
-            git_commit = subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"],
-                cwd=PROJECT_PATH,
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
+            git_commit = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=PROJECT_PATH,
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
             mlflow.set_tag("git_commit", git_commit)
         except Exception:
             mlflow.set_tag("git_commit", "unknown")
@@ -331,6 +336,7 @@ def demand_forecasting_dag():
                 )
                 # Log data version tag (hash of shape + first/last rows for reproducibility)
                 import hashlib
+
                 data_hash = hashlib.md5(
                     f"{len(df)}_{df.columns.tolist()}_{df.iloc[0].values.tolist()}".encode()
                 ).hexdigest()[:8]
@@ -571,9 +577,6 @@ def demand_forecasting_dag():
             # CRITICAL: Split data into train/test sets BEFORE optimization
             # This ensures hyperparameters are tuned on training data and evaluated on unseen test data
             # Matches the notebook strategy: 80% train, 20% test
-            from sklearn.model_selection import (
-                train_test_split as sklearn_train_test_split,
-            )
 
             from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
                 optimize_catboost_params,
@@ -584,7 +587,7 @@ def demand_forecasting_dag():
             random_state = params.get("data_processing", {}).get("random_state", 42)
 
             logger.info(
-                f"Splitting data: {train_fraction*100:.0f}% train, {(1-train_fraction)*100:.0f}% test"
+                f"Splitting data: {train_fraction * 100:.0f}% train, {(1 - train_fraction) * 100:.0f}% test"
             )
 
             # Split the data using SEQUENTIAL split (NO shuffle!)
@@ -678,7 +681,10 @@ def demand_forecasting_dag():
                     # Log model with input signature for schema validation
                     try:
                         from mlflow.models.signature import infer_signature
-                        signature = infer_signature(X_test, catboost_model.predict(X_test))
+
+                        signature = infer_signature(
+                            X_test, catboost_model.predict(X_test)
+                        )
                     except Exception:
                         signature = None
 
@@ -702,7 +708,9 @@ def demand_forecasting_dag():
 
             try:
                 fs = get_s3_filesystem()
-                versioned_model_path = f"{S3_BUCKET}/06_models/regressor_{timestamp}.pickle"
+                versioned_model_path = (
+                    f"{S3_BUCKET}/06_models/regressor_{timestamp}.pickle"
+                )
                 logger.info(f"Saving versioned model to: {versioned_model_path}")
 
                 with fs.open(versioned_model_path, "wb") as f:
@@ -787,7 +795,9 @@ def demand_forecasting_dag():
             params = conf_loader["parameters"]
 
             # Check if multi-objective is enabled
-            if not params.get("advanced_features", {}).get("enable_multi_objective", False):
+            if not params.get("advanced_features", {}).get(
+                "enable_multi_objective", False
+            ):
                 logger.info("Multi-objective optimization disabled. Skipping...")
                 return {"status": "skipped", "reason": "disabled_in_config"}
 
@@ -825,8 +835,12 @@ def demand_forecasting_dag():
                 storage=get_optuna_storage(),
             )
 
-            n_trials = params.get("advanced_features", {}).get("multi_objective_trials", 50)
-            results = optimizer.optimize(X_train, X_test, y_train, y_test, n_trials=n_trials)
+            n_trials = params.get("advanced_features", {}).get(
+                "multi_objective_trials", 50
+            )
+            results = optimizer.optimize(
+                X_train, X_test, y_train, y_test, n_trials=n_trials
+            )
 
             # Get recommended solution
             preference_weights = params.get("advanced_features", {}).get(
@@ -834,7 +848,7 @@ def demand_forecasting_dag():
             )
             recommendation = optimizer.recommend_solution(preference_weights)
 
-            logger.info(f"✅ Multi-objective optimization complete")
+            logger.info("✅ Multi-objective optimization complete")
             logger.info(f"Pareto-optimal solutions found: {results['n_pareto_trials']}")
             logger.info(f"Recommended trial: {recommendation}")
 
@@ -842,17 +856,23 @@ def demand_forecasting_dag():
             if MLFLOW_AVAILABLE:
                 # Issue 8 fix: nested=True creates a child run under the active main
                 # training run instead of a separate top-level run.
-                with mlflow.start_run(run_name="multi_objective_optimization", nested=True):
-                    mlflow.log_params({
-                        "objectives": ",".join(objectives),
-                        "n_trials": n_trials,
-                        "pareto_solutions": results["n_pareto_trials"],
-                    })
+                with mlflow.start_run(
+                    run_name="multi_objective_optimization", nested=True
+                ):
+                    mlflow.log_params(
+                        {
+                            "objectives": ",".join(objectives),
+                            "n_trials": n_trials,
+                            "pareto_solutions": results["n_pareto_trials"],
+                        }
+                    )
 
             return {
                 "status": "success",
                 "pareto_solutions": results["n_pareto_trials"],
-                "recommended_params": recommendation.get("recommended_trial", {}).get("params", {}),
+                "recommended_params": recommendation.get("recommended_trial", {}).get(
+                    "params", {}
+                ),
                 "objectives": objectives,
             }
 
@@ -902,61 +922,83 @@ def demand_forecasting_dag():
             ensemble_manager = EnsembleManager()
 
             # Get ensemble type from config
-            ensemble_type = params.get("advanced_features", {}).get("ensemble_type", "stacking")
+            ensemble_type = params.get("advanced_features", {}).get(
+                "ensemble_type", "stacking"
+            )
 
             if ensemble_type == "stacking":
                 # Create stacking ensemble
                 catboost_params = params.get("model_training", {}).get("catboost", {})
-                ensemble_manager.create_stacking_ensemble(catboost_params=catboost_params)
+                ensemble_manager.create_stacking_ensemble(
+                    catboost_params=catboost_params
+                )
             else:
                 # Create voting ensemble with default models
                 from catboost import CatBoostRegressor
                 from sklearn.ensemble import RandomForestRegressor
 
                 models = [
-                    ("catboost", CatBoostRegressor(iterations=500, verbose=False, random_seed=42)),
+                    (
+                        "catboost",
+                        CatBoostRegressor(
+                            iterations=500, verbose=False, random_seed=42
+                        ),
+                    ),
                     ("rf", RandomForestRegressor(n_estimators=100, random_state=42)),
                 ]
                 ensemble_manager.create_voting_ensemble(models)
 
             # Train ensemble
             logger.info(f"Training {ensemble_type} ensemble...")
-            train_results = ensemble_manager.train_ensemble(X_train, y_train, X_test, y_test)
+            train_results = ensemble_manager.train_ensemble(
+                X_train, y_train, X_test, y_test
+            )
 
             # Evaluate on test set
             eval_results = ensemble_manager.evaluate_ensemble(X_test, y_test)
 
-            logger.info(f"✅ Ensemble training complete")
-            logger.info(f"Ensemble RMSE: {eval_results['ensemble_metrics']['rmse']:.4f}")
-            logger.info(f"Improvement over best base: {eval_results['improvements']['rmse_improvement_percent']:.2f}%")
+            logger.info("✅ Ensemble training complete")
+            logger.info(
+                f"Ensemble RMSE: {eval_results['ensemble_metrics']['rmse']:.4f}"
+            )
+            logger.info(
+                f"Improvement over best base: {eval_results['improvements']['rmse_improvement_percent']:.2f}%"
+            )
 
             # Save ensemble model
             fs = get_s3_filesystem()
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             ensemble_path = f"{S3_BUCKET}/06_models/ensemble_{timestamp}.joblib"
-            
+
             import tempfile
+
             with tempfile.NamedTemporaryFile(suffix=".joblib", delete=False) as tmp:
                 ensemble_manager.save_ensemble(tmp.name)
                 with open(tmp.name, "rb") as f:
                     with fs.open(ensemble_path, "wb") as s3_f:
                         s3_f.write(f.read())
-            
+
             logger.info(f"Ensemble saved to: {ensemble_path}")
 
             # Log to MLflow
             if MLFLOW_AVAILABLE:
                 # Issue 8 fix: nested=True — child run under the active main run.
                 with mlflow.start_run(run_name="ensemble_training", nested=True):
-                    mlflow.log_params({
-                        "ensemble_type": ensemble_type,
-                        "base_models": list(ensemble_manager.base_models.keys()),
-                    })
-                    mlflow.log_metrics({
-                        "ensemble_rmse": eval_results["ensemble_metrics"]["rmse"],
-                        "ensemble_mae": eval_results["ensemble_metrics"]["mae"],
-                        "rmse_improvement": eval_results["improvements"]["rmse_improvement_percent"],
-                    })
+                    mlflow.log_params(
+                        {
+                            "ensemble_type": ensemble_type,
+                            "base_models": list(ensemble_manager.base_models.keys()),
+                        }
+                    )
+                    mlflow.log_metrics(
+                        {
+                            "ensemble_rmse": eval_results["ensemble_metrics"]["rmse"],
+                            "ensemble_mae": eval_results["ensemble_metrics"]["mae"],
+                            "rmse_improvement": eval_results["improvements"][
+                                "rmse_improvement_percent"
+                            ],
+                        }
+                    )
 
             return {
                 "status": "success",

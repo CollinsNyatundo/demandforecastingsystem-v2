@@ -1,0 +1,30 @@
+# Dashboard UI Improvements Task
+
+## Planning
+- [x] Read design_iterations CSS
+- [x] Read app-ui/app.py layout & callbacks
+- [x] Read app-ui/assets/custom.css
+- [x] Read api_client.py
+- [x] Write implementation plan
+
+## CSS Fixes (custom.css)
+- [ ] Fix `section-icon` size (explicit 32×32)
+- [ ] Add `.badge-success`, `.badge-warning`, `.badge-danger`, `.badge-info`, `.badge-muted` variants
+- [ ] Apply `count-up` animation to `.kpi-value`
+- [ ] Fix `.status-dot` (background, not color)
+- [ ] Add `.drift-alert` styles
+- [ ] Add `.metric-row` styles for new model metrics section
+- [ ] Add health item coloured left-border styles
+
+## Python Fixes (app.py)
+- [ ] Fix blank KPI trend badges — add colour classes in callback
+- [ ] Add Model Metrics panel (RMSE/MAE/MAPE from MLflow)
+- [ ] Fix forecast chart rendering (remove n_intervals > 0 guard)
+- [ ] Enhance System Health items with colour left-border
+- [ ] Add Drift Alert Banner when drift detected
+- [ ] Add tabs to main chart area (Demand | Hourly Pattern | Weekly Heatmap)
+
+## Verification
+- [ ] Run existing test suite
+- [ ] Manual browser check of KPI cards
+- [ ] Manual check of model metrics

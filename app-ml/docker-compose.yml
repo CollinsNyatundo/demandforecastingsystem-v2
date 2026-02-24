@@ -51,8 +51,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: "s3://airflow-logs"
     AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: "minio_s3"
     # Celery Configuration using shared Redis
-    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-    AIRFLOW__CELERY__RESULT_BACKEND: redis://redis:6379/0
+    AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    AIRFLOW__CELERY__RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -122,7 +122,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      test: [ "CMD", "sh", "-c", "redis-cli -a $$REDIS_PASSWORD ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -369,8 +369,8 @@ services:
       # CRITICAL: Override PYTHONPATH from .env (which has /opt/airflow/src for airflow containers)
       # The model-server src lives at /app/src, not /opt/airflow/src
       PYTHONPATH: "/app/src"
-      # API Authentication (loaded from .env but also set explicitly for clarity)
-      VALID_API_KEYS: ${VALID_API_KEYS:-dev-key-123,test-key-456}
+      # API Authentication
+      VALID_API_KEYS: ${VALID_API_KEYS}
       MODEL_NAME: ${MODEL_NAME:-demand_forecasting_catboost}
       MODEL_STAGE: ${MODEL_STAGE:-Production}
       # Path to the actual model file (lives in experiments/ subdirectory)
@@ -674,7 +674,8 @@ services:
       - AIRFLOW_URL=http://airflow-webserver:8080
       - MINIO_URL=http://minio:9000
       - GRAFANA_URL=http://grafana:3000
-      - API_KEY=${UI_API_KEY:-dev-key}
+      - API_KEY=${UI_API_KEY:-dev-key-123}
+      - GROQ_API_KEY=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
       # PROJECT_ROOT tells app.py where to find data and shared modules in Docker
       - PROJECT_ROOT=/project
     volumes:

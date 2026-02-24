@@ -44,7 +44,7 @@ class RawBikeDataSchema(pa.DataFrameModel):
         - coerce: Enable type coercion for numeric types
         """
 
-        # STRICT mode: reject extra columns, require exact schema match
-        strict = True
+        # 'filter' mode: drop extra columns instead of crashing
+        strict = "filter"
         # Enable type coercion only for numeric types
         coerce = True

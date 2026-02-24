@@ -112,6 +112,10 @@ def get_drift_metrics_for_prometheus(
     """Get drift metrics formatted for Prometheus exposition.
 
     Returns dict of metric_name -> value for Prometheus gauges.
+    Column counts are derived from the shared numeric columns between
+    reference and current data (Evidently v0.7.x does not expose per-column
+    drift counts via the public metric attribute API, so we compute them
+    from the input DataFrames directly).
 
     Args:
         reference_data: Reference/training data
@@ -123,25 +127,25 @@ def get_drift_metrics_for_prometheus(
     if not EVIDENTLY_AVAILABLE:
         return {}
 
+    # Determine total monitored columns (numeric columns shared by both sets)
+    shared_cols = set(reference_data.select_dtypes(include='number').columns) & \
+                  set(current_data.select_dtypes(include='number').columns)
+    n_total = len(shared_cols)
+
     report = Report(metrics=[DatasetDriftMetric()])
     report.run(reference_data=reference_data, current_data=current_data)
 
-    result = report
     drift_share = 0.0
     dataset_drift = False
-    n_total = 0
-    n_drifted = 0
-    for metric in result.items():
+    for metric in report.items():
         ds = getattr(metric, 'drift_share', None)
-        cnt = getattr(metric, 'count', None)
-        shr = getattr(metric, 'share', None)
         if ds is not None:
             drift_share = float(ds)
             dataset_drift = drift_share > 0.0
-        if cnt is not None:
-            n_drifted = int(cnt)
-        if shr is not None and n_drifted > 0 and drift_share > 0:
-            n_total = int(n_drifted / drift_share) if drift_share else 0
+            break
+
+    # Estimate drifted column count from share × total
+    n_drifted = round(drift_share * n_total) if n_total > 0 else 0
 
     return {
         "evidently_dataset_drift": 1.0 if dataset_drift else 0.0,
@@ -185,5 +189,5 @@ def check_drift_threshold(
         "drift_share": drift_share,
         "threshold": threshold,
         "exceeds_threshold": exceeds_threshold,
-        "dataset_drift": metrics.get("dataset_drift", False),
+        "dataset_drift": drift_share > 0.0,
     }

@@ -8,6 +8,7 @@ Provides fixtures and utilities for testing all system components including:
 - MLOps infrastructure (MLflow, Optuna, Airflow)
 - Edge cases and error scenarios
 """
+
 from __future__ import annotations
 
 import shutil
@@ -57,16 +58,30 @@ try:
     from fastapi.testclient import TestClient  # type: ignore[import-not-found]
     from optuna.storages import RDBStorage  # type: ignore[import-not-found]
 
-    from demand_forecasting.automation.retraining_scheduler import RetrainingScheduler  # type: ignore[import-not-found]
-    from demand_forecasting.explainability.shap_explainer import ModelExplainer  # type: ignore[import-not-found]
-    from demand_forecasting.monitoring.drift_detector import DriftDetector  # type: ignore[import-not-found]
-    from demand_forecasting.optimization.ensemble import EnsembleManager  # type: ignore[import-not-found]
-    from demand_forecasting.optimization.multi_objective import objective_multi  # type: ignore[import-not-found]
-    from demand_forecasting.serving.model_router import ModelRouter  # type: ignore[import-not-found]
+    from demand_forecasting.automation.retraining_scheduler import (
+        RetrainingScheduler,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.explainability.shap_explainer import (
+        ModelExplainer,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.monitoring.drift_detector import (
+        DriftDetector,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.optimization.ensemble import (
+        EnsembleManager,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.optimization.multi_objective import (
+        objective_multi,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.serving.model_router import (
+        ModelRouter,  # type: ignore[import-not-found]
+    )
 
     # Import model server app (may fail if dependencies not met)
     try:
-        from demand_forecasting.serving.model_server import app as model_server_app  # type: ignore[import-not-found]
+        from demand_forecasting.serving.model_server import (
+            app as model_server_app,  # type: ignore[import-not-found]
+        )
     except ImportError:
         model_server_app = None
 
@@ -290,11 +305,13 @@ def _apply_missing_features(data: pd.DataFrame) -> pd.DataFrame:
     """Remove essential features."""
     return data.drop(columns=["temp", "humidity"])
 
+
 def _apply_invalid_types(data: pd.DataFrame) -> pd.DataFrame:
     """Add invalid data types."""
     data.loc[0, "temp"] = "invalid"
     data.loc[1, "humidity"] = None
     return data
+
 
 def _apply_extreme_values(data: pd.DataFrame) -> pd.DataFrame:
     """Add extreme but valid values."""
@@ -303,21 +320,25 @@ def _apply_extreme_values(data: pd.DataFrame) -> pd.DataFrame:
     data.loc[2, "wind_speed"] = 100.0  # Extreme wind
     return data
 
+
 def _apply_null_values(data: pd.DataFrame) -> pd.DataFrame:
     """Add null values."""
     for col in ["temp", "humidity", "wind_speed"]:
         data.loc[data.sample(frac=0.1).index, col] = np.nan
     return data
 
+
 def _apply_negative_values(data: pd.DataFrame) -> pd.DataFrame:
     """Add negative values where inappropriate."""
     data.loc[0, "demand"] = -10  # Negative demand
     return data
 
+
 def _apply_large_values(data: pd.DataFrame) -> pd.DataFrame:
     """Add very large values."""
     data.loc[0, "demand"] = 1000000  # Very large demand
     return data
+
 
 def _apply_duplicate_rows(data: pd.DataFrame) -> pd.DataFrame:
     """Add duplicates."""
