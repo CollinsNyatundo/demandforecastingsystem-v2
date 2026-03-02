@@ -1,56 +1,68 @@
-# Demand Forecasting System v2
+# UrbanFlow Intelligence: Demand Forecasting System v2
 
-An end-to-end MLOps pipeline for demand forecasting, built with Kedro, Airflow, and MLflow. This system implements a robust machine learning lifecycle including data engineering, model training, optimization with Optuna, and automated deployment.
+[![CI/CD Pipeline](https://github.com/CollinsNyatundo/demandforecastingsystem-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/CollinsNyatundo/demandforecastingsystem-v2/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🏗️ System Architecture
+UrbanFlow Intelligence is a production-grade MLOps ecosystem designed for high-precision demand forecasting. It integrates advanced machine learning engineering with automated orchestration and real-time monitoring to provide a robust solution for urban mobility and logistics optimization.
 
-The project is structured into two main components:
-- **`app-ml`**: The core machine learning engine.
-  - **Kedro Pipelines**: Managed data processing, feature engineering, and modeling.
-  - **Airflow DAGs**: Orchestrated workflow scheduling.
-  - **MLflow & ClearML**: Experiment tracking and model versioning.
-  - **MinIO**: S3-compatible object storage for data and logs.
-  - **Monitoring**: Prometheus and Grafana integration for system health and model drift.
-- **`app-ui`**: A Streamlit/Dash-based dashboard for visualizing forecasts and system status.
+## 🏛️ System Architecture & Deep Dive
 
-## 🚀 Key Features
+The system is architected as a decoupled, multi-tier environment:
 
-- **Advanced Modeling**: High-performance forecasting using CatBoost, XGBoost, and LightGBM.
-- **Automated Hyperparameter Tuning**: Integrated Optuna for model optimization.
-- **Explainable AI**: Integrated SHAP for feature importance and model transparency.
-- **Scalable Infrastructure**: Containerized with Docker Compose, featuring high-availability profiles.
-- **CI/CD Integration**: Automated testing and documentation updates via GitHub Actions.
+### 1. Data Engineering & ML Pipeline (`app-ml`)
+Powered by **Kedro**, the pipeline implements a rigorous transformation process:
+- **Data Ingestion & Validation**: Uses **Pandera** for schema enforcement and data quality checks (`data_processing/nodes.py`).
+- **Feature Engineering**: Automated extraction of temporal features (hour, day of week, season) and creation of demand lags (1h, 2h, 22h, 23h) based on autocorrelation analysis.
+- **Modeling Strategy**: A competitive ensemble approach comparing **CatBoost**, **XGBoost**, and **LightGBM**.
+- **Optimization**: **Optuna** Bayesian optimization with persistence to a PostgreSQL backend, allowing trials to resume across pipeline runs.
+- **Explainability**: SHAP integration provides per-prediction transparency.
 
-## 🛠️ Tech Stack
+### 2. Orchestration & MLOps Infrastructure
+- **Apache Airflow**: Manages complex DAGs including `automated_drift_detection_retraining`. It features conditional branching to trigger retraining only when statistical drift (measured via **Evidently**) exceeds pre-defined thresholds.
+- **Experiment Tracking**: **MLflow** logs over 15 metrics (RMSE, MAE, MAPE), 8 parameters, and 12 tags per run, providing a complete audit trail.
+- **Object Storage**: **MinIO** serves as the unified data lake for raw inputs, intermediate artifacts, and model binaries.
 
-- **Frameworks**: Kedro, Apache Airflow
-- **ML Libraries**: CatBoost, XGBoost, LightGBM, Scikit-learn, Optuna, SHAP
-- **MLOps**: MLflow, ClearML, MinIO
-- **Monitoring**: Prometheus, Grafana
-- **Infrastructure**: Docker, Nginx
+### 3. Intelligence Dashboard (`app-ui`)
+A sophisticated **Dash/Streamlit** interface (UrbanFlow Intelligence) featuring:
+- **Multi-page Routing**: Dedicated views for forecast analysis, system health, and drift reporting.
+- **Grok AI Integration**: A floating AI chat widget that uses Server-Sent Events (SSE) to provide real-time assistance based on the current page context.
+- **Operational Health**: Real-time integration with backend monitoring metrics.
 
-## 📦 Getting Started
+## 🚀 Key Technical Features
 
-### Prerequisites
-- Docker and Docker Compose
-- Python 3.9+ (for local development)
+- **Drift-Aware Retraining**: Automated detection of statistical shifts in production data triggers retraining workflows via Airflow `BranchPythonOperator`.
+- **Memory Optimized**: Vectorized feature engineering and numeric downcasting for handling large datasets efficiently.
+- **High Availability**: Docker profiles (`linux-host`, `celery`, `clearml`) for scaling from local dev to production clusters.
+- **Security-First**: Integrated **Bandit** and **Safety** scanning in the CI/CD pipeline.
 
-### Deployment
-1. Clone the repository and navigate to the root directory.
-2. Initialize environment variables:
-   ```bash
-   cp app-ml/.env.example app-ml/.env
-   ```
-3. Start the full stack using Docker:
-   ```bash
-   docker compose up -d
-   ```
+## 🛠️ Tech Stack & Requirements
 
-### Accessing Services
-- **App UI**: `http://localhost:8050`
-- **Airflow**: `http://localhost:8081`
-- **MLflow**: `http://localhost:5000`
-- **Grafana**: `http://localhost:3000`
+- **Languages**: Python 3.9+, Bash, SQL
+- **Core Frameworks**: Kedro 1.1.1, Apache Airflow 2.x, Dash, Flask
+- **Machine Learning**: CatBoost 1.2.8, XGBoost 2.0+, LightGBM 4.0+, Optuna 4.3.0, SHAP 0.50.0
+- **Storage & Monitoring**: MinIO, MLflow, ClearML, Prometheus, Grafana, PostgreSQL
 
-## 📖 Documentation
-Detailed documentation is available in the `app-ml/analysis_reports` and various `.md` guides within the `app-ml` directory.
+## 📦 Deployment & Setup
+
+### Environment Configuration
+```bash
+# Clone and navigate
+git clone https://github.com/CollinsNyatundo/demandforecastingsystem-v2.git
+cd demandforecastingsystem-v2
+
+# Setup environment
+cp app-ml/.env.example app-ml/.env
+```
+
+### Starting the Stack
+The system uses Docker Compose with profiles for granular control:
+```bash
+# Start core services
+docker compose -f app-ml/docker-compose.yml up -d
+
+# Start with monitoring and experiment tracking
+docker compose --profile linux-host --profile clearml up -d
+```
+
+---
+*Developed by Collins Nyatundo (Machine Learning Engineer)*
