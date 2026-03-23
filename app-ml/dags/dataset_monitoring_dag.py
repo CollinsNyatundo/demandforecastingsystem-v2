@@ -1,5 +1,4 @@
-"""
-Dataset Monitoring and Alerting DAG
+"""Dataset Monitoring and Alerting DAG.
 
 This DAG monitors all datasets in the demand forecasting pipeline:
 - Checks dataset freshness (last update time)
@@ -14,7 +13,6 @@ Best Practices Implemented:
 - Independent from main ML pipeline
 """
 
-import json
 import logging
 import os
 from datetime import datetime, timedelta
@@ -28,7 +26,6 @@ from demand_forecasting.utils import (
     DatasetMonitor,
     check_freshness,
     create_monitor,
-    get_stale_datasets,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,8 +64,7 @@ MONITORED_DATASETS = {
 def _check_prefix_freshness(
     monitor: DatasetMonitor, prefix_uri: str, max_age_hours: int
 ) -> tuple[bool, float]:
-    """
-    Check freshness of datasets matching a prefix (for timestamped models).
+    """Check freshness of datasets matching a prefix (for timestamped models).
 
     Args:
         monitor: DatasetMonitor instance
@@ -140,7 +136,16 @@ def _check_prefix_freshness(
 
 
 # Get alert emails from environment variable
-ALERT_EMAILS = os.getenv("AIRFLOW_ALERT_EMAIL", "cnyagakan@gmail.com").split(",")
+# IMPORTANT: Set AIRFLOW_ALERT_EMAIL in production - no hardcoded fallback
+_alert_email = os.getenv("AIRFLOW_ALERT_EMAIL", "")
+if not _alert_email:
+    logging.warning(
+        "AIRFLOW_ALERT_EMAIL not set. Email alerts will be disabled. "
+        "Set this environment variable to enable email notifications."
+    )
+    ALERT_EMAILS = []
+else:
+    ALERT_EMAILS = [e.strip() for e in _alert_email.split(",") if e.strip()]
 
 default_args = {
     "owner": "data-ops",
@@ -178,15 +183,14 @@ default_args = {
     4. Search space (max age: 24h)
     5. Trained model (critical, max age: 48h)
 
-    **Contact:** cnyagakan@gmail.com
-    **Alerts:** Email on stale critical datasets
+    **Contact:** Set AIRFLOW_ALERT_EMAIL environment variable for alerts
+    **Alerts:** Email on stale critical datasets (requires AIRFLOW_ALERT_EMAIL)
     """,
 )
 def dataset_monitoring_dag():
     @task()
     def check_dataset_freshness():
-        """
-        Check freshness of all monitored datasets.
+        """Check freshness of all monitored datasets.
 
         Returns:
             Dictionary of dataset freshness results
@@ -227,8 +231,7 @@ def dataset_monitoring_dag():
 
     @task()
     def identify_stale_datasets(freshness_results: dict):
-        """
-        Identify stale datasets that need attention.
+        """Identify stale datasets that need attention.
 
         Args:
             freshness_results: Results from check_dataset_freshness
@@ -264,9 +267,8 @@ def dataset_monitoring_dag():
         return stale
 
     @task()
-    def send_stale_data_alerts(stale_datasets: list):
-        """
-        Send email alerts for stale datasets.
+    def send_stale_data_alerts(stale_datasets: list) -> str:
+        """Send email alerts for stale datasets.
 
         Args:
             stale_datasets: List of stale dataset information
@@ -329,7 +331,7 @@ def dataset_monitoring_dag():
                 "<li>Review Airflow logs for errors</li>",
                 "<li>Check MinIO bucket for data presence</li>",
                 "</ul>",
-                "<p><strong>Airflow UI:</strong> <a href='http://localhost:8080'>http://localhost:8080</a></p>",
+                "<p><strong>Airflow UI:</strong> <a href='http://localhost:8081'>http://localhost:8081</a></p>",  # host port 8081 maps to container 8080
             ]
         )
 
@@ -344,16 +346,15 @@ def dataset_monitoring_dag():
             )
             logger.info(f"Stale data alert email sent to {', '.join(ALERT_EMAILS)}")
         except Exception as e:
-            logger.error(f"Failed to send alert email: {str(e)}")
+            logger.error(f"Failed to send alert email: {e!s}")
             # Don't fail the task if email fails
-            return f"Email failed: {str(e)}"
+            return f"Email failed: {e!s}"
 
         return f"Alert sent for {len(stale_datasets)} stale datasets"
 
     @task()
     def generate_daily_report(freshness_results: dict):
-        """
-        Generate comprehensive daily freshness report.
+        """Generate comprehensive daily freshness report.
 
         Args:
             freshness_results: Results from check_dataset_freshness
@@ -380,7 +381,7 @@ def dataset_monitoring_dag():
                 f.write(report)
             logger.info(f"Report saved to {report_file}")
         except Exception as e:
-            logger.warning(f"Could not save report: {str(e)}")
+            logger.warning(f"Could not save report: {e!s}")
 
         # Generate statistics for each dataset
         stats = {}
@@ -400,9 +401,8 @@ def dataset_monitoring_dag():
         }
 
     @task()
-    def export_metrics():
-        """
-        Export dataset metrics to CSV for analysis.
+    def export_metrics() -> str | None:
+        """Export dataset metrics to CSV for analysis.
 
         Returns:
             Export status
@@ -417,13 +417,12 @@ def dataset_monitoring_dag():
             logger.info(f"Metrics exported to {csv_file}")
             return f"Exported to {csv_file}"
         except Exception as e:
-            logger.error(f"Failed to export metrics: {str(e)}")
-            return f"Export failed: {str(e)}"
+            logger.error(f"Failed to export metrics: {e!s}")
+            return f"Export failed: {e!s}"
 
     @task.branch()
-    def should_send_daily_report():
-        """
-        Decide if we should send daily report (only at 8 AM UTC).
+    def should_send_daily_report() -> str:
+        """Decide if we should send daily report (only at 8 AM UTC).
 
         Returns:
             Task ID to execute next
@@ -433,13 +432,11 @@ def dataset_monitoring_dag():
         # Send daily report at 8 AM UTC
         if current_hour == 8:
             return "send_daily_summary_email"
-        else:
-            return "skip_daily_report"
+        return "skip_daily_report"
 
     @task()
-    def send_daily_summary_email(report_summary: dict):
-        """
-        Send daily summary email with all dataset statistics.
+    def send_daily_summary_email(report_summary: dict) -> str:
+        """Send daily summary email with all dataset statistics.
 
         Args:
             report_summary: Summary from generate_daily_report
@@ -479,23 +476,27 @@ def dataset_monitoring_dag():
 
         email_content = "\n".join(email_lines)
 
-        try:
-            send_email(
-                to=["cnyagakan@gmail.com"],
-                subject=f"[AIRFLOW] Daily Dataset Health Report - {datetime.utcnow().strftime('%Y-%m-%d')}",
-                html_content=email_content,
+        # Only send email if ALERT_EMAILS is configured
+        if ALERT_EMAILS:
+            try:
+                send_email(
+                    to=ALERT_EMAILS,
+                    subject=f"[AIRFLOW] Daily Dataset Health Report - {datetime.utcnow().strftime('%Y-%m-%d')}",
+                    html_content=email_content,
+                )
+                logger.info(f"Daily summary email sent to {ALERT_EMAILS}")
+            except Exception as e:
+                logger.error(f"Failed to send daily summary: {e!s}")
+        else:
+            logger.warning(
+                "Skipping daily report email - AIRFLOW_ALERT_EMAIL not configured"
             )
-            logger.info("Daily summary email sent")
-        except Exception as e:
-            logger.error(f"Failed to send daily summary: {str(e)}")
 
         return "Daily report sent"
 
     @task()
-    def skip_daily_report():
-        """
-        Placeholder task when daily report should be skipped.
-        """
+    def skip_daily_report() -> str:
+        """Placeholder task when daily report should be skipped."""
         logger.info("Skipping daily report (not scheduled time)")
         return "Skipped"
 

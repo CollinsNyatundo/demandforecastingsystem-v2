@@ -1,10 +1,8 @@
-"""
-Automated retraining scheduler with multiple trigger types.
-"""
+"""Automated retraining scheduler with multiple trigger types."""
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Any
 
 import mlflow
 import pandas as pd
@@ -12,11 +10,25 @@ from scipy import stats
 
 logger = logging.getLogger(__name__)
 
+# Constants for magic values
+DEFAULT_DAYS_INTERVAL = 2
+DEFAULT_HOURS_INTERVAL = 4
+MIN_PERFORMANCE_THRESHOLD = 0.05
+DEFAULT_PERFORMANCE_THRESHOLD = 0.5
+DEFAULT_DATA_VOLUME_THRESHOLD = 10000
+
+# Priority level constants
+CRITICAL_PRIORITY_THRESHOLD = 4
+HIGH_PRIORITY_THRESHOLD = 3
+MEDIUM_PRIORITY_THRESHOLD = 2
+LOW_PRIORITY_THRESHOLD = 1
+
 
 class RetrainingScheduler:
     """Automated retraining with multiple trigger types."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
+        """Initialize retraining scheduler."""
         self.time_interval_days = config.get("time_interval_days", 7)
         self.performance_threshold = config.get("performance_threshold", 5.0)
         self.data_volume_threshold = config.get("data_volume_threshold", 10000)
@@ -25,7 +37,7 @@ class RetrainingScheduler:
             "model_registry_name", "demand_forecasting"
         )
 
-    def should_retrain(self) -> Dict[str, Any]:
+    def should_retrain(self) -> dict[str, Any]:
         """Check all triggers and decide if retraining needed."""
         triggers = []
 
@@ -69,12 +81,15 @@ class RetrainingScheduler:
                 return True
 
             last_version = latest_versions[0]
-            last_training_time = last_version.creation_timestamp
+            # creation_timestamp from MLflow is in milliseconds, convert to datetime
+            last_training_time = datetime.fromtimestamp(
+                last_version.creation_timestamp / 1000
+            )
 
             # Calculate days since last training
             days_since = (datetime.now() - last_training_time).days
 
-            should_trigger = days_since >= self.time_interval_days
+            should_trigger = bool(days_since >= self.time_interval_days)
 
             if should_trigger:
                 logger.info(
@@ -124,7 +139,7 @@ class RetrainingScheduler:
 
             # Calculate performance degradation
             degradation_pct = ((current_rmse - baseline_rmse) / baseline_rmse) * 100
-            should_trigger = degradation_pct > self.performance_threshold
+            should_trigger = bool(degradation_pct > self.performance_threshold)
 
             if should_trigger:
                 logger.info(
@@ -170,7 +185,7 @@ class RetrainingScheduler:
             # In practice, you'd query your actual data source
             estimated_new_data = len(runs) * 1000  # Rough estimate
 
-            should_trigger = estimated_new_data >= self.data_volume_threshold
+            should_trigger = bool(estimated_new_data >= self.data_volume_threshold)
 
             if should_trigger:
                 logger.info(
@@ -187,69 +202,105 @@ class RetrainingScheduler:
             logger.error(f"Error checking data trigger: {e}")
             return False
 
+    def _get_recent_rmse_values(self, max_results: int = 10) -> list[float]:
+        """Get recent RMSE values from MLflow runs.
+
+        Args:
+            max_results: Maximum number of runs to analyze
+
+        Returns:
+            List of recent RMSE values
+        """
+        client = mlflow.tracking.MlflowClient()
+        experiments = client.search_experiments(
+            filter_string=f"name = '{self.model_registry_name}'"
+        )
+
+        if not experiments:
+            return []
+
+        experiment_id = experiments[0].experiment_id
+
+        # Get recent runs for drift analysis
+        recent_runs = client.search_runs(
+            experiment_ids=[experiment_id],
+            max_results=max_results,
+            order_by=["start_time DESC"],
+        )
+
+        # Extract RMSE values
+        recent_rmse_values = []
+        for run in recent_runs:
+            rmse = run.data.metrics.get("rmse")
+            if rmse is not None:
+                recent_rmse_values.append(rmse)
+
+        return recent_rmse_values
+
+    def _perform_statistical_drift_test(
+        self, recent_rmse_values: list[float]
+    ) -> tuple[bool, float, float]:
+        """Perform statistical test for performance drift.
+
+        Args:
+            recent_rmse_values: List of recent RMSE values
+
+        Returns:
+            Tuple of (should_trigger, p_value, cohens_d)
+        """
+        if len(recent_rmse_values) < DEFAULT_DAYS_INTERVAL:
+            return False, 1.0, 0.0
+
+        # Statistical test for performance drift
+        older_rmse = recent_rmse_values[-2:]  # Older runs
+        newer_rmse = recent_rmse_values[:2]  # Recent runs
+
+        if len(older_rmse) == 0 or len(newer_rmse) == 0:
+            return False, 1.0, 0.0
+
+        # Perform t-test
+        _t_stat, p_value_raw = stats.ttest_ind(older_rmse, newer_rmse)
+        p_value: float = float(p_value_raw)
+
+        # Calculate effect size (Cohen's d)
+        pooled_std = (
+            (len(older_rmse) - 1) * pd.Series(older_rmse).var()
+            + (len(newer_rmse) - 1) * pd.Series(newer_rmse).var()
+        ) / (len(older_rmse) + len(newer_rmse) - 2)
+
+        if pooled_std > 0:
+            cohens_d = (
+                pd.Series(newer_rmse).mean() - pd.Series(older_rmse).mean()
+            ) / pooled_std
+        else:
+            cohens_d = 0
+
+        try:
+            p_val_float = float(p_value)
+        except (ValueError, TypeError):
+            p_val_float = 1.0  # Default to no significance
+
+        should_trigger = (
+            p_val_float < MIN_PERFORMANCE_THRESHOLD
+            and cohens_d > DEFAULT_PERFORMANCE_THRESHOLD
+        )  # Significant degradation
+
+        return should_trigger, p_value, cohens_d
+
     def _check_drift_trigger(self) -> bool:
         """Check if data drift detected."""
         try:
-            # This would typically use your drift detection implementation
-            # For now, we'll simulate with statistical tests on recent data
+            # Get recent RMSE values
+            recent_rmse_values = self._get_recent_rmse_values()
 
-            client = mlflow.tracking.MlflowClient()
-            experiments = client.search_experiments(
-                filter_string=f"name = '{self.model_registry_name}'"
-            )
-
-            if not experiments:
-                return False
-
-            experiment_id = experiments[0].experiment_id
-
-            # Get recent runs for drift analysis
-            recent_runs = client.search_runs(
-                experiment_ids=[experiment_id],
-                max_results=10,
-                order_by=["start_time DESC"],
-            )
-
-            if len(recent_runs) < 2:
+            if len(recent_rmse_values) < DEFAULT_DAYS_INTERVAL:
                 logger.info("Insufficient runs for drift analysis")
                 return False
 
-            # Compare recent model performance
-            recent_rmse_values = []
-            for run in recent_runs:
-                rmse = run.data.metrics.get("rmse")
-                if rmse is not None:
-                    recent_rmse_values.append(rmse)
-
-            if len(recent_rmse_values) < 2:
-                return False
-
-            # Statistical test for performance drift
-            older_rmse = recent_rmse_values[-2:]  # Older runs
-            newer_rmse = recent_rmse_values[:2]  # Recent runs
-
-            if len(older_rmse) == 0 or len(newer_rmse) == 0:
-                return False
-
-            # Perform t-test
-            t_stat, p_value = stats.ttest_ind(older_rmse, newer_rmse)
-
-            # Calculate effect size (Cohen's d)
-            pooled_std = (
-                (len(older_rmse) - 1) * pd.Series(older_rmse).var()
-                + (len(newer_rmse) - 1) * pd.Series(newer_rmse).var()
-            ) / (len(older_rmse) + len(newer_rmse) - 2)
-
-            if pooled_std > 0:
-                cohens_d = (
-                    pd.Series(newer_rmse).mean() - pd.Series(older_rmse).mean()
-                ) / pooled_std
-            else:
-                cohens_d = 0
-
-            should_trigger = (
-                p_value < 0.05 and cohens_d > 0.5
-            )  # Significant degradation
+            # Perform statistical drift test
+            should_trigger, p_value, cohens_d = self._perform_statistical_drift_test(
+                recent_rmse_values
+            )
 
             if should_trigger:
                 logger.info(
@@ -275,7 +326,7 @@ class RetrainingScheduler:
             )
 
             if not experiments:
-                return None
+                return float("inf")  # Default to worst case RMSE
 
             experiment_id = experiments[0].experiment_id
 
@@ -288,35 +339,34 @@ class RetrainingScheduler:
             )
 
             if best_runs:
-                return best_runs[0].data.metrics.get("rmse")
+                return float(best_runs[0].data.metrics.get("rmse", 0.0))
 
-            return None
+            return float("inf")  # Default to worst case RMSE
 
         except Exception as e:
             logger.error(f"Error getting baseline RMSE: {e}")
-            return None
+            return float("inf")  # Default to worst case RMSE
 
-    def _calculate_priority(self, triggers: List[str]) -> str:
+    def _calculate_priority(self, triggers: list[str]) -> str:
         """Calculate retraining priority based on trigger types."""
         priority_scores = {
             "TIME_INTERVAL": 1,
-            "DATA_VOLUME": 2,
+            "DATA_VOLUME": DEFAULT_HOURS_INTERVAL,
             "PERFORMANCE_DEGRADATION": 3,
-            "DATA_DRIFT": 4,
+            "DATA_DRIFT": DEFAULT_DAYS_INTERVAL,
         }
 
         max_score = max([priority_scores.get(trigger, 0) for trigger in triggers])
 
-        if max_score >= 4:
+        if max_score >= CRITICAL_PRIORITY_THRESHOLD:
             return "CRITICAL"
-        elif max_score >= 3:
+        if max_score >= HIGH_PRIORITY_THRESHOLD:
             return "HIGH"
-        elif max_score >= 2:
+        if max_score >= MEDIUM_PRIORITY_THRESHOLD:
             return "MEDIUM"
-        else:
-            return "LOW"
+        return "LOW"
 
-    def _get_trigger_details(self) -> Dict[str, Any]:
+    def _get_trigger_details(self) -> dict[str, Any]:
         """Get detailed information about each trigger."""
         return {
             "time_interval": {
@@ -338,10 +388,10 @@ class RetrainingScheduler:
             },
         }
 
-    def log_retraining_decision(self, decision: Dict[str, Any]):
+    def log_retraining_decision(self, decision: dict[str, Any]) -> None:
         """Log retraining decision to MLflow."""
         try:
-            client = mlflow.tracking.MlflowClient()
+            mlflow.tracking.MlflowClient()
 
             with mlflow.start_run(
                 run_name=f"retraining_decision_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -363,7 +413,7 @@ class RetrainingScheduler:
         except Exception as e:
             logger.error(f"Failed to log retraining decision to MLflow: {e}")
 
-    def get_retraining_recommendations(self, decision: Dict[str, Any]) -> List[str]:
+    def get_retraining_recommendations(self, decision: dict[str, Any]) -> list[str]:
         """Get recommendations based on retraining decision."""
         recommendations = []
 

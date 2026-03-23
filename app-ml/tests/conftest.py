@@ -9,12 +9,14 @@ Provides fixtures and utilities for testing all system components including:
 - Edge cases and error scenarios
 """
 
-import os
+from __future__ import annotations
+
+import shutil
 import sys
 import tempfile
-import shutil
+from collections.abc import Generator
 from pathlib import Path
-from typing import Dict, Any, Generator, List
+from typing import Any
 
 # Add src to path for imports
 project_root = Path(__file__).parent.parent
@@ -22,40 +24,77 @@ sys.path.insert(0, str(project_root / "src"))
 
 # Import pytest fixtures only when available
 try:
-    import pytest
+    import pytest  # type: ignore[import-not-found]
 
     PYTEST_AVAILABLE = True
 except ImportError:
     PYTEST_AVAILABLE = False
-    print("Warning: pytest not available, some fixtures may not work")
 
-# Import system components only when available
+# Initialize module-level variables for lazy imports
+DriftDetector = None
+EnsembleManager = None
+RetrainingScheduler = None
+ModelExplainer = None
+ModelRouter = None
+model_server_app = None
+mlflow = None
+RDBStorage = None
+np = None
+pd = None
+TestClient = None
+Mock = None
+MagicMock = None
+patch = None
+
+COMPONENTS_AVAILABLE = False
+
+# Import system components only when available (lazy loading pattern)
 try:
-    import numpy as np
-    import pandas as pd
-    from unittest.mock import Mock, patch, MagicMock
-    import mlflow
-    import optuna
-    from optuna.storages import RDBStorage
-    from fastapi.testclient import TestClient
+    from unittest.mock import MagicMock, Mock, patch
 
-    # Import system components
-    from demand_forecasting.serving.model_server import app as model_server_app
-    from demand_forecasting.monitoring.drift_detector import DriftDetector
-    from demand_forecasting.explainability.shap_explainer import ModelExplainer
-    from demand_forecasting.optimization.multi_objective import objective_multi
-    from demand_forecasting.optimization.ensemble import EnsembleManager
-    from demand_forecasting.automation.retraining_scheduler import RetrainingScheduler
-    from demand_forecasting.serving.model_router import ModelRouter
+    import mlflow  # type: ignore[import-not-found]
+    import numpy as np  # type: ignore[import-not-found]
+    import pandas as pd  # type: ignore[import-not-found]
+    from fastapi.testclient import TestClient  # type: ignore[import-not-found]
+    from optuna.storages import RDBStorage  # type: ignore[import-not-found]
+
+    from demand_forecasting.automation.retraining_scheduler import (
+        RetrainingScheduler,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.explainability.shap_explainer import (
+        ModelExplainer,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.monitoring.drift_detector import (
+        DriftDetector,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.optimization.ensemble import (
+        EnsembleManager,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.optimization.multi_objective import (
+        objective_multi,  # type: ignore[import-not-found]
+    )
+    from demand_forecasting.serving.model_router import (
+        ModelRouter,  # type: ignore[import-not-found]
+    )
+
+    # Import model server app (may fail if dependencies not met)
+    try:
+        from demand_forecasting.serving.model_server import (
+            app as model_server_app,  # type: ignore[import-not-found]
+        )
+    except ImportError:
+        model_server_app = None
 
     COMPONENTS_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: Some components not available: {e}")
+    import warnings
+
+    warnings.warn(f"Some test dependencies not available: {e}")
     COMPONENTS_AVAILABLE = False
 
 
 @pytest.fixture(scope="session")
-def test_config() -> Dict[str, Any]:
+def test_config() -> dict[str, Any]:
     """Test configuration for all components."""
     return {
         "model_params": {
@@ -80,8 +119,10 @@ def test_config() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def sample_data() -> pd.DataFrame:
+def sample_data():
     """Generate sample demand forecasting data for testing."""
+    if np is None or pd is None:
+        pytest.skip("numpy or pandas not available")
     np.random.seed(42)
     n_samples = 1000
 
@@ -103,8 +144,10 @@ def sample_data() -> pd.DataFrame:
 
 
 @pytest.fixture
-def reference_data() -> pd.DataFrame:
+def reference_data():
     """Reference data for drift detection testing."""
+    if np is None or pd is None:
+        pytest.skip("numpy or pandas not available")
     np.random.seed(123)
     n_samples = 500
 
@@ -120,8 +163,10 @@ def reference_data() -> pd.DataFrame:
 
 
 @pytest.fixture
-def drifted_data() -> pd.DataFrame:
+def drifted_data():
     """Data with drift for testing drift detection."""
+    if np is None or pd is None:
+        pytest.skip("numpy or pandas not available")
     np.random.seed(456)
     n_samples = 500
 
@@ -140,6 +185,8 @@ def drifted_data() -> pd.DataFrame:
 @pytest.fixture
 def sample_model():
     """Create a simple mock model for testing."""
+    if np is None:
+        pytest.skip("numpy not available")
 
     class MockModel:
         def predict(self, X):
@@ -164,14 +211,18 @@ def temp_directory() -> Generator[Path, None, None]:
 @pytest.fixture
 def mlflow_tracking_uri(temp_directory: Path) -> str:
     """MLflow tracking URI for testing."""
+    if mlflow is None:
+        pytest.skip("mlflow not available")
     uri = f"sqlite:///{temp_directory}/test_mlflow.db"
     mlflow.set_tracking_uri(uri)
     return uri
 
 
 @pytest.fixture
-def optuna_storage(temp_directory: Path) -> RDBStorage:
+def optuna_storage(temp_directory: Path):
     """Optuna storage for testing."""
+    if RDBStorage is None:
+        pytest.skip("optuna not available")
     storage_url = f"sqlite:///{temp_directory}/test_optuna.db"
     return RDBStorage(storage_url)
 
@@ -179,6 +230,8 @@ def optuna_storage(temp_directory: Path) -> RDBStorage:
 @pytest.fixture
 def mock_mlflow_client():
     """Mock MLflow client for testing."""
+    if patch is None or Mock is None or pd is None:
+        pytest.skip("unittest.mock or pandas not available")
     with patch("mlflow.tracking.MlflowClient") as mock_client:
         client = Mock()
         mock_client.return_value = client
@@ -195,30 +248,36 @@ def mock_mlflow_client():
 
 
 @pytest.fixture
-def model_server_test_client() -> TestClient:
+def model_server_test_client():
     """Test client for model server FastAPI app."""
+    if TestClient is None or model_server_app is None:
+        pytest.skip("model_server or TestClient not available")
     return TestClient(model_server_app)
 
 
 @pytest.fixture
-def drift_detector(
-    reference_data: pd.DataFrame, test_config: Dict[str, Any]
-) -> DriftDetector:
+def drift_detector(reference_data, test_config: dict[str, Any]):
     """Drift detector instance for testing."""
+    if DriftDetector is None:
+        pytest.skip("DriftDetector not available")
     return DriftDetector(
         reference_data=reference_data, threshold=test_config["drift_threshold"]
     )
 
 
 @pytest.fixture
-def ensemble_manager() -> EnsembleManager:
+def ensemble_manager():
     """Ensemble manager for testing."""
+    if EnsembleManager is None:
+        pytest.skip("EnsembleManager not available")
     return EnsembleManager()
 
 
 @pytest.fixture
-def retraining_scheduler(test_config: Dict[str, Any]) -> RetrainingScheduler:
+def retraining_scheduler(test_config: dict[str, Any]):
     """Retraining scheduler for testing."""
+    if RetrainingScheduler is None:
+        pytest.skip("RetrainingScheduler not available")
     return RetrainingScheduler(test_config["retraining_config"])
 
 
@@ -241,50 +300,76 @@ def test_scenarios(request):
     return request.param
 
 
+# Helper functions for edge case scenarios to reduce complexity
+def _apply_missing_features(data: pd.DataFrame) -> pd.DataFrame:
+    """Remove essential features."""
+    return data.drop(columns=["temp", "humidity"])
+
+
+def _apply_invalid_types(data: pd.DataFrame) -> pd.DataFrame:
+    """Add invalid data types."""
+    data.loc[0, "temp"] = "invalid"
+    data.loc[1, "humidity"] = None
+    return data
+
+
+def _apply_extreme_values(data: pd.DataFrame) -> pd.DataFrame:
+    """Add extreme but valid values."""
+    data.loc[0, "temp"] = 100.0  # Very hot
+    data.loc[1, "temp"] = -50.0  # Very cold
+    data.loc[2, "wind_speed"] = 100.0  # Extreme wind
+    return data
+
+
+def _apply_null_values(data: pd.DataFrame) -> pd.DataFrame:
+    """Add null values."""
+    for col in ["temp", "humidity", "wind_speed"]:
+        data.loc[data.sample(frac=0.1).index, col] = np.nan
+    return data
+
+
+def _apply_negative_values(data: pd.DataFrame) -> pd.DataFrame:
+    """Add negative values where inappropriate."""
+    data.loc[0, "demand"] = -10  # Negative demand
+    return data
+
+
+def _apply_large_values(data: pd.DataFrame) -> pd.DataFrame:
+    """Add very large values."""
+    data.loc[0, "demand"] = 1000000  # Very large demand
+    return data
+
+
+def _apply_duplicate_rows(data: pd.DataFrame) -> pd.DataFrame:
+    """Add duplicates."""
+    return pd.concat([data, data.iloc[0:5]], ignore_index=True)
+
+
 @pytest.fixture
 def edge_case_data(test_scenarios: str, sample_data: pd.DataFrame) -> pd.DataFrame:
     """Generate edge case data based on scenario."""
     data = sample_data.copy()
 
-    if test_scenarios == "missing_features":
-        # Remove essential features
-        data = data.drop(columns=["temp", "humidity"])
+    # Map scenarios to handler functions
+    scenario_handlers = {
+        "missing_features": _apply_missing_features,
+        "invalid_types": _apply_invalid_types,
+        "extreme_values": _apply_extreme_values,
+        "null_values": _apply_null_values,
+        "negative_values": _apply_negative_values,
+        "large_values": _apply_large_values,
+        "duplicate_rows": _apply_duplicate_rows,
+    }
 
-    elif test_scenarios == "invalid_types":
-        # Add invalid data types
-        data.loc[0, "temp"] = "invalid"
-        data.loc[1, "humidity"] = None
-
-    elif test_scenarios == "extreme_values":
-        # Add extreme but valid values
-        data.loc[0, "temp"] = 100.0  # Very hot
-        data.loc[1, "temp"] = -50.0  # Very cold
-        data.loc[2, "wind_speed"] = 100.0  # Extreme wind
-
-    elif test_scenarios == "empty_data":
-        # Return empty DataFrame
+    # Handle special cases that return early
+    if test_scenarios == "empty_data":
         return pd.DataFrame(columns=data.columns)
-
-    elif test_scenarios == "single_row":
-        # Return single row
+    if test_scenarios == "single_row":
         return data.iloc[0:1]
 
-    elif test_scenarios == "duplicate_rows":
-        # Add duplicates
-        data = pd.concat([data, data.iloc[0:5]], ignore_index=True)
-
-    elif test_scenarios == "null_values":
-        # Add null values
-        for col in ["temp", "humidity", "wind_speed"]:
-            data.loc[data.sample(frac=0.1).index, col] = np.nan
-
-    elif test_scenarios == "negative_values":
-        # Add negative values where inappropriate
-        data.loc[0, "demand"] = -10  # Negative demand
-
-    elif test_scenarios == "large_values":
-        # Add very large values
-        data.loc[0, "demand"] = 1000000  # Very large demand
+    # Apply scenario-specific transformation
+    if test_scenarios in scenario_handlers:
+        data = scenario_handlers[test_scenarios](data)
 
     return data
 

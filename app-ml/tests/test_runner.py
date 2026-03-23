@@ -4,15 +4,15 @@ Comprehensive test runner for the demand forecasting ML system.
 Runs all test suites and provides detailed reporting.
 """
 
-import os
-import sys
-import subprocess
-import json
-import time
-from pathlib import Path
-from typing import Dict, List, Any, Tuple
 import argparse
+import json
+import os
+import subprocess
+import sys
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 class TestRunner:
@@ -31,40 +31,38 @@ class TestRunner:
                 "files": [
                     "test_minio_upload.py",
                     "test_s3_helpers.py",
-                    "test_data_processing.py"
+                    "test_data_processing.py",
                 ],
-                "description": "Core utility function tests"
+                "description": "Core utility function tests",
             },
             "integration": {
                 "name": "Integration Tests",
                 "files": [
                     "test_automation.py",
                     "test_core_utilities.py",
-                    "test_drift_detection.py"
+                    "test_drift_detection.py",
                 ],
-                "description": "Component integration tests"
+                "description": "Component integration tests",
             },
             "ml": {
                 "name": "ML Pipeline Tests",
                 "files": [
                     "test_model_serving.py",
                     "test_optimization.py",
-                    "pipelines/test_data_processing.py"
+                    "pipelines/test_data_processing.py",
                 ],
-                "description": "ML pipeline and model tests"
+                "description": "ML pipeline and model tests",
             },
             "system": {
                 "name": "System Tests",
-                "files": [
-                    "test_integration.py",
-                    "test_production_ops.py"
-                ],
-                "description": "End-to-end system tests"
-            }
+                "files": ["test_integration.py", "test_production_ops.py"],
+                "description": "End-to-end system tests",
+            },
         }
 
-    def run_all_tests(self, verbose: bool = False, coverage: bool = True,
-                     html_report: bool = True) -> Dict[str, Any]:
+    def run_all_tests(
+        self, verbose: bool = False, coverage: bool = True, html_report: bool = True
+    ) -> dict[str, Any]:
         """Run all test suites."""
         print("🚀 Starting Comprehensive ML System Test Suite")
         print("=" * 60)
@@ -80,15 +78,17 @@ class TestRunner:
                 "failed": 0,
                 "skipped": 0,
                 "errors": 0,
-                "duration": 0
-            }
+                "duration": 0,
+            },
         }
 
         for suite_name, suite_config in self.test_suites.items():
             print(f"\n📋 Running {suite_config['name']}...")
             print(f"   {suite_config['description']}")
 
-            suite_result = self._run_test_suite(suite_name, suite_config, verbose, coverage)
+            suite_result = self._run_test_suite(
+                suite_name, suite_config, verbose, coverage
+            )
             results["suites"][suite_name] = suite_result
 
             # Update summary
@@ -112,8 +112,9 @@ class TestRunner:
 
         return results
 
-    def run_specific_suite(self, suite_name: str, verbose: bool = False,
-                          coverage: bool = True) -> Dict[str, Any]:
+    def run_specific_suite(
+        self, suite_name: str, verbose: bool = False, coverage: bool = True
+    ) -> dict[str, Any]:
         """Run a specific test suite."""
         if suite_name not in self.test_suites:
             available_suites = list(self.test_suites.keys())
@@ -131,14 +132,19 @@ class TestRunner:
         results = {
             "timestamp": datetime.now().isoformat(),
             "suite": suite_name,
-            "result": result
+            "result": result,
         }
         self._save_results(results, f"{suite_name}_results.json")
 
         return result
 
-    def _run_test_suite(self, suite_name: str, suite_config: Dict[str, Any],
-                       verbose: bool = False, coverage: bool = True) -> Dict[str, Any]:
+    def _run_test_suite(
+        self,
+        suite_name: str,
+        suite_config: dict[str, Any],
+        verbose: bool = False,
+        coverage: bool = True,
+    ) -> dict[str, Any]:
         """Run a single test suite."""
         suite_result = {
             "name": suite_config["name"],
@@ -151,8 +157,8 @@ class TestRunner:
                 "failed": 0,
                 "skipped": 0,
                 "errors": 0,
-                "duration": 0
-            }
+                "duration": 0,
+            },
         }
 
         start_time = time.time()
@@ -163,7 +169,7 @@ class TestRunner:
                 print(f"⚠️  Test file not found: {test_file}")
                 suite_result["results"][test_file] = {
                     "status": "NOT_FOUND",
-                    "error": "File does not exist"
+                    "error": "File does not exist",
                 }
                 continue
 
@@ -185,8 +191,9 @@ class TestRunner:
 
         return suite_result
 
-    def _run_test_file(self, test_path: Path, verbose: bool = False,
-                      coverage: bool = True) -> Dict[str, Any]:
+    def _run_test_file(
+        self, test_path: Path, verbose: bool = False, coverage: bool = True
+    ) -> dict[str, Any]:
         """Run a single test file."""
         cmd = [sys.executable, "-m", "pytest", str(test_path)]
 
@@ -196,11 +203,13 @@ class TestRunner:
             cmd.extend(["--tb=long", "-v"])
 
         if coverage:
-            cmd.extend([
-                "--cov=src/demand_forecasting",
-                "--cov-report=term-missing",
-                "--cov-report=json:coverage.json"
-            ])
+            cmd.extend(
+                [
+                    "--cov=src/demand_forecasting",
+                    "--cov-report=term-missing",
+                    "--cov-report=json:coverage.json",
+                ]
+            )
 
         # Set environment
         env = os.environ.copy()
@@ -213,7 +222,7 @@ class TestRunner:
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minutes per file
+                timeout=300,  # 5 minutes per file
             )
 
             # Parse pytest output
@@ -224,53 +233,73 @@ class TestRunner:
                 "exit_code": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "summary": parsed_result
+                "summary": parsed_result,
             }
 
         except subprocess.TimeoutExpired:
             return {
                 "status": "TIMEOUT",
                 "error": "Test execution timed out after 5 minutes",
-                "summary": {"total": 0, "passed": 0, "failed": 0, "skipped": 0, "errors": 1}
+                "summary": {
+                    "total": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                    "errors": 1,
+                },
             }
         except Exception as e:
             return {
                 "status": "ERROR",
                 "error": str(e),
-                "summary": {"total": 0, "passed": 0, "failed": 0, "skipped": 0, "errors": 1}
+                "summary": {
+                    "total": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                    "errors": 1,
+                },
             }
 
-    def _parse_pytest_output(self, stdout: str, stderr: str) -> Dict[str, int]:
+    def _parse_pytest_output(self, stdout: str, stderr: str) -> dict[str, int]:
         """Parse pytest output to extract test counts."""
         summary = {"total": 0, "passed": 0, "failed": 0, "skipped": 0, "errors": 0}
 
         # Look for the summary line (e.g., "3 passed, 1 failed, 2 skipped")
-        lines = stdout.split('\n')
+        lines = stdout.split("\n")
         for line in lines:
             line = line.strip()
-            if any(keyword in line.lower() for keyword in ['passed', 'failed', 'skipped', 'error']):
+            if any(
+                keyword in line.lower()
+                for keyword in ["passed", "failed", "skipped", "error"]
+            ):
                 # Parse the line
-                parts = line.replace(',', '').split()
+                parts = line.replace(",", "").split()
                 for i, part in enumerate(parts):
                     if part.isdigit():
                         count = int(part)
                         if i + 1 < len(parts):
                             next_word = parts[i + 1].lower()
-                            if 'passed' in next_word:
+                            if "passed" in next_word:
                                 summary["passed"] = count
-                            elif 'failed' in next_word:
+                            elif "failed" in next_word:
                                 summary["failed"] = count
-                            elif 'skipped' in next_word:
+                            elif "skipped" in next_word:
                                 summary["skipped"] = count
-                            elif 'error' in next_word:
+                            elif "error" in next_word:
                                 summary["errors"] = count
 
         # Calculate total
-        summary["total"] = summary["passed"] + summary["failed"] + summary["skipped"] + summary["errors"]
+        summary["total"] = (
+            summary["passed"]
+            + summary["failed"]
+            + summary["skipped"]
+            + summary["errors"]
+        )
 
         return summary
 
-    def _print_suite_summary(self, suite_result: Dict[str, Any]):
+    def _print_suite_summary(self, suite_result: dict[str, Any]):
         """Print summary for a test suite."""
         summary = suite_result["summary"]
         total = summary["total"]
@@ -281,14 +310,16 @@ class TestRunner:
         duration = summary["duration"]
 
         print(f"\n   📊 {suite_result['name']} Results:")
-        print(f"      Total: {total}, Passed: {passed}, Failed: {failed}, Skipped: {skipped}, Errors: {errors}")
-        print(".2f"
+        print(
+            f"      Total: {total}, Passed: {passed}, Failed: {failed}, Skipped: {skipped}, Errors: {errors}"
+        )
+        print(f"      Duration: {duration:.2f}s")
         if failed > 0 or errors > 0:
-            print("      ❌ Some tests failed - check details above"
+            print("      ❌ Some tests failed - check details above")
         else:
-            print("      ✅ All tests passed"
+            print("      ✅ All tests passed")
 
-    def _print_final_summary(self, results: Dict[str, Any]):
+    def _print_final_summary(self, results: dict[str, Any]):
         """Print final test summary."""
         print("\n" + "=" * 60)
         print("🎯 FINAL TEST SUMMARY")
@@ -308,10 +339,10 @@ class TestRunner:
         print(f"Tests Failed: {failed}")
         print(f"Tests Skipped: {skipped}")
         print(f"Test Errors: {errors}")
-        print(".2f"
+        print(f"Total Duration: {results['total_duration']:.2f}s")
         if total_tests > 0:
             success_rate = (passed / total_tests) * 100
-            print(".1f"
+            print(f"Success Rate: {success_rate:.1f}%")
         print(f"Timestamp: {results['timestamp']}")
 
         # Overall status
@@ -320,11 +351,13 @@ class TestRunner:
             print("The ML system is ready for deployment.")
         else:
             print(f"\n⚠️  {failed + errors} tests failed or had errors.")
-            print("Please review the test output above and fix issues before deployment.")
+            print(
+                "Please review the test output above and fix issues before deployment."
+            )
 
         print(f"\n📄 Detailed reports saved to: {self.reports_dir}")
 
-    def _generate_html_report(self, results: Dict[str, Any]):
+    def _generate_html_report(self, results: dict[str, Any]):
         """Generate HTML test report."""
         html_content = f"""
 <!DOCTYPE html>
@@ -350,31 +383,31 @@ class TestRunner:
     <div class="header">
         <h1>🚀 Demand Forecasting ML System</h1>
         <h2>Test Report</h2>
-        <p>Generated on: {results['timestamp']}</p>
+        <p>Generated on: {results["timestamp"]}</p>
     </div>
 
     <div class="summary">
         <h2>📊 Overall Summary</h2>
         <div class="metric">
-            <strong>Total Suites:</strong> {results['total_suites']}
+            <strong>Total Suites:</strong> {results["total_suites"]}
         </div>
         <div class="metric">
-            <strong>Total Tests:</strong> {results['summary']['total_tests']}
+            <strong>Total Tests:</strong> {results["summary"]["total_tests"]}
         </div>
         <div class="metric">
-            <strong>Passed:</strong> <span class="status-pass">{results['summary']['passed']}</span>
+            <strong>Passed:</strong> <span class="status-pass">{results["summary"]["passed"]}</span>
         </div>
         <div class="metric">
-            <strong>Failed:</strong> <span class="status-fail">{results['summary']['failed']}</span>
+            <strong>Failed:</strong> <span class="status-fail">{results["summary"]["failed"]}</span>
         </div>
         <div class="metric">
-            <strong>Skipped:</strong> <span class="status-skip">{results['summary']['skipped']}</span>
+            <strong>Skipped:</strong> <span class="status-skip">{results["summary"]["skipped"]}</span>
         </div>
         <div class="metric">
-            <strong>Errors:</strong> <span class="status-fail">{results['summary']['errors']}</span>
+            <strong>Errors:</strong> <span class="status-fail">{results["summary"]["errors"]}</span>
         </div>
         <div class="metric">
-            <strong>Duration:</strong> {results['summary']['duration']:.2f}s
+            <strong>Duration:</strong> {results["summary"]["duration"]:.2f}s
         </div>
     </div>
 
@@ -383,23 +416,27 @@ class TestRunner:
 
         for suite_name, suite_result in results["suites"].items():
             suite_summary = suite_result["summary"]
-            status_class = "status-pass" if suite_summary["failed"] == 0 and suite_summary["errors"] == 0 else "status-fail"
+            status_class = (
+                "status-pass"
+                if suite_summary["failed"] == 0 and suite_summary["errors"] == 0
+                else "status-fail"
+            )
 
             html_content += f"""
     <div class="suite">
-        <h3>{suite_result['name']} <span class="{status_class}">({suite_summary['passed']}/{suite_summary['total']} passed)</span></h3>
-        <p>{suite_result['description']}</p>
+        <h3>{suite_result["name"]} <span class="{status_class}">({suite_summary["passed"]}/{suite_summary["total"]} passed)</span></h3>
+        <p>{suite_result["description"]}</p>
         <div class="metric">
-            <strong>Total:</strong> {suite_summary['total']}
+            <strong>Total:</strong> {suite_summary["total"]}
         </div>
         <div class="metric">
-            <strong>Passed:</strong> <span class="status-pass">{suite_summary['passed']}</span>
+            <strong>Passed:</strong> <span class="status-pass">{suite_summary["passed"]}</span>
         </div>
         <div class="metric">
-            <strong>Failed:</strong> <span class="status-fail">{suite_summary['failed']}</span>
+            <strong>Failed:</strong> <span class="status-fail">{suite_summary["failed"]}</span>
         </div>
         <div class="metric">
-            <strong>Duration:</strong> {suite_summary['duration']:.2f}s
+            <strong>Duration:</strong> {suite_summary["duration"]:.2f}s
         </div>
 
         <table>
@@ -421,19 +458,19 @@ class TestRunner:
             <tr>
                 <td>{file_name}</td>
                 <td class="status-pass">✅ Completed</td>
-                <td>{file_summary['total']}</td>
-                <td class="status-pass">{file_summary['passed']}</td>
-                <td class="status-fail">{file_summary['failed']}</td>
-                <td class="status-skip">{file_summary['skipped']}</td>
-                <td class="status-fail">{file_summary['errors']}</td>
+                <td>{file_summary["total"]}</td>
+                <td class="status-pass">{file_summary["passed"]}</td>
+                <td class="status-fail">{file_summary["failed"]}</td>
+                <td class="status-skip">{file_summary["skipped"]}</td>
+                <td class="status-fail">{file_summary["errors"]}</td>
             </tr>
 """
                 else:
                     html_content += f"""
             <tr>
                 <td>{file_name}</td>
-                <td class="status-fail">❌ {file_result['status']}</td>
-                <td colspan="5">{file_result.get('error', 'Unknown error')}</td>
+                <td class="status-fail">❌ {file_result["status"]}</td>
+                <td colspan="5">{file_result.get("error", "Unknown error")}</td>
             </tr>
 """
 
@@ -457,7 +494,9 @@ class TestRunner:
 
         print(f"📄 HTML report saved to: {report_path}")
 
-    def _save_results(self, results: Dict[str, Any], filename: str = "comprehensive_test_results.json"):
+    def _save_results(
+        self, results: dict[str, Any], filename: str = "comprehensive_test_results.json"
+    ):
         """Save test results to JSON file."""
         results_path = self.reports_dir / filename
         with open(results_path, "w", encoding="utf-8") as f:
@@ -474,27 +513,19 @@ def main():
     parser.add_argument(
         "--suite",
         choices=["unit", "integration", "ml", "system"],
-        help="Run specific test suite"
+        help="Run specific test suite",
+    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--no-coverage", action="store_true", help="Skip coverage reporting"
     )
     parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Verbose output"
-    )
-    parser.add_argument(
-        "--no-coverage",
-        action="store_true",
-        help="Skip coverage reporting"
-    )
-    parser.add_argument(
-        "--no-html",
-        action="store_true",
-        help="Skip HTML report generation"
+        "--no-html", action="store_true", help="Skip HTML report generation"
     )
     parser.add_argument(
         "--project-root",
         type=str,
-        help="Project root directory (default: current directory parent)"
+        help="Project root directory (default: current directory parent)",
     )
 
     args = parser.parse_args()
@@ -513,16 +544,14 @@ def main():
         if args.suite:
             # Run specific suite
             results = runner.run_specific_suite(
-                args.suite,
-                verbose=args.verbose,
-                coverage=not args.no_coverage
+                args.suite, verbose=args.verbose, coverage=not args.no_coverage
             )
         else:
             # Run all tests
             results = runner.run_all_tests(
                 verbose=args.verbose,
                 coverage=not args.no_coverage,
-                html_report=not args.no_html
+                html_report=not args.no_html,
             )
 
         # Exit with appropriate code

@@ -8,10 +8,51 @@ name = "demand_forecasting"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
+    # Kedro Ecosystem
+    "kedro==1.1.1",
+    "kedro-datasets",
+    "kedro-mlflow",
+    "kedro-telemetry>=0.7.0",
+    
+    # Machine Learning
+    "scikit-learn>=1.5.0,<2.0.0",
+    "catboost>=1.2.8",
+    "xgboost>=2.0.0",
+    "lightgbm>=4.0.0",
+    "optuna>=4.3.0",
+    "shap>=0.50.0",
+    
+    # Core Data
+    "numpy>=2.0.0,<2.4.0",  # <2.4 for numba compatibility (numba doesn't support 2.4 yet)
+    "pandas>=2.2.0,<3.0.0",
+    "pandera>=0.20.0",
+    
+    # API & Serving
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    
+    # MLflow & Monitoring
+    "mlflow>=3.8.1",
+    "clearml>=1.14.0",              # Experiment tracking & visualization
+    "evidently>=0.4.0",             # Data/model drift monitoring
+    "optuna-dashboard>=0.15.0",     # Hyperparameter optimization UI
+    "argon2-cffi>=23.1.0",  # Secure password hashing
+    "prometheus-client>=0.19.0",
+    
+    # Storage
+    "s3fs>=2024.6.1",
+    "boto3>=1.34.0",
+    
+    # Utilities
+    "tenacity>=9.1.0",
+    "cachetools>=5.3.0",
+    "joblib>=1.4.0",
+    
+    # Notebooks
     "ipython>=8.10",
     "jupyterlab>=3.0",
     "notebook",
-    "kedro==1.1.1"
 ]
 
 [project.scripts]
@@ -35,7 +76,10 @@ dev = [
     "pytest-cov>=3,<7",
     "pytest-mock>=1.7.1, <2.0",
     "pytest~=7.2",
-    "ruff~=0.12.0"
+    "ruff~=0.12.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.0",
+    "pre-commit>=3.2.0",
 ]
 
 [tool.setuptools.dynamic]
@@ -58,29 +102,184 @@ addopts = """
 --cov-report term-missing \
 --cov src/demand_forecasting -ra"""
 
-[tool.coverage.report]
-fail_under = 0
-show_missing = true
-exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
-
-[tool.ruff.format]
-docstring-code-format = true
+# Filter known third-party warnings that cannot be fixed in our codebase
+filterwarnings = [
+    "ignore::FutureWarning:mlflow.*",  # MLflow filesystem deprecation
+    "ignore::UserWarning:mlflow.pyfunc.*",  # MLflow predict method type hints
+    "ignore::FutureWarning:pandera.*",  # Pandera import deprecation (we use new imports)
+    "ignore:Numba needs NumPy:UserWarning",  # Numba/NumPy version compatibility
+]
 
 [tool.ruff]
+# Python target version
+target-version = "py310"
 line-length = 88
 show-fixes = true
 
+# Include test files in linting
+extend-include = ["*.ipynb"]
+
 [tool.ruff.lint]
+# Comprehensive rule set based on industry best practices
 select = [
-    "F",   # Pyflakes
-    "W",   # pycodestyle
-    "E",   # pycodestyle
-    "I",   # isort
-    "UP",  # pyupgrade
-    "PL",  # Pylint
-    "T201", # Print Statement
+    # Pyflakes (F) - Logic errors
+    "F",
+    
+    # pycodestyle (E, W) - Style violations
+    "E",
+    "W",
+    
+    # isort (I) - Import sorting
+    "I",
+    
+    # pyupgrade (UP) - Modernize Python syntax
+    "UP",
+    
+    # Pylint (PL) - General quality checks
+    "PL",
+    
+    # flake8-bugbear (B) - Additional bug finding
+    "B",
+    
+    # flake8-bandit (S) - Security issues ⭐ NEW
+    "S",
+    
+    # flake8-comprehensions (C4) - Comprehension improvements
+    "C4",
+    
+    # flake8-simplify (SIM) - Code simplification
+    "SIM",
+    
+    # mccabe (C90) - Complexity checking ⭐ NEW
+    "C90",
+    
+    # pydocstyle (D) - Docstring conventions ⭐ NEW
+    "D",
+    
+    # flake8-annotations (ANN) - Type annotations ⭐ NEW
+    "ANN",
+    
+    # flake8-print (T20) - Print statement detection
+    "T20",
+    
+    # flake8-pytest-style (PT) - Pytest best practices
+    "PT",
+    
+    # flake8-return (RET) - Return statement improvements
+    "RET",
+    
+    # flake8-use-pathlib (PTH) - Pathlib usage
+    "PTH",
+    
+    # Ruff-specific (RUF) - Ruff-specific rules
+    "RUF",
 ]
-ignore = ["E501"]  # Ruff format takes care of line-too-long
+
+ignore = [
+    "E501",    # Line too long (formatter handles this)
+    "D100",    # Missing docstring in public module
+    "D104",    # Missing docstring in public package
+    "S101",    # Use of assert (needed for tests)
+    "RUF100",  # Unused noqa comments (prevents loop)
+    "SIM102",  # Collapsible if statements (prevents loop)
+]
+
+# Per-file ignores
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # Allow assert in tests
+    "D",       # Don't require docstrings in tests
+    "ANN",     # Don't require type hints in tests
+    "PLR2004", # Magic values acceptable in tests
+]
+
+"tests/conftest.py" = [
+    "E402",    # Allow conditional imports for optional dependencies
+    "F401",    # Allow unused imports from conditional blocks
+]
+
+"__init__.py" = [
+    "D104",    # Don't require docstrings in __init__
+    "F401",    # Allow unused imports in __init__
+]
+
+# Complexity settings
+[tool.ruff.lint.mccabe]
+max-complexity = 10  # Functions with >10 branches flagged
+
+# Docstring settings
+[tool.ruff.lint.pydocstyle]
+convention = "google"  # Google-style docstrings
+
+# Type annotation settings
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+suppress-none-returning = true
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+indent-style = "space"
+
+# Additional tools
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "src"  # Fix src layout issues
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = false
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_optional = true
+disable_error_code = "import-untyped"  # Research-based global suppression
+
+# Per-module overrides
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["catboost.*", "shap.*", "pandera.*", "kedro.*", "pluggy.*"]
+ignore_missing_imports = true
+
+# Research-based selective suppression for libraries without type stubs
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "s3fs.*", "plotly.*", "tenacity.*", "joblib.*", "cachetools.*", "pandas_profiling.*"]
+disable_error_code = "import-untyped"
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "docs"]
+tests = ["B201", "B301", "B302", "B303", "B304", "B305", "B306", "B307"]
+
+[tool.coverage.run]
+source = ["src/demand_forecasting"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+fail_under = 80  # Increase from 0 to 80%
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
 
 [tool.kedro_telemetry]
 project_id = "a2eb38bc5cf240cfa545656623abb992"

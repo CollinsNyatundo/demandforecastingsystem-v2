@@ -3,14 +3,10 @@ Unit tests for S3 helper utilities.
 Tests the core functionality of s3_helpers.py module.
 """
 
-import pytest
 import os
-import pandas as pd
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock, mock_open
-from pathlib import Path
-import tempfile
-import json
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestS3Helpers:
@@ -25,7 +21,7 @@ class TestS3Helpers:
             "s3_bucket": "demand-forecasting",
         }
 
-    @patch("src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
+    @patch("demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
     def test_get_s3_filesystem_success(self, mock_s3fs):
         """Test successful S3 filesystem creation."""
         # Mock the S3FileSystem
@@ -33,7 +29,7 @@ class TestS3Helpers:
         mock_s3fs.return_value = mock_fs
 
         # Import and test the function
-        from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
+        from demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
         # Set environment variables
         with patch.dict(
@@ -57,7 +53,7 @@ class TestS3Helpers:
 
             assert fs == mock_fs
 
-    @patch("src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
+    @patch("demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
     def test_get_s3_filesystem_with_retry(self, mock_s3fs):
         """Test S3 filesystem creation with retry logic."""
         # Mock the S3FileSystem to fail twice then succeed
@@ -68,7 +64,7 @@ class TestS3Helpers:
             mock_fs,
         ]
 
-        from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
+        from demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
         with patch.dict(
             os.environ,
@@ -84,13 +80,13 @@ class TestS3Helpers:
             assert mock_s3fs.call_count == 3
             assert fs == mock_fs
 
-    @patch("src.demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
+    @patch("demand_forecasting.utils.s3_helpers.s3fs.S3FileSystem")
     def test_get_s3_filesystem_max_retries_exceeded(self, mock_s3fs):
         """Test S3 filesystem creation when max retries exceeded."""
         # Mock the S3FileSystem to always fail
         mock_s3fs.side_effect = Exception("Connection failed")
 
-        from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
+        from demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
         with patch.dict(
             os.environ,
@@ -108,7 +104,7 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_valid(self):
         """Test parameter validation with valid parameters."""
-        from src.demand_forecasting.utils.s3_helpers import (
+        from demand_forecasting.utils.s3_helpers import (
             validate_search_space_parameters,
         )
 
@@ -126,7 +122,7 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_missing_optuna(self):
         """Test parameter validation with missing optuna section."""
-        from src.demand_forecasting.utils.s3_helpers import (
+        from demand_forecasting.utils.s3_helpers import (
             validate_search_space_parameters,
         )
 
@@ -139,7 +135,7 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_invalid_trials(self):
         """Test parameter validation with invalid n_trials."""
-        from src.demand_forecasting.utils.s3_helpers import (
+        from demand_forecasting.utils.s3_helpers import (
             validate_search_space_parameters,
         )
 
@@ -153,7 +149,7 @@ class TestS3Helpers:
 
     def test_validate_search_space_parameters_invalid_range(self):
         """Test parameter validation with invalid parameter range."""
-        from src.demand_forecasting.utils.s3_helpers import (
+        from demand_forecasting.utils.s3_helpers import (
             validate_search_space_parameters,
         )
 
@@ -169,26 +165,26 @@ class TestS3Helpers:
 
     def test_validate_trial_files_list_valid(self):
         """Test trial files list validation with valid list."""
-        from src.demand_forecasting.utils.s3_helpers import validate_trial_files_list
+        from demand_forecasting.utils.s3_helpers import validate_trial_files_list
 
         valid_files = ["trial_1.json", "trial_2.json", "trial_3.json"]
         validate_trial_files_list(valid_files)  # Should not raise
 
     def test_validate_trial_files_list_empty(self):
         """Test trial files list validation with empty list."""
-        from src.demand_forecasting.utils.s3_helpers import validate_trial_files_list
+        from demand_forecasting.utils.s3_helpers import validate_trial_files_list
 
         with pytest.raises(ValueError, match="Trial files list is empty"):
             validate_trial_files_list([])
 
     def test_validate_trial_files_list_none(self):
         """Test trial files list validation with None."""
-        from src.demand_forecasting.utils.s3_helpers import validate_trial_files_list
+        from demand_forecasting.utils.s3_helpers import validate_trial_files_list
 
         with pytest.raises(ValueError, match="Trial files list is empty"):
             validate_trial_files_list(None)
 
-    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
+    @patch("demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_validate_model_save_success(self, mock_get_fs):
         """Test model save validation with successful save."""
         mock_fs = MagicMock()
@@ -198,14 +194,14 @@ class TestS3Helpers:
         mock_fs.exists.return_value = True
         mock_fs.size.return_value = 1024  # 1KB file
 
-        from src.demand_forecasting.utils.s3_helpers import validate_model_save
+        from demand_forecasting.utils.s3_helpers import validate_model_save
 
         # Should not raise any exception
         validate_model_save(mock_fs, "s3://bucket/models/model.pickle")
 
         mock_fs.exists.assert_called_once_with("s3://bucket/models/model.pickle")
 
-    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
+    @patch("demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_validate_model_save_file_not_found(self, mock_get_fs):
         """Test model save validation when file doesn't exist."""
         mock_fs = MagicMock()
@@ -214,12 +210,12 @@ class TestS3Helpers:
         # Mock file doesn't exist
         mock_fs.exists.return_value = False
 
-        from src.demand_forecasting.utils.s3_helpers import validate_model_save
+        from demand_forecasting.utils.s3_helpers import validate_model_save
 
         with pytest.raises(FileNotFoundError, match="Model file was not saved"):
             validate_model_save(mock_fs, "s3://bucket/models/model.pickle")
 
-    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
+    @patch("demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_validate_model_save_empty_file(self, mock_get_fs):
         """Test model save validation with empty file."""
         mock_fs = MagicMock()
@@ -229,14 +225,14 @@ class TestS3Helpers:
         mock_fs.exists.return_value = True
         mock_fs.size.return_value = 0
 
-        from src.demand_forecasting.utils.s3_helpers import validate_model_save
+        from demand_forecasting.utils.s3_helpers import validate_model_save
 
         with pytest.raises(ValueError, match="Model file appears to be corrupted"):
             validate_model_save(mock_fs, "s3://bucket/models/model.pickle")
 
     def test_get_email_config_with_env_vars(self):
         """Test email config retrieval with environment variables."""
-        from src.demand_forecasting.utils.s3_helpers import get_email_config
+        from demand_forecasting.utils.s3_helpers import get_email_config
 
         test_config = {
             "smtp_host": "smtp.gmail.com",
@@ -266,7 +262,7 @@ class TestS3Helpers:
 
     def test_get_email_config_missing_env_vars(self):
         """Test email config retrieval with missing environment variables."""
-        from src.demand_forecasting.utils.s3_helpers import get_email_config
+        from demand_forecasting.utils.s3_helpers import get_email_config
 
         # Clear relevant environment variables
         env_vars_to_clear = [
@@ -277,7 +273,7 @@ class TestS3Helpers:
             "AIRFLOW_ALERT_EMAIL",
         ]
 
-        with patch.dict(os.environ, {var: "" for var in env_vars_to_clear}, clear=True):
+        with patch.dict(os.environ, dict.fromkeys(env_vars_to_clear, ""), clear=True):
             config = get_email_config()
 
             # Should return defaults or None
@@ -295,7 +291,7 @@ class TestS3Helpers:
 
     def test_parse_s3_timestamp_path_valid(self):
         """Test S3 timestamp path parsing with valid path."""
-        from src.demand_forecasting.utils.s3_helpers import parse_s3_timestamp_path
+        from demand_forecasting.utils.s3_helpers import parse_s3_timestamp_path
 
         test_path = "s3://demand-forecasting/logs/dag_id=demand_forecasting/run_date=2023-01-01/task_name=preprocess/attempt=1.log"
 
@@ -309,7 +305,7 @@ class TestS3Helpers:
 
     def test_parse_s3_timestamp_path_invalid(self):
         """Test S3 timestamp path parsing with invalid path."""
-        from src.demand_forecasting.utils.s3_helpers import parse_s3_timestamp_path
+        from demand_forecasting.utils.s3_helpers import parse_s3_timestamp_path
 
         invalid_paths = [
             "s3://bucket/file.txt",
@@ -324,7 +320,7 @@ class TestS3Helpers:
 
     def test_parse_s3_timestamp_path_malformed(self):
         """Test S3 timestamp path parsing with malformed path."""
-        from src.demand_forecasting.utils.s3_helpers import parse_s3_timestamp_path
+        from demand_forecasting.utils.s3_helpers import parse_s3_timestamp_path
 
         malformed_path = "s3://demand-forecasting/logs/dag_id=demand_forecasting/run_date=2023-01-01/task_name=preprocess/attempt=.log"
 
@@ -337,13 +333,13 @@ class TestS3Helpers:
         assert result["task_name"] == "preprocess"
         assert result["attempt"] == ""
 
-    @patch("src.demand_forecasting.utils.s3_helpers.get_s3_filesystem")
+    @patch("demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_s3_operations_with_context_manager(self, mock_get_fs):
         """Test S3 operations using context manager pattern."""
         mock_fs = MagicMock()
         mock_get_fs.return_value = mock_fs
 
-        from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
+        from demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
         with patch.dict(os.environ, self.test_config):
             # Test that filesystem can be used in a context-like manner
@@ -361,7 +357,7 @@ class TestS3Helpers:
 
     def test_environment_variable_fallbacks(self):
         """Test environment variable fallbacks."""
-        from src.demand_forecasting.utils.s3_helpers import get_s3_filesystem
+        from demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
         # Test with partial environment variables
         with patch.dict(
@@ -372,18 +368,16 @@ class TestS3Helpers:
             },
         ):
             # Should use default values
-            fs = get_s3_filesystem()
+            get_s3_filesystem()
             # Function should handle missing env vars gracefully or use defaults
 
     def test_error_handling_comprehensive(self):
         """Test comprehensive error handling."""
-        from src.demand_forecasting.utils.s3_helpers import (
-            get_s3_filesystem,
-            validate_search_space_parameters,
-            validate_trial_files_list,
-            validate_model_save,
+        from demand_forecasting.utils.s3_helpers import (
             get_email_config,
             parse_s3_timestamp_path,
+            validate_search_space_parameters,
+            validate_trial_files_list,
         )
 
         # Test that all functions handle None/empty inputs gracefully
@@ -413,17 +407,19 @@ class TestS3HelpersIntegration:
         # This would test the complete workflow in a real environment
         # For now, we'll use mocks to simulate the workflow
 
-        with patch(
-            "src.demand_forecasting.utils.s3_helpers.get_s3_filesystem"
-        ) as mock_get_fs, patch(
-            "src.demand_forecasting.utils.s3_helpers.validate_search_space_parameters"
-        ) as mock_validate_params:
-
+        with (
+            patch(
+                "demand_forecasting.utils.s3_helpers.get_s3_filesystem"
+            ) as mock_get_fs,
+            patch(
+                "demand_forecasting.utils.s3_helpers.validate_search_space_parameters"
+            ) as mock_validate_params,
+        ):
             mock_fs = MagicMock()
             mock_get_fs.return_value = mock_fs
 
             # Simulate workflow steps
-            from src.demand_forecasting.utils.s3_helpers import (
+            from demand_forecasting.utils.s3_helpers import (
                 get_s3_filesystem,
                 validate_search_space_parameters,
             )

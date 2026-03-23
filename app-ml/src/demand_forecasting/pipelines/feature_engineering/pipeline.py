@@ -1,18 +1,20 @@
-"""Feature Engineering Pipeline
+"""Feature Engineering Pipeline.
 
 Transforms raw preprocessed data into engineered features
 including temporal features, interactions, and normalization.
 """
 
 from kedro.pipeline import Pipeline, node
+
 from .nodes import (
-    extract_temporal_features,
-    validate_features,
     create_feature_interactions,
+    extract_temporal_features,
+    split_features,
+    validate_features,
 )
 
 
-def create_pipeline(**kwargs) -> Pipeline:
+def create_pipeline(**kwargs: object) -> Pipeline:
     """Create the feature engineering pipeline.
 
     Returns:
@@ -37,6 +39,17 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["engineered_features"],
                 outputs="validated_features",
                 name="validate_features",
+            ),
+            node(
+                func=split_features,
+                inputs=["validated_features"],
+                outputs={
+                    "X_train": "X_train",
+                    "X_test": "X_test",
+                    "y_train": "y_train",
+                    "y_test": "y_test",
+                },
+                name="split_features",
             ),
         ]
     )

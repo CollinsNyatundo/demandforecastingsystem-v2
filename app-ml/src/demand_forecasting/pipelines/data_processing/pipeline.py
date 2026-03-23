@@ -1,13 +1,20 @@
 """data processing pipeline definition.
 
-This module defines the Kedro pipeline for data processing."""
+This module defines the Kedro pipeline for data processing.
+"""
 
 from kedro.pipeline import Pipeline, node, pipeline
-from .nodes import preprocess_data
+
 from ...utils.gx_profiler_simple import profile_dataset_gx
+from .nodes import preprocess_data
 
 
-def create_pipeline(**kwargs) -> Pipeline:
+def create_pipeline(**kwargs: object) -> Pipeline:
+    """Create the data processing pipeline.
+
+    Returns:
+        Pipeline: Kedro pipeline with data processing nodes
+    """
     return pipeline(
         [
             node(

@@ -28,19 +28,18 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
-from fastapi import FastAPI
-from starlette.requests import Request
-from starlette.responses import HTMLResponse
-from starlette.staticfiles import StaticFiles
-from starlette.templating import Jinja2Templates
-from termcolor import colored
-
 from airflow.api_fastapi.app import AUTH_MANAGER_FASTAPI_APP_PREFIX
 from airflow.api_fastapi.auth.managers.base_auth_manager import BaseAuthManager
 from airflow.api_fastapi.auth.managers.models.resource_details import BackfillDetails
 from airflow.api_fastapi.auth.managers.simple.user import SimpleAuthManagerUser
 from airflow.api_fastapi.common.types import MenuItem
 from airflow.configuration import AIRFLOW_HOME, conf
+from fastapi import FastAPI
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
+from starlette.staticfiles import StaticFiles
+from starlette.templating import Jinja2Templates
+from termcolor import colored
 
 if TYPE_CHECKING:
     from airflow.api_fastapi.auth.managers.base_auth_manager import ResourceMethod
@@ -60,8 +59,7 @@ log = logging.getLogger(__name__)
 
 
 class SimpleAuthManagerRole(namedtuple("SimpleAuthManagerRole", "name order"), Enum):
-    """
-    List of pre-defined roles in simple auth manager.
+    """List of pre-defined roles in simple auth manager.
 
     The first attribute defines the name that references this role in the config.
     The second attribute defines the order between roles. The role with order X means it grants access to
@@ -82,8 +80,7 @@ class SimpleAuthManagerRole(namedtuple("SimpleAuthManagerRole", "name order"), E
 
 
 class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
-    """
-    Simple auth manager.
+    """Simple auth manager.
 
     Default auth manager used in Airflow. This auth manager should not be used in production.
     This auth manager is very basic and only intended for development and testing purposes.
@@ -297,8 +294,7 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
         return menu_items
 
     def get_fastapi_app(self) -> FastAPI | None:
-        """
-        Specify a sub FastAPI application specific to the auth manager.
+        """Specify a sub FastAPI application specific to the auth manager.
 
         This sub application, if specified, is mounted in the main FastAPI application.
         """
@@ -348,8 +344,7 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
         user: SimpleAuthManagerUser,
         allow_get_role: SimpleAuthManagerRole | None = None,
     ):
-        """
-        Return whether the user is authorized to access a given resource.
+        """Return whether the user is authorized to access a given resource.
 
         :param method: the method to perform
         :param allow_role: minimal role giving access to the resource, if the user's role is greater or
@@ -406,6 +401,6 @@ class SimpleAuthManager(BaseAuthManager[SimpleAuthManagerUser]):
     @staticmethod
     def _print_output(output: str):
         name = "Simple auth manager"
-        colorized_name = colored(f"{name:10}", "white")
-        for line in output.splitlines():
-            print(f"{colorized_name} | {line.strip()}")
+        colored(f"{name:10}", "white")
+        for _line in output.splitlines():
+            pass

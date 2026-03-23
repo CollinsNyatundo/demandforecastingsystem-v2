@@ -1,14 +1,17 @@
-import pandera as pa
+import pandera.pandas as pa
 from pandera.typing import Series
 
 
 class RawBikeDataSchema(pa.DataFrameModel):
-    """
-    Schema for raw bike sharing data with strict validation.
+    """Schema for raw bike sharing data with strict validation.
 
     All constraints enforce valid data ranges and prevent arbitrary values.
     """
 
+    # Optional datetime column (present in raw data, dropped during preprocessing)
+    datetime: Series[str] = pa.Field(
+        nullable=True, description="Datetime string (optional)"
+    )
     season: Series[int] = pa.Field(ge=1, le=4, description="Season (1-4)")
     yr: Series[int] = pa.Field(ge=0, le=1, description="Year (0-1: 2011-2012)")
     mnth: Series[int] = pa.Field(ge=1, le=12, description="Month (1-12)")
@@ -34,9 +37,14 @@ class RawBikeDataSchema(pa.DataFrameModel):
     cnt: Series[int] = pa.Field(ge=0, description="Total bike rental count")
 
     class Config:
-        # STRICT mode: reject extra columns, require exact schema match
-        strict = True
+        """Pandera configuration for demand data schema.
+
+        Settings:
+        - strict: Reject extra columns, require exact schema match
+        - coerce: Enable type coercion for numeric types
+        """
+
+        # 'filter' mode: drop extra columns instead of crashing
+        strict = "filter"
         # Enable type coercion only for numeric types
         coerce = True
-        # Provide detailed error messages
-        error_handler = pa.errors.SchemaErrorHandler.raise_

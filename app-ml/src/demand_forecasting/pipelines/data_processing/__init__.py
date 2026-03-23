@@ -1,6 +1,6 @@
-"""
-This is a boilerplate pipeline 'data_processing'
-generated using Kedro 0.19.10
+"""This is a boilerplate pipeline 'data_processing'.
+
+generated using Kedro 0.19.10.
 """
 
 from .pipeline import create_pipeline

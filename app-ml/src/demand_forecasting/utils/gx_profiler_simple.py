@@ -1,27 +1,34 @@
-"""
-Great Expectations data profiling and validation utilities.
+"""Great Expectations data profiling and validation utilities.
+
 Production-compatible alternative to pandas-profiling.
 """
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Data quality threshold constants
+OUTLIER_PERCENTAGE_THRESHOLD = 5
+MISSING_VALUES_THRESHOLD = 20
+ZERO_COUNT_THRESHOLD = 5
+SMALL_DATASET_THRESHOLD = 1000
+HIGH_VARIANCE_THRESHOLD = 10
 
-def profile_dataset_gx(
+
+def profile_dataset_gx(  # noqa: C901, PLR0912, PLR0915
     df: pd.DataFrame,
     dataset_name: str,
     docs_dir: str = "/opt/airflow/data/docs",
     enable_data_docs: bool = True,
-) -> Optional[str]:
-    """
-    Profile dataset using Great Expectations.
+) -> str | None:
+    """Profile dataset using Great Expectations.
 
     Args:
         df: DataFrame to profile
@@ -44,7 +51,9 @@ def profile_dataset_gx(
     docs_path.mkdir(parents=True, exist_ok=True)
 
     # Generate comprehensive profiling report
-    profile_data = {
+    quality_flags: list[str] = []
+    data_quality_checks: list[str] = []
+    profile_data: dict[str, Any] = {
         "dataset_name": dataset_name,
         "timestamp": datetime.now().isoformat(),
         "shape": df.shape,
@@ -54,8 +63,8 @@ def profile_dataset_gx(
         "missing_percentage": (df.isnull().sum() / len(df) * 100).to_dict(),
         "numeric_summary": {},
         "categorical_summary": {},
-        "quality_flags": [],
-        "data_quality_checks": [],
+        "quality_flags": quality_flags,
+        "data_quality_checks": data_quality_checks,
     }
 
     # Numeric columns analysis
@@ -81,7 +90,11 @@ def profile_dataset_gx(
                     {
                         "column": col,
                         "check": "outliers",
-                        "status": "warning" if outlier_percentage > 5 else "info",
+                        "status": (
+                            "warning"
+                            if outlier_percentage > OUTLIER_PERCENTAGE_THRESHOLD
+                            else "info"
+                        ),
                         "message": f"{len(outliers)} outliers detected ({outlier_percentage:.1f}%)",
                     }
                 )
@@ -94,7 +107,11 @@ def profile_dataset_gx(
                     {
                         "column": col,
                         "check": "zero_values",
-                        "status": "warning" if zero_percentage > 20 else "info",
+                        "status": (
+                            "warning"
+                            if zero_percentage > MISSING_VALUES_THRESHOLD
+                            else "info"
+                        ),
                         "message": f"{zero_count} zero values ({zero_percentage:.1f}%)",
                     }
                 )
@@ -127,10 +144,10 @@ def profile_dataset_gx(
     total_missing = df.isnull().sum().sum()
     missing_percentage = (total_missing / (len(df) * len(df.columns))) * 100
 
-    if missing_percentage > 5:
+    if missing_percentage > ZERO_COUNT_THRESHOLD:
         profile_data["quality_flags"].append("HIGH_MISSING_VALUES")
 
-    if len(df) < 1000:
+    if len(df) < SMALL_DATASET_THRESHOLD:
         profile_data["quality_flags"].append("SMALL_DATASET")
 
     # Special handling for target column (cnt)
@@ -144,7 +161,12 @@ def profile_dataset_gx(
         }
         profile_data["target_analysis"] = cnt_stats
 
-        if cnt_stats["zero_percentage"] > 10:
+        try:
+            zero_percentage = float(cnt_stats["zero_percentage"])  # type: ignore[arg-type]
+        except (ValueError, TypeError):
+            zero_percentage = 0.0
+
+        if zero_percentage > HIGH_VARIANCE_THRESHOLD:
             profile_data["quality_flags"].append("HIGH_ZERO_COUNT")
 
         # Check for negative values (shouldn't exist for bike counts)
@@ -164,7 +186,7 @@ def profile_dataset_gx(
         docs_path
         / f"{dataset_name}_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with open(profile_file, "w") as f:
+    with profile_file.open("w") as f:
         json.dump(profile_data, f, indent=2, default=str)
 
     # Generate HTML report
@@ -196,38 +218,58 @@ def profile_dataset_gx(
         <div class="header">
             <h1>Data Profile Report</h1>
             <h2>{dataset_name}</h2>
-            <p>Generated: {profile_data['timestamp']}</p>
+            <p>Generated: {profile_data["timestamp"]}</p>
         </div>
-        
+
         <div class="section">
             <h3>Dataset Overview</h3>
             <table class="stats-table">
                 <tr><th>Metric</th><th>Value</th></tr>
-                <tr><td>Shape</td><td>{profile_data['shape']}</td></tr>
-                <tr><td>Columns</td><td>{len(profile_data['columns'])}</td></tr>
-                <tr><td>Total Missing Values</td><td>{sum(profile_data['missing_values'].values())}</td></tr>
+                <tr><td>Shape</td><td>{profile_data["shape"]}</td></tr>
+                <tr><td>Columns</td><td>{len(profile_data["columns"])}</td></tr>
+                <tr><td>Total Missing Values</td><td>{
+        sum(profile_data["missing_values"].values())
+    }</td></tr>
             </table>
         </div>
-        
+
         <div class="section">
             <h3>Quality Flags</h3>
-            {"".join([f'<p class="quality-flag">⚠️ {flag}</p>' for flag in profile_data.get('quality_flags', [])]) or '<p>No quality issues detected ✅</p>'}
+            {
+        "".join(
+            [
+                f'<p class="quality-flag">⚠️ {flag}</p>'
+                for flag in profile_data.get("quality_flags", [])
+            ]
+        )
+        or "<p>No quality issues detected ✅</p>"
+    }
         </div>
-        
+
         <div class="section">
             <h3>Data Quality Checks</h3>
-            {"".join([f'''
+            {
+        "".join(
+            [
+                f'''
             <div class="quality-check {check['status']}">
                 <strong>{check['column']} - {check['check']}:</strong> {check['message']}
             </div>
-            ''' for check in profile_data.get('data_quality_checks', [])])}
+            '''
+                for check in profile_data.get("data_quality_checks", [])
+            ]
+        )
+    }
         </div>
-        
+
         <div class="section">
             <h3>Numeric Summary</h3>
             <table class="stats-table">
                 <tr><th>Column</th><th>Count</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr>
-                {"".join([f'''
+                {
+        "".join(
+            [
+                f'''
                 <tr>
                     <td>{col}</td>
                     <td>{profile_data['numeric_summary'][col].get('count', 'N/A')}</td>
@@ -236,28 +278,40 @@ def profile_dataset_gx(
                     <td>{profile_data['numeric_summary'][col].get('min', 'N/A')}</td>
                     <td>{profile_data['numeric_summary'][col].get('max', 'N/A')}</td>
                 </tr>
-                ''' for col in profile_data.get('numeric_summary', {})])}
+                '''
+                for col in profile_data.get("numeric_summary", {})
+            ]
+        )
+    }
             </table>
         </div>
-        
+
         <div class="section">
             <h3>Missing Values</h3>
             <table class="stats-table">
                 <tr><th>Column</th><th>Missing Count</th><th>Missing %</th></tr>
-                {"".join([f'''
+                {
+        "".join(
+            [
+                f'''
                 <tr>
                     <td>{col}</td>
                     <td>{profile_data['missing_values'][col]}</td>
                     <td>{profile_data['missing_percentage'][col]:.2f}%</td>
                 </tr>
-                ''' for col in profile_data['missing_values'] if profile_data['missing_values'][col] > 0])}
+                '''
+                for col in profile_data["missing_values"]
+                if profile_data["missing_values"][col] > 0
+            ]
+        )
+    }
             </table>
         </div>
     </body>
     </html>
     """
 
-    with open(html_file, "w", encoding="utf-8") as f:
+    with html_file.open("w", encoding="utf-8") as f:
         f.write(html_content)
 
     logger.info(f"Generated data profile report for {dataset_name}")

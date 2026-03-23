@@ -1,23 +1,38 @@
-"""
-Data drift detection using statistical methods.
-"""
+"""Data drift detection using statistical methods."""
 
 import logging
-from typing import Dict, Any, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.stats import ks_2samp, chi2_contingency
+from scipy.stats import chi2_contingency, ks_2samp
 
 logger = logging.getLogger(__name__)
+
+# Drift detection constants
+HIGH_DRIFT_THRESHOLD = 0.8
+MEDIUM_DRIFT_THRESHOLD = 0.6
+LOW_DRIFT_THRESHOLD = 0.4
+
+# PSI interpretation constants
+PSI_NO_CHANGE_THRESHOLD = 0.1
+PSI_MODERATE_CHANGE_THRESHOLD = 0.25
+
+# Trend analysis constants
+MIN_TREND_SAMPLES = 2
+INCREASING_TREND_THRESHOLD = 0.01
+DECREASING_TREND_THRESHOLD = -0.01
+
+# PSI calculation constants
+MIN_SAMPLES_FOR_TEST = 30
+SMALL_VALUE_REPLACEMENT = 0.0001
 
 
 class DriftDetector:
     """Detect distribution drift in features using statistical tests."""
 
     def __init__(self, reference_data: pd.DataFrame, threshold: float = 0.05):
-        """
-        Initialize drift detector.
+        """Initialize drift detector.
 
         Args:
             reference_data: Reference dataset for comparison
@@ -26,13 +41,12 @@ class DriftDetector:
         self.reference_data = reference_data.copy()
         self.reference_stats = self._compute_statistics(reference_data)
         self.threshold = threshold
-        self.drift_history = []
+        self.drift_history: list[dict[str, Any]] = []
 
     def detect_drift(
-        self, current_data: pd.DataFrame, threshold: float = None
-    ) -> Dict[str, Any]:
-        """
-        Detect drift between reference and current data.
+        self, current_data: pd.DataFrame, threshold: float | None = None
+    ) -> dict[str, Any]:
+        """Detect drift between reference and current data.
 
         Args:
             current_data: Current dataset to compare
@@ -96,14 +110,16 @@ class DriftDetector:
 
     def _test_column_drift(
         self, column: str, current_data: pd.DataFrame, threshold: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Test drift for a single column."""
         ref_values = self.reference_data[column].dropna()
         curr_values = current_data[column].dropna()
 
         # Check if we have enough data
-        min_samples = 30
-        if len(ref_values) < min_samples or len(curr_values) < min_samples:
+        if (
+            len(ref_values) < MIN_SAMPLES_FOR_TEST
+            or len(curr_values) < MIN_SAMPLES_FOR_TEST
+        ):
             return {
                 "drift_score": 0.0,
                 "p_value": 1.0,
@@ -156,7 +172,7 @@ class DriftDetector:
                     {"reference": ref_counts, "current": curr_counts}
                 ).T
 
-                chi2, p_value, _, expected = chi2_contingency(contingency_table)
+                chi2, p_value, _, _expected = chi2_contingency(contingency_table)
                 drift_score = chi2 / len(ref_values)  # Normalized chi-square
                 is_drifted = p_value < threshold
                 method = "CHI_SQUARE"
@@ -186,7 +202,7 @@ class DriftDetector:
                 "error": str(e),
             }
 
-    def _compute_statistics(self, data: pd.DataFrame) -> Dict[str, Any]:
+    def _compute_statistics(self, data: pd.DataFrame) -> dict[str, Any]:
         """Compute reference statistics for all columns."""
         stats = {}
 
@@ -223,17 +239,16 @@ class DriftDetector:
 
     def _get_recommendation(self, drift_score: float, threshold: float) -> str:
         """Generate recommendation based on drift score."""
-        if drift_score > 0.8:
+        if drift_score > HIGH_DRIFT_THRESHOLD:
             return "URGENT_RETRAIN"
-        elif drift_score > 0.6:
-            return "RETRAIN_SOON"
-        elif drift_score > threshold:
+        if drift_score > MEDIUM_DRIFT_THRESHOLD:
+            return "CONSIDER_RETRAIN"
+        if drift_score > LOW_DRIFT_THRESHOLD:
             return "MONITOR_CLOSELY"
-        else:
-            return "CONTINUE"
+        return "NO_ACTION"
 
-    def get_drift_trend(self, window_size: int = 10) -> Dict[str, Any]:
-        """Analyze drift trend over time."""
+    def get_drift_trend(self, window_size: int = 10) -> dict[str, Any]:
+        """Analyze drift trend over recent runs."""
         if len(self.drift_history) < window_size:
             return {
                 "trend": "insufficient_data",
@@ -246,12 +261,15 @@ class DriftDetector:
         recent_history = self.drift_history[-window_size:]
         recent_scores = [h.get("overall_drift_score", 0) for h in recent_history]
 
+        # Issue 3 fix: pre-assign slope so it is always bound in the return dict
+        # even when the else branch (trend = "unknown") is taken.
+        slope = 0.0
         # Calculate trend
-        if len(recent_scores) >= 2:
+        if len(recent_scores) >= MIN_TREND_SAMPLES:
             slope = np.polyfit(range(len(recent_scores)), recent_scores, 1)[0]
-            if slope > 0.01:
+            if slope > INCREASING_TREND_THRESHOLD:
                 trend = "increasing"
-            elif slope < -0.01:
+            elif slope < DECREASING_TREND_THRESHOLD:
                 trend = "decreasing"
             else:
                 trend = "stable"
@@ -260,7 +278,7 @@ class DriftDetector:
 
         return {
             "trend": trend,
-            "slope": slope if len(recent_scores) >= 2 else 0,
+            "slope": slope,
             "recent_scores": recent_scores,
             "avg_score": np.mean(recent_scores),
             "max_score": np.max(recent_scores),
@@ -268,7 +286,7 @@ class DriftDetector:
             "window_size": window_size,
         }
 
-    def update_reference(self, new_reference: pd.DataFrame):
+    def update_reference(self, new_reference: pd.DataFrame) -> None:
         """Update reference data with new dataset."""
         self.reference_data = new_reference.copy()
         self.reference_stats = self._compute_statistics(new_reference)
@@ -280,7 +298,7 @@ class DriftDetector:
             return pd.DataFrame()
 
         # Collect drift scores for each feature over time
-        feature_scores = {}
+        feature_scores: dict[str, list[float]] = {}
         for run in self.drift_history:
             for feature, details in run.get("details", {}).items():
                 if feature not in feature_scores:
@@ -314,9 +332,8 @@ class PopulationStabilityIndex:
     @staticmethod
     def calculate_psi(
         expected: pd.Series, actual: pd.Series, buckets: int = 10
-    ) -> Dict[str, Any]:
-        """
-        Calculate PSI between two distributions.
+    ) -> dict[str, Any]:
+        """Calculate PSI between two distributions.
 
         Args:
             expected: Expected/Reference distribution
@@ -333,13 +350,15 @@ class PopulationStabilityIndex:
                 _, bin_edges = pd.qcut(
                     expected, q=buckets, retbins=True, duplicates="drop"
                 )
-                expected_binned = pd.cut(expected, bins=bin_edges, include_lowest=True)
-                actual_binned = pd.cut(actual, bins=bin_edges, include_lowest=True)
+                expected_binned = pd.cut(expected, bins=bin_edges, include_lowest=True)  # type: ignore[call-overload]
+                actual_binned = pd.cut(actual, bins=bin_edges, include_lowest=True)  # type: ignore[call-overload]
             else:
                 # For categorical data, use unique values as bins
                 all_categories = set(expected.unique()) | set(actual.unique())
-                expected_binned = pd.Categorical(expected, categories=all_categories)
-                actual_binned = pd.Categorical(actual, categories=all_categories)
+                expected_binned = pd.Categorical(
+                    expected, categories=list(all_categories)
+                )
+                actual_binned = pd.Categorical(actual, categories=list(all_categories))
 
             # Calculate percentages
             expected_counts = expected_binned.value_counts(normalize=True, sort=False)
@@ -355,9 +374,9 @@ class PopulationStabilityIndex:
 
                 # Avoid division by zero
                 if exp_pct == 0:
-                    exp_pct = 0.0001
+                    exp_pct = SMALL_VALUE_REPLACEMENT
                 if act_pct == 0:
-                    act_pct = 0.0001
+                    act_pct = SMALL_VALUE_REPLACEMENT
 
                 psi_component = (act_pct - exp_pct) * np.log(act_pct / exp_pct)
                 psi_components.append(psi_component)
@@ -365,9 +384,9 @@ class PopulationStabilityIndex:
             psi_total = sum(psi_components)
 
             # Interpret PSI
-            if psi_total < 0.1:
+            if psi_total < PSI_NO_CHANGE_THRESHOLD:
                 psi_interpretation = "no_significant_change"
-            elif psi_total < 0.25:
+            elif psi_total < PSI_MODERATE_CHANGE_THRESHOLD:
                 psi_interpretation = "moderate_change"
             else:
                 psi_interpretation = "significant_change"
@@ -377,7 +396,7 @@ class PopulationStabilityIndex:
                 "interpretation": psi_interpretation,
                 "expected_counts": expected_counts.to_dict(),
                 "actual_counts": actual_counts.to_dict(),
-                "psi_components": dict(zip(all_bins, psi_components)),
+                "psi_components": dict(zip(all_bins, psi_components, strict=False)),
                 "buckets_used": len(all_bins),
             }
 

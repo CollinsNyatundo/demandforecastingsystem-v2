@@ -35,8 +35,7 @@ RUN pip install --default-timeout=1000 --no-cache-dir --upgrade -r /requirements
 # Install main requirements last (may override versions)
 RUN pip install --default-timeout=1000 --no-cache-dir --upgrade -r /requirements/requirements.txt
 
-# Install additional packages needed for DAGs
-RUN pip install --default-timeout=1000 --no-cache-dir s3fs pandera
+# Note: s3fs and pandera are already installed via requirements files above — no extra step needed
 
 # Copy application code
 COPY . /opt/airflow

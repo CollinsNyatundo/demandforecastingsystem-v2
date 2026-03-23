@@ -8,15 +8,18 @@
 # SHARED INFRASTRUCTURE SERVICES
 # -----------------------------------------------------------------------------
 
-x-common-env: &common-env
-  # PostgreSQL Environment
-  POSTGRES_USER: airflow
-  POSTGRES_PASSWORD: airflow
+x-common-env:
+  # PostgreSQL Environment - Use environment variables for security
+  # SECURITY: Never use default credentials in production!
+  # Set these in your .env file before deployment
+  &common-env
+  POSTGRES_USER: ${POSTGRES_USER:-airflow}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
   POSTGRES_MULTIPLE_DATABASES: "airflow,mlflow,optuna"
-  
-  # Redis Environment
-  REDIS_PASSWORD: redis123
-  
+
+  # Redis Environment - Use environment variables for security
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+
   # MinIO Environment
   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
   MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -29,7 +32,7 @@ x-airflow-common: &airflow-common
     <<: *common-env
     PYTHONPATH: /opt/airflow/src
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/airflow
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -48,8 +51,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: "s3://airflow-logs"
     AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: "minio_s3"
     # Celery Configuration using shared Redis
-    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-    AIRFLOW__CELERY__RESULT_BACKEND: redis://redis:6379/0
+    AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    AIRFLOW__CELERY__RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -60,6 +63,7 @@ x-airflow-common: &airflow-common
     - ./scripts:/opt/airflow/scripts
     - ./conf/local/airflow_passwords.json:/opt/airflow/airflow_passwords.json
     - ./pyproject.toml:/opt/airflow/pyproject.toml
+    - ./tmp/catboost_info:/opt/airflow/catboost_info # Writable directory for CatBoost temp files
   extra_hosts:
     - "host.docker.internal:host-gateway"
   depends_on:
@@ -75,10 +79,14 @@ services:
   # SHARED POSTGRESQL - Single instance with multiple databases
   # -----------------------------------------------------------------------------
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.1-alpine
+    container_name: postgres_container
+    command: postgres -c max_connections=200 -c shared_buffers=256MB -c effective_cache_size=1GB
+    env_file:
+      - .env
     environment:
       <<: *common-env
-      POSTGRES_DB: airflow  # Default database for Airflow
+      POSTGRES_DB: airflow # Default database for Airflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Initialize multiple databases
@@ -86,12 +94,20 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      test: [ "CMD-SHELL", "pg_isready -U airflow" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   # -----------------------------------------------------------------------------
   # SHARED REDIS - Single instance for both MLflow caching and Airflow Celery
@@ -106,12 +122,20 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: [ "CMD", "sh", "-c", "redis-cli -a $$REDIS_PASSWORD ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   # -----------------------------------------------------------------------------
   # SHARED MINIO - Single instance for both MLflow artifacts and Airflow logs
@@ -127,27 +151,48 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   # -----------------------------------------------------------------------------
   # MLFLOW TRACKING SERVER
   # -----------------------------------------------------------------------------
+  # Issue C fix: use official ghcr.io/mlflow/mlflow image (MLflow pre-installed)
+  # instead of python:3.11-slim + pip-at-startup (which was slow and unpredictable).
+  # mlflow-entrypoint.sh is kept as documentation but is no longer used at runtime.
   mlflow:
-    image: python:3.11-slim
-    command: ["/bin/bash", "/opt/airflow/mlflow-entrypoint.sh"]
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      - --default-artifact-root=s3://mlflow-artifacts/
+      - --serve-artifacts
+      # MLflow 3.x added security middleware that defaults to localhost-only.
+      # --allowed-hosts=* is required for Docker container networking.
+      - --allowed-hosts=*
     ports:
       - "5000:5000"
     volumes:
       - mlflow_data:/mlflow
-      - ./mlflow-entrypoint.sh:/opt/airflow/mlflow-entrypoint.sh
     environment:
       <<: *common-env
-      DATABASE_URL: postgresql://airflow:airflow@postgres:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
@@ -157,13 +202,21 @@ services:
       minio:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 5000); conn.request('GET', '/health'); exit(0) if conn.getresponse().status == 200 else exit(1)"]
+      test: [ "CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 5000); conn.request('GET', '/health'); exit(0) if conn.getresponse().status == 200 else exit(1)" ]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 45s
     networks:
       - mlops-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
   # -----------------------------------------------------------------------------
   # AIRFLOW SERVICES
@@ -177,8 +230,8 @@ services:
       <<: *common-env
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
-      _AIRFLOW_WWW_USER_USERNAME: "Cole"
-      _AIRFLOW_WWW_USER_PASSWORD: "admin"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
       _AIRFLOW_WWW_USER_ROLE: "Admin"
     depends_on:
       postgres:
@@ -193,7 +246,7 @@ services:
     ports:
       - "8081:8080"
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -207,16 +260,11 @@ services:
     networks:
       - mlops-network
 
-  # Airflow Scheduler
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"',
-        ]
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"' ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -227,22 +275,21 @@ services:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
-      airflow-webserver:
-        condition: service_healthy
+        # Note: airflow-webserver dependency removed — scheduler has no runtime dep on webserver
+        # and the old dependency added 2-5 minutes to scheduler startup time
     networks:
       - mlops-network
 
-  # Airflow Worker (Celery)
+  # Airflow Worker (Celery) - DISABLED for LocalExecutor
+  # With LocalExecutor, tasks run in the scheduler process, no worker needed
   airflow-worker:
     <<: *airflow-common
-    command: celery worker
+    command: version # Just prints version and exits (placeholder)
+    profiles:
+      - celery # Only starts when 'celery' profile is active
     hostname: ${CELERY_WORKER_HOSTNAME:-airflow-worker}
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@${CELERY_WORKER_HOSTNAME:-airflow-worker}"',
-        ]
+      test: [ "CMD", "echo", "ok" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -261,11 +308,7 @@ services:
     <<: *airflow-common
     command: triggerer
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"',
-        ]
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"' ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -296,9 +339,9 @@ services:
         /usr/bin/mc mb myminio/demand-forecasting --ignore-existing;
         /usr/bin/mc mb myminio/mlflow-artifacts --ignore-existing;
         /usr/bin/mc mb myminio/airflow-logs --ignore-existing;
-        /usr/bin/mc policy set public myminio/demand-forecasting;
-        /usr/bin/mc policy set public myminio/mlflow-artifacts;
-        /usr/bin/mc policy set public myminio/airflow-logs;
+        /usr/bin/mc mb myminio/drift-reports --ignore-existing;
+        /usr/bin/mc mb myminio/clearml-artifacts --ignore-existing;
+        echo 'Buckets created with private access (default). Use IAM policies for production access control.';
         exit 0;
       "
     networks:
@@ -308,9 +351,11 @@ services:
   # MODEL SERVER (FastAPI)
   # -----------------------------------------------------------------------------
   model-server:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.model-server.ultra-optimized
+    env_file:
+      - .env
     ports:
       - "8000:8000"
       - "8001:8001"
@@ -321,17 +366,28 @@ services:
       METRICS_PORT: "8001"
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
       LOG_LEVEL: "INFO"
+      # CRITICAL: Override PYTHONPATH from .env (which has /opt/airflow/src for airflow containers)
+      # The model-server src lives at /app/src, not /opt/airflow/src
+      PYTHONPATH: "/app/src"
+      # API Authentication
+      VALID_API_KEYS: ${VALID_API_KEYS}
+      MODEL_NAME: ${MODEL_NAME:-demand_forecasting_catboost}
+      MODEL_STAGE: ${MODEL_STAGE:-Production}
+      # Path to the actual model file (lives in experiments/ subdirectory)
+      MODEL_PATH: "/app/models/experiments/final_catboost_model.cbm"
     volumes:
+      # Mount full models dir; model lives at models/experiments/final_catboost_model.cbm
       - ./models:/app/models
       - ./logs:/app/logs
       - ./data:/app/data
+      - ./src:/app/src # Mount source for development hot-reload
     depends_on:
       - postgres
       - redis
       - mlflow
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -353,7 +409,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.model-server.ultra-optimized
-    command: ["python", "-m", "pytest", "tests", "-v", "--tb=short", "--cov=src/demand_forecasting", "--cov-report=html", "--cov-report=term-missing", "--cov-report=json", "--junit-xml=test_results.xml"]
+    command: [ "python", "-m", "pytest", "tests", "-v", "--tb=short", "--cov=src/demand_forecasting", "--cov-report=html", "--cov-report=term-missing", "--cov-report=json", "--junit-xml=test_results.xml" ]
     volumes:
       - ./tests:/app/tests
       - ./src:/app/src
@@ -379,13 +435,13 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
-      - "8080:8080"
+      - "8888:8080" # Status page on 8888 to avoid confusion with Airflow (8081)
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - nginx_logs:/var/log/nginx
     depends_on:
       model-server:
-        condition: service_healthy
+        condition: service_started # Changed from service_healthy to allow startup without model
     restart: unless-stopped
     networks:
       - mlops-network
@@ -411,7 +467,7 @@ services:
       - '--web.enable-lifecycle'
     depends_on:
       model-server:
-        condition: service_healthy
+        condition: service_started # Changed from service_healthy
     restart: unless-stopped
     networks:
       - mlops-network
@@ -424,7 +480,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     volumes:
@@ -437,6 +494,209 @@ services:
     restart: unless-stopped
     networks:
       - mlops-network
+
+  # -----------------------------------------------------------------------------
+  # CLEARML SERVER STACK
+  # -----------------------------------------------------------------------------
+
+  clearml-mongo:
+    # Issue 2 fix: mongo:4.4 reached EOL February 2024.
+    # Updated to mongo:7.0 which is the version ClearML supports in 2024+.
+    # The healthcheck also uses mongosh (mongo shell was removed in MongoDB 6+).
+    image: mongo:7.0
+    container_name: clearml-mongo
+    volumes:
+      - clearml_mongo_data:/data/db
+    networks:
+      - mlops-network
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
+  clearml-elastic:
+    image: elasticsearch:7.17.0
+    container_name: clearml-elastic
+    environment:
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    volumes:
+      - clearml_elastic_data:/usr/share/elasticsearch/data
+    networks:
+      - mlops-network
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    restart: unless-stopped
+
+  clearml-apiserver:
+    image: clearml/server:latest
+    container_name: clearml-apiserver
+    command: apiserver
+    ports:
+      - "8008:8008"
+    depends_on:
+      clearml-mongo:
+        condition: service_healthy
+      clearml-elastic:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      CLEARML_HOST_IP: ${CLEARML_HOST_IP:-localhost}
+      CLEARML_MONGODB_SERVICE_HOST: clearml-mongo
+      CLEARML_MONGODB_SERVICE_PORT: 27017
+      CLEARML_ELASTIC_SERVICE_HOST: clearml-elastic
+      CLEARML_ELASTIC_SERVICE_PORT: 9200
+      CLEARML_REDIS_SERVICE_HOST: redis
+      CLEARML_REDIS_SERVICE_PORT: 6379
+      CLEARML_REDIS_SERVICE_PASSWORD: ${REDIS_PASSWORD}
+      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
+    volumes:
+      - ./clearml_config:/opt/clearml/config
+    networks:
+      mlops-network:
+        aliases:
+          - apiserver
+    restart: unless-stopped
+
+  clearml-webserver:
+    image: clearml/server:latest
+    container_name: clearml-webserver
+    command: webserver
+    ports:
+      - "8082:80"
+    depends_on:
+      - clearml-apiserver
+    environment:
+      CLEARML__APISERVER__HOST: http://clearml-apiserver:8008
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  clearml-fileserver:
+    image: clearml/server:latest
+    container_name: clearml-fileserver
+    command: fileserver
+    ports:
+      - "8083:8081"
+    volumes:
+      - clearml_files:/mnt/fileserver
+    depends_on:
+      - clearml-apiserver
+    networks:
+      mlops-network:
+        aliases:
+          - fileserver
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------------
+  # OPTUNA DASHBOARD
+  # -----------------------------------------------------------------------------
+
+  optuna-dashboard:
+    image: ghcr.io/optuna/optuna-dashboard:latest
+    container_name: optuna-dashboard
+    ports:
+      - "8084:8080"
+    # Storage DSN is a positional argument (official optuna-dashboard docker image format)
+    # postgresql+psycopg2:// is required — plain postgresql:// is not supported by the image
+    command:
+      - "postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/optuna"
+      - "--port"
+      - "8080"
+    environment:
+      OPTUNA_STORAGE: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD}@postgres:5432/optuna
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------------
+  # NODE EXPORTER (Host Metrics for Grafana)
+  # -----------------------------------------------------------------------------
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--no-collector.filesystem'
+      - '--no-collector.diskstats'
+      - '--no-collector.netdev'
+      - '--no-collector.hwmon'
+      - '--collector.cpu'
+      - '--collector.meminfo'
+      - '--collector.loadavg'
+    networks:
+      - mlops-network
+    restart: unless-stopped
+    # Only works on Linux hosts — skip on Windows/macOS (Docker Desktop)
+    # To enable: docker compose --profile linux-host up
+    profiles:
+      - linux-host
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # -----------------------------------------------------------------------------
+  # DASH WEB UI
+  # -----------------------------------------------------------------------------
+  app-ui:
+    build:
+      context: ../app-ui
+      dockerfile: Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      - MODEL_SERVER_URL=http://model-server:8000
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - AIRFLOW_URL=http://airflow-webserver:8080
+      - MINIO_URL=http://minio:9000
+      - GRAFANA_URL=http://grafana:3000
+      - API_KEY=${UI_API_KEY:-dev-key-123}
+      - GROQ_API_KEY=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
+      # PROJECT_ROOT tells app.py where to find data and shared modules in Docker
+      - PROJECT_ROOT=/project
+    volumes:
+      - ../app-ui:/app
+      - ../common:/app/common
+      - ../config:/app/config
+      # Mount app-ml/data so UI can find raw_data_full.parquet
+      - ./data:/project/app-ml/data:ro
+      - ../data:/project/data:ro
+    depends_on:
+      model-server:
+        condition: service_started
+    command: python app.py
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8050" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mlops-network
+    restart: unless-stopped
 
 # -----------------------------------------------------------------------------
 # NAMED VOLUMES
@@ -455,6 +715,12 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  clearml_mongo_data:
+    driver: local
+  clearml_elastic_data:
+    driver: local
+  clearml_files:
     driver: local
 
 # -----------------------------------------------------------------------------

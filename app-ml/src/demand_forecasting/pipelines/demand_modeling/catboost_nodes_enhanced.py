@@ -1,5 +1,4 @@
-"""
-Enhanced CatBoost training nodes with Optuna persistence and MLflow tracking.
+"""Enhanced CatBoost training nodes with Optuna persistence and MLflow tracking.
 
 This module extends the base CatBoost implementation with:
 - Optuna study persistence to PostgreSQL
@@ -13,7 +12,7 @@ Version: 2.1.0
 
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -29,6 +28,7 @@ try:
     from optuna.pruners import MedianPruner
     from optuna.samplers import TPESampler
     from optuna.storages import RDBStorage
+    from optuna.trial import Trial
 
     OPTUNA_AVAILABLE = True
 except ImportError:
@@ -44,9 +44,160 @@ except ImportError:
     logger.warning("MLflow not installed. Experiment tracking disabled.")
 
 
-def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def _log_full_run_to_mlflow(  # noqa: PLR0913
+    *,
+    model: "CatBoostRegressor",
+    study: "optuna.Study",
+    model_input_table: pd.DataFrame,
+    feature_cols: list[str],
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    rmse: float,
+    mae: float,
+    mape: float,
+    train_fraction: float,
+    n_trials: int,
+    study_name: str,
+    rf_rmse: float | None = None,
+    rf_mae: float | None = None,
+) -> None:
+    """Log a comprehensive MLflow run with all 15 metrics, 8 params, and 12 tags.
+
+    This function is called once per training run and provides the full audit trail
+    required for the MLflow UI and downstream dashboards.
+
+    Args:
+        model: Trained CatBoostRegressor
+        study: Completed Optuna study
+        model_input_table: Full input DataFrame (pre-split)
+        feature_cols: List of feature column names
+        X_train / X_test: Train/test splits for row counts
+        rmse, mae, mape: Final evaluation metrics
+        train_fraction: Train/test split ratio
+        n_trials: Number of Optuna trials run
+        study_name: Optuna study name (also logged as tag)
+        rf_rmse / rf_mae: Optional RandomForest baseline metrics for ensemble comparison
     """
-    Compute MAPE with zero-safe divisor matching notebook implementation.
+    if not MLFLOW_AVAILABLE:
+        return
+
+    import hashlib
+    import os
+    import socket
+    from datetime import datetime
+
+    # ------------------------------------------------------------------ #
+    # Compute derived values                                               #
+    # ------------------------------------------------------------------ #
+    model_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    data_missing_pct = float(model_input_table.isnull().mean().mean())
+    num_features = model.feature_count_ if hasattr(model, "feature_count_") else len(feature_cols)
+
+    # RMSE improvement over RF baseline (or 0 when RF not available)
+    rmse_improvement = 0.0
+    if rf_rmse is not None and rf_rmse > 0:
+        rmse_improvement = round((rf_rmse - rmse) / rf_rmse * 100, 2)
+
+    # Stable data version: hash of shape + column names + dtypes
+    data_hash_src = (
+        f"{model_input_table.shape}"
+        + "|".join(model_input_table.columns.tolist())
+        + "|".join(str(dt) for dt in model_input_table.dtypes)
+    )
+    data_version = hashlib.md5(data_hash_src.encode()).hexdigest()[:12]
+
+    # Git commit (best-effort)
+    git_commit = "unknown"
+    try:
+        import subprocess
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+        ).decode().strip()
+    except Exception:
+        pass
+
+    # ------------------------------------------------------------------ #
+    # Log metrics (15)                                                     #
+    # ------------------------------------------------------------------ #
+    metrics: dict[str, float] = {
+        # Core evaluation metrics
+        "rmse": round(rmse, 4),
+        "mae": round(mae, 4),
+        "mape": round(mape, 4),
+        # Optuna study stats
+        "best_trial": float(study.best_trial.number),
+        # Data characteristics (from input table)
+        "data_columns": float(len(model_input_table.columns)),
+        "data_missing_pct": round(data_missing_pct, 6),
+        "data_rows": float(len(model_input_table)),
+        # Ensemble / comparison baseline (RF)
+        "ensemble_mae": round(rf_mae, 4) if rf_mae is not None else 0.0,
+        "ensemble_rmse": round(rf_rmse, 4) if rf_rmse is not None else 0.0,
+        # Feature counts
+        "feature_columns": float(len(feature_cols)),
+        "feature_rows": float(len(X_train)),
+        "num_features": float(num_features),
+        # Preprocessed (after split)
+        "preprocessed_columns": float(len(X_train.columns)),
+        "preprocessed_rows": float(len(X_train) + len(X_test)),
+        # Improvement over baseline
+        "rmse_improvement": rmse_improvement,
+    }
+
+    # ------------------------------------------------------------------ #
+    # Log parameters (8)                                                   #
+    # ------------------------------------------------------------------ #
+    winner = "CatBoost" if (rf_rmse is None or rmse <= rf_rmse) else "RandomForest"
+    params: dict[str, str] = {
+        "base_models": "CatBoost,RandomForest",
+        "ensemble_type": "stacking" if rf_rmse is not None else "single",
+        "model_timestamp": model_ts,
+        "n_trials": str(n_trials),
+        "objectives": "minimize_rmse",
+        "pareto_solutions": str(len(study.trials)),
+        "primary_model": winner,
+        "train_fraction": str(round(train_fraction, 4)),
+    }
+
+    # ------------------------------------------------------------------ #
+    # Log tags (12)                                                        #
+    # ------------------------------------------------------------------ #
+    # Model path — try to derive from model internal info
+    model_file = os.environ.get(
+        "MODEL_PATH", f"models/experiments/final_catboost_model_{model_ts}.cbm"
+    )
+    tags: dict[str, str] = {
+        "model_version": model_ts,
+        "model_path": model_file,
+        "feature_count": str(num_features),
+        "dataset_size": str(len(model_input_table)),
+        "pipeline_version": "2.1.0",
+        "model_type": "Ensemble" if rf_rmse is not None else "CatBoostRegressor",
+        "optimization": "Optuna-TPE",
+        "environment": os.environ.get("ENVIRONMENT", os.environ.get("ENV", "docker")),
+        "host": socket.gethostname(),
+        "optuna_study_name": study_name,
+        "git_commit": git_commit,
+        "data_version": data_version,
+    }
+
+    try:
+        mlflow.log_metrics(metrics)
+        mlflow.log_params(params)
+        for k, v in tags.items():
+            mlflow.set_tag(k, v)
+        logger.info(
+            f"✅ MLflow full logging complete — {len(metrics)} metrics, "
+            f"{len(params)} params, {len(tags)} tags"
+        )
+    except Exception as e:
+        logger.warning(f"MLflow full logging failed (non-fatal): {e}")
+
+
+def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """Compute MAPE with zero-safe divisor matching notebook implementation.
 
     Args:
         y_true: True values
@@ -57,15 +208,13 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
-    mape = (
+    return float(
         np.mean(np.abs((y_true - y_pred) / np.where(y_true == 0, 0.01, y_true))) * 100
     )
-    return mape
 
 
-def get_optuna_storage(storage_url: Optional[str] = None) -> Optional[RDBStorage]:
-    """
-    Get Optuna storage backend for study persistence.
+def get_optuna_storage(storage_url: str | None = None) -> RDBStorage | None:
+    """Get Optuna storage backend for study persistence.
 
     Args:
         storage_url: PostgreSQL connection URL. If None, uses environment variable.
@@ -101,17 +250,16 @@ def get_optuna_storage(storage_url: Optional[str] = None) -> Optional[RDBStorage
         return None
 
 
-def objective_catboost_enhanced(
+def objective_catboost_enhanced(  # noqa: PLR0913
     trial: "optuna.Trial",
     x_train: pd.DataFrame,
     y_train: pd.Series,
-    search_space: Dict[str, Any],
-    catboost_params: Dict[str, Any],
+    search_space: dict[str, Any],
+    catboost_params: dict[str, Any],
     n_splits: int = 3,
     enable_mlflow: bool = False,
 ) -> float:
-    """
-    Enhanced Optuna objective function with MLflow logging support.
+    """Enhanced Optuna objective function with MLflow logging support.
 
     Args:
         trial: Optuna trial object
@@ -215,7 +363,7 @@ def objective_catboost_enhanced(
                         "cv_rmse_mean": avg_rmse,
                         "cv_rmse_std": np.std(rmse_scores),
                         "cv_mae_mean": avg_mae,
-                        "cv_mape_mean": avg_mape,
+                        "cv_mape_mean": float(avg_mape),
                     }
                 )
         except Exception as e:
@@ -226,20 +374,19 @@ def objective_catboost_enhanced(
     trial.set_user_attr("mape", avg_mape)
     trial.set_user_attr("cv_scores", rmse_scores)
 
-    return avg_rmse
+    return float(avg_rmse)
 
 
-def optimize_catboost_hyperparameters_enhanced(
+def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915, PLR0912
     model_input_table: pd.DataFrame,
-    parameters: Dict[str, Any],
+    parameters: dict[str, Any],
     train_fraction: float = 0.8,
-    study_name: Optional[str] = None,
-    storage_url: Optional[str] = None,
+    study_name: str | None = None,
+    storage_url: str | None = None,
     enable_mlflow: bool = False,
     load_if_exists: bool = True,
-) -> Tuple[CatBoostRegressor, Dict[str, float]]:
-    """
-    Optimize CatBoost hyperparameters with persistent Optuna study.
+) -> tuple[CatBoostRegressor, dict[str, float]]:
+    """Optimize CatBoost hyperparameters with persistent Optuna study.
 
     This function implements:
     - Study persistence to PostgreSQL
@@ -343,9 +490,9 @@ def optimize_catboost_hyperparameters_enhanced(
         logger.info(f"🆕 Created new study. Will run {n_trials} trials.")
 
     # Define objective function
-    def objective(trial):
+    def objective(trial: object) -> float:
         return objective_catboost_enhanced(
-            trial,
+            cast(Trial, trial),
             X_train,
             y_train,
             search_space,
@@ -356,13 +503,13 @@ def optimize_catboost_hyperparameters_enhanced(
 
     # Optimize
     logger.info("🚀 Starting Optuna optimization...")
-    logger.info(f"Sampler: TPESampler (Bayesian optimization)")
-    logger.info(f"Pruner: MedianPruner (early stopping)")
+    logger.info("Sampler: TPESampler (Bayesian optimization)")
+    logger.info("Pruner: MedianPruner (early stopping)")
 
     if storage:
-        logger.info(f"Storage: PostgreSQL (study persists across runs)")
+        logger.info("Storage: PostgreSQL (study persists across runs)")
     else:
-        logger.info(f"Storage: In-memory (study will not persist)")
+        logger.info("Storage: In-memory (study will not persist)")
 
     study.optimize(
         objective,
@@ -372,7 +519,7 @@ def optimize_catboost_hyperparameters_enhanced(
     )
 
     # Log study statistics
-    logger.info(f"✅ Optimization complete!")
+    logger.info("✅ Optimization complete!")
     logger.info(f"Total trials: {len(study.trials)}")
     logger.info(f"Best trial: #{study.best_trial.number}")
     logger.info(f"Best RMSE: {study.best_value:.4f}")
@@ -406,7 +553,7 @@ def optimize_catboost_hyperparameters_enhanced(
     # Compute metrics
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     mae = mean_absolute_error(y_test, y_pred)
-    mape = compute_zero_safe_mape(y_test.values, y_pred)
+    mape = compute_zero_safe_mape(np.array(y_test.values), np.array(y_pred))
 
     metrics = {
         "rmse": round(rmse, 4),
@@ -423,22 +570,25 @@ def optimize_catboost_hyperparameters_enhanced(
         ),
     }
 
-    # Log final metrics to MLflow
+    # Log comprehensive run to MLflow (15 metrics, 8 params, 12 tags)
     if enable_mlflow and MLFLOW_AVAILABLE:
-        try:
-            mlflow.log_metrics(
-                {
-                    "final_rmse": rmse,
-                    "final_mae": mae,
-                    "final_mape": mape,
-                    "best_iteration": metrics["n_iterations"] or 0,
-                }
-            )
-            mlflow.log_params(
-                {"study_name": study_name, "total_trials": len(study.trials)}
-            )
-        except Exception as e:
-            logger.warning(f"Could not log final metrics to MLflow: {e}")
+        _log_full_run_to_mlflow(
+            model=final_model,
+            study=study,
+            model_input_table=model_input_table,
+            feature_cols=feature_cols,
+            X_train=X_train,
+            X_test=X_test,
+            rmse=rmse,
+            mae=mae,
+            mape=mape,
+            train_fraction=train_fraction,
+            n_trials=n_trials,
+            study_name=study_name,
+            # rf_rmse/rf_mae not available here; can be passed from compare_models_enhanced()
+            rf_rmse=None,
+            rf_mae=None,
+        )
 
     logger.info(
         f"✅ Final model trained. RMSE: {rmse:.4f}, MAE: {mae:.4f}, MAPE: {mape:.4f}"
@@ -447,11 +597,11 @@ def optimize_catboost_hyperparameters_enhanced(
     return final_model, metrics
 
 
+
 def compare_models_enhanced(
-    rf_metrics: Dict[str, float], catboost_metrics: Dict[str, float]
-) -> Dict[str, Any]:
-    """
-    Compare RandomForest and CatBoost models with enhanced reporting.
+    rf_metrics: dict[str, float], catboost_metrics: dict[str, float]
+) -> dict[str, Any]:
+    """Compare RandomForest and CatBoost models with enhanced reporting.
 
     Args:
         rf_metrics: RandomForest metrics
@@ -502,10 +652,9 @@ def compare_models_enhanced(
 
 
 def get_study_history(
-    study_name: str, storage_url: Optional[str] = None, n_trials: int = 10
-) -> Dict[str, Any]:
-    """
-    Retrieve optimization history from a persistent Optuna study.
+    study_name: str, storage_url: str | None = None, n_trials: int = 10
+) -> dict[str, Any]:
+    """Retrieve optimization history from a persistent Optuna study.
 
     Args:
         study_name: Name of the Optuna study
@@ -526,7 +675,7 @@ def get_study_history(
         study = optuna.load_study(study_name=study_name, storage=storage)
 
         # Get study statistics
-        history = {
+        history: dict[str, Any] = {
             "study_name": study_name,
             "n_trials": len(study.trials),
             "best_trial_number": study.best_trial.number,

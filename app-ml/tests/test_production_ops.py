@@ -13,18 +13,14 @@ Run with:
     pytest tests/test_production_ops.py::TestDriftDetector -v
 """
 
-import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import stats
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "production_ops"))
@@ -194,7 +190,7 @@ class TestDriftDetector:
         assert drift_count >= 2, "Expected at least 2 features with drift"
 
         # Check that drift_score is calculated
-        for feature, result in results.items():
+        for _feature, result in results.items():
             assert "drift_score" in result
             assert result["drift_score"] >= 0
 
@@ -264,7 +260,7 @@ class TestDriftDetector:
         self, drift_detector, reference_data, production_data_with_drift
     ):
         """Test that drift records are stored in database."""
-        results = drift_detector.detect_drift(
+        drift_detector.detect_drift(
             reference_data=reference_data,
             production_data=production_data_with_drift,
             feature_cols=["sales", "quantity"],
@@ -295,7 +291,7 @@ class TestDriftDetector:
 
         # Test drift_only filtering
         history_drift_only = drift_detector.get_drift_history(days=1, drift_only=True)
-        assert all(history_drift_only["drift_detected"] == True)
+        assert all(history_drift_only["drift_detected"])
 
     def test_handle_missing_features(self, drift_detector, reference_data):
         """Test handling of missing features in production data."""

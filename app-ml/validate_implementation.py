@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""
-Implementation validation script for demand forecasting system.
+"""Implementation validation script for demand forecasting system.
 Checks for port conflicts, missing dependencies, and configuration issues.
 """
 
-import os
-import sys
-import yaml
 import logging
+import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+
+import yaml
 
 # Setup logging
 logging.basicConfig(
@@ -26,7 +24,7 @@ class ImplementationValidator:
         self.issues = []
         self.warnings = []
 
-    def validate_all(self) -> Dict[str, any]:
+    def validate_all(self) -> dict[str, any]:
         """Run all validation checks."""
         results = {"status": "PASS", "issues": [], "warnings": [], "checks": {}}
 
@@ -51,7 +49,7 @@ class ImplementationValidator:
         results["checks"]["syntax"] = syntax_results
 
         # Aggregate results
-        for check_name, check_result in results["checks"].items():
+        for _check_name, check_result in results["checks"].items():
             if check_result["status"] == "FAIL":
                 results["status"] = "FAIL"
                 results["issues"].extend(check_result.get("issues", []))
@@ -59,7 +57,7 @@ class ImplementationValidator:
 
         return results
 
-    def check_port_conflicts(self) -> Dict[str, any]:
+    def check_port_conflicts(self) -> dict[str, any]:
         """Check for port conflicts in docker-compose.yml."""
         logger.info("Checking port conflicts...")
 
@@ -72,7 +70,7 @@ class ImplementationValidator:
                 result["status"] = "FAIL"
                 return result
 
-            with open(docker_compose_path, "r") as f:
+            with open(docker_compose_path) as f:
                 content = f.read()
 
             # Extract port mappings
@@ -117,12 +115,12 @@ class ImplementationValidator:
             logger.info(f"Port check completed. Found {len(used_ports)} port mappings.")
 
         except Exception as e:
-            result["issues"].append(f"Error checking ports: {str(e)}")
+            result["issues"].append(f"Error checking ports: {e!s}")
             result["status"] = "FAIL"
 
         return result
 
-    def check_dependencies(self) -> Dict[str, any]:
+    def check_dependencies(self) -> dict[str, any]:
         """Check requirements.txt for missing dependencies."""
         logger.info("Checking dependencies...")
 
@@ -135,7 +133,7 @@ class ImplementationValidator:
                 result["status"] = "FAIL"
                 return result
 
-            with open(requirements_path, "r") as f:
+            with open(requirements_path) as f:
                 requirements = f.read()
 
             # Required dependencies for new features
@@ -165,12 +163,12 @@ class ImplementationValidator:
             logger.info(f"Dependency check completed. Missing: {len(missing_deps)}")
 
         except Exception as e:
-            result["issues"].append(f"Error checking dependencies: {str(e)}")
+            result["issues"].append(f"Error checking dependencies: {e!s}")
             result["status"] = "FAIL"
 
         return result
 
-    def check_file_structure(self) -> Dict[str, any]:
+    def check_file_structure(self) -> dict[str, any]:
         """Check if required files and directories exist."""
         logger.info("Checking file structure...")
 
@@ -226,7 +224,7 @@ class ImplementationValidator:
 
         return result
 
-    def check_configurations(self) -> Dict[str, any]:
+    def check_configurations(self) -> dict[str, any]:
         """Check configuration files for syntax errors."""
         logger.info("Checking configurations...")
 
@@ -236,46 +234,46 @@ class ImplementationValidator:
         try:
             docker_compose_path = self.base_path / "docker-compose.yml"
             if docker_compose_path.exists():
-                with open(docker_compose_path, "r") as f:
+                with open(docker_compose_path) as f:
                     yaml.safe_load(f)
         except yaml.YAMLError as e:
-            result["issues"].append(f"docker-compose.yml YAML error: {str(e)}")
+            result["issues"].append(f"docker-compose.yml YAML error: {e!s}")
             result["status"] = "FAIL"
         except Exception as e:
-            result["issues"].append(f"Error reading docker-compose.yml: {str(e)}")
+            result["issues"].append(f"Error reading docker-compose.yml: {e!s}")
             result["status"] = "FAIL"
 
         # Check nginx configuration
         try:
             nginx_path = self.base_path / "nginx/nginx.conf"
             if nginx_path.exists():
-                with open(nginx_path, "r") as f:
+                with open(nginx_path) as f:
                     content = f.read()
                     # Basic syntax check for nginx config
                     if "events {" not in content or "http {" not in content:
                         result["warnings"].append("nginx.conf may have syntax issues")
         except Exception as e:
-            result["issues"].append(f"Error checking nginx.conf: {str(e)}")
+            result["issues"].append(f"Error checking nginx.conf: {e!s}")
             result["status"] = "FAIL"
 
         # Check Prometheus configuration
         try:
             prometheus_path = self.base_path / "prometheus/prometheus.yml"
             if prometheus_path.exists():
-                with open(prometheus_path, "r") as f:
+                with open(prometheus_path) as f:
                     yaml.safe_load(f)
         except yaml.YAMLError as e:
-            result["issues"].append(f"prometheus.yml YAML error: {str(e)}")
+            result["issues"].append(f"prometheus.yml YAML error: {e!s}")
             result["status"] = "FAIL"
         except Exception as e:
-            result["issues"].append(f"Error reading prometheus.yml: {str(e)}")
+            result["issues"].append(f"Error reading prometheus.yml: {e!s}")
             result["status"] = "FAIL"
 
         logger.info("Configuration check completed.")
 
         return result
 
-    def check_python_syntax(self) -> Dict[str, any]:
+    def check_python_syntax(self) -> dict[str, any]:
         """Check Python files for syntax errors."""
         logger.info("Checking Python syntax...")
 
@@ -296,12 +294,12 @@ class ImplementationValidator:
             full_path = self.base_path / file_path
             if full_path.exists():
                 try:
-                    with open(full_path, "r") as f:
+                    with open(full_path) as f:
                         compile(f.read(), str(full_path), "exec")
                 except SyntaxError as e:
-                    syntax_errors.append(f"{file_path}: {str(e)}")
+                    syntax_errors.append(f"{file_path}: {e!s}")
                 except Exception as e:
-                    result["warnings"].append(f"Could not check {file_path}: {str(e)}")
+                    result["warnings"].append(f"Could not check {file_path}: {e!s}")
 
         if syntax_errors:
             result["issues"].extend(syntax_errors)
@@ -317,30 +315,18 @@ def main():
     validator = ImplementationValidator()
     results = validator.validate_all()
 
-    print("\n" + "=" * 60)
-    print("DEMAND FORECASTING SYSTEM VALIDATION RESULTS")
-    print("=" * 60)
-
-    print(f"\nOverall Status: {results['status']}")
-
     if results["issues"]:
-        print(f"\n🚨 ISSUES FOUND ({len(results['issues'])}):")
-        for i, issue in enumerate(results["issues"], 1):
-            print(f"  {i}. {issue}")
+        for _i, _issue in enumerate(results["issues"], 1):
+            pass
 
     if results["warnings"]:
-        print(f"\n⚠️  WARNINGS ({len(results['warnings'])}):")
-        for i, warning in enumerate(results["warnings"], 1):
-            print(f"  {i}. {warning}")
-
-    print("\n" + "=" * 60)
+        for _i, _warning in enumerate(results["warnings"], 1):
+            pass
 
     # Exit with appropriate code
     if results["status"] == "FAIL":
-        print("❌ VALIDATION FAILED - Fix issues before proceeding")
         sys.exit(1)
     else:
-        print("✅ VALIDATION PASSED - System ready for deployment")
         sys.exit(0)
 
 

@@ -1,9 +1,7 @@
-"""
-Model explainability using SHAP for demand forecasting.
-"""
+"""Model explainability using SHAP for demand forecasting."""
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -16,9 +14,8 @@ logger = logging.getLogger(__name__)
 class ModelExplainer:
     """Generate model explanations using SHAP."""
 
-    def __init__(self, model, data: pd.DataFrame, model_type: str = "tree"):
-        """
-        Initialize SHAP explainer.
+    def __init__(self, model: object, data: pd.DataFrame, model_type: str = "tree"):
+        """Initialize SHAP explainer.
 
         Args:
             model: Trained model to explain
@@ -55,9 +52,8 @@ class ModelExplainer:
             logger.error(f"Failed to initialize SHAP explainer: {e}")
             raise
 
-    def global_importance(self, top_n: int = None) -> pd.DataFrame:
-        """
-        Get global feature importance.
+    def global_importance(self, top_n: int | None = None) -> pd.DataFrame:
+        """Get global feature importance.
 
         Args:
             top_n: Number of top features to return
@@ -92,10 +88,9 @@ class ModelExplainer:
             raise
 
     def explain_prediction(
-        self, sample_idx: int, feature_names: List[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Explain a single prediction.
+        self, sample_idx: int, feature_names: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Explain a single prediction.
 
         Args:
             sample_idx: Index of the sample to explain
@@ -118,12 +113,14 @@ class ModelExplainer:
 
             # Get prediction
             if hasattr(self.model, "predict"):
-                prediction = self.model.predict(sample.values.reshape(1, -1))[0]
+                # Convert to numpy array to handle ExtensionArray cases
+                sample_array = np.asarray(sample.values).reshape(1, -1)
+                prediction = self.model.predict(sample_array)[0]
             else:
                 prediction = "unknown"
 
             # Create feature contributions dictionary
-            contributions = dict(zip(feature_names, shap_vals))
+            contributions = dict(zip(feature_names, shap_vals, strict=False))
 
             # Get top contributors (positive and negative)
             sorted_contributions = sorted(
@@ -145,7 +142,7 @@ class ModelExplainer:
                     else 0.0
                 ),
                 "shap_values": contributions,
-                "feature_values": dict(zip(feature_names, sample.values)),
+                "feature_values": dict(zip(feature_names, sample.values, strict=False)),
                 "top_positive_contributors": top_positive,
                 "top_negative_contributors": top_negative,
                 "top_contributors": sorted_contributions[:5],
@@ -159,8 +156,7 @@ class ModelExplainer:
     def create_summary_plot(
         self, plot_type: str = "bar", max_features: int = 20
     ) -> Figure:
-        """
-        Create SHAP summary plot using Plotly.
+        """Create SHAP summary plot using Plotly.
 
         Args:
             plot_type: Type of plot ('bar', 'beeswarm', 'violin')
@@ -235,7 +231,7 @@ class ModelExplainer:
             else:  # violin plot
                 fig = Figure()
 
-                for i, feature in enumerate(importance_df["feature"]):
+                for feature in importance_df["feature"]:
                     feature_idx = list(self.data.columns).index(feature)
                     shap_vals = self.shap_values[:, feature_idx]
 
@@ -263,8 +259,7 @@ class ModelExplainer:
             raise
 
     def create_waterfall_plot(self, sample_idx: int, max_features: int = 10) -> Figure:
-        """
-        Create waterfall plot for a single prediction.
+        """Create waterfall plot for a single prediction.
 
         Args:
             sample_idx: Index of the sample to explain
@@ -296,8 +291,8 @@ class ModelExplainer:
             fig = Figure()
 
             # Add bars
-            for i, (feature, value, cum) in enumerate(
-                zip(features, values, cumulative)
+            for i, (feature, value, _cum) in enumerate(
+                zip(features, values, cumulative, strict=False)
             ):
                 if i == 0:  # Base value
                     color = "gray"
@@ -344,9 +339,8 @@ class ModelExplainer:
             logger.error(f"Error creating waterfall plot: {e}")
             raise
 
-    def create_force_plot_data(self, sample_idx: int) -> Dict[str, Any]:
-        """
-        Create data for force plot visualization.
+    def create_force_plot_data(self, sample_idx: int) -> dict[str, Any]:
+        """Create data for force plot visualization.
 
         Args:
             sample_idx: Index of the sample to explain
@@ -375,9 +369,8 @@ class ModelExplainer:
             logger.error(f"Error creating force plot data: {e}")
             raise
 
-    def get_feature_interactions(self, interaction_idx: int = 0) -> Dict[str, Any]:
-        """
-        Get feature interaction values (if available).
+    def get_feature_interactions(self, interaction_idx: int = 0) -> dict[str, Any]:
+        """Get feature interaction values (if available).
 
         Args:
             interaction_idx: Index for interaction values (for multi-output models)
@@ -422,20 +415,18 @@ class ModelExplainer:
                     "top_interactions": top_interactions[:20],
                     "feature_names": feature_names,
                 }
-            else:
-                return {
-                    "message": "Interaction values not available for this explainer type"
-                }
+            return {
+                "message": "Interaction values not available for this explainer type"
+            }
 
         except Exception as e:
             logger.error(f"Error calculating feature interactions: {e}")
             return {"error": str(e)}
 
     def generate_explanation_report(
-        self, sample_indices: List[int] = None
-    ) -> Dict[str, Any]:
-        """
-        Generate comprehensive explanation report.
+        self, sample_indices: list[int] | None = None
+    ) -> dict[str, Any]:
+        """Generate comprehensive explanation report.
 
         Args:
             sample_indices: List of sample indices to explain (random sample if None)

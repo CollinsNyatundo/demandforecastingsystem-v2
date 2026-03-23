@@ -1,23 +1,41 @@
-# Docker compose file that runs all the services in production
+# =============================================================================
+# DEMAND FORECASTING MLOPS — ROOT COMPOSE WRAPPER
+# =============================================================================
+#
+# This file is a convenience entry point. The CANONICAL docker-compose
+# configuration lives in app-ml/docker-compose.yml
+#
+# USAGE:
+#   1. Copy .env from example:
+#      cp app-ml/.env.example app-ml/.env
+#
+#   2. Start the full stack (from this root directory):
+#      docker compose -f app-ml/docker-compose.yml --env-file app-ml/.env up -d
+#
+#   3. Or from the app-ml directory (recommended):
+#      cd app-ml && docker compose up -d
+#
+# PROFILES:
+#   --profile linux-host   Enable node-exporter (Linux hosts only)
+#   --profile celery       Enable Celery-based Airflow workers (scaling)
+#   --profile clearml      Enable ClearML experiment tracking stack
+#
+# SERVICE PORTS QUICK-REFERENCE:
+#   Airflow:     http://localhost:8081   (admin / check .env)
+#   MLflow:      http://localhost:5000
+#   App UI:      http://localhost:8050
+#   Model API:   http://localhost:8000
+#   MinIO:       http://localhost:9001   (console)
+#   Grafana:     http://localhost:3000
+#   Prometheus:  http://localhost:9090
+#   Optuna:      http://localhost:8085
+#   Nginx:       http://localhost:80
+# =============================================================================
+#
+# NOTE: This file deliberately delegates to app-ml/docker-compose.yml.
+# Do NOT add services here directly — edit app-ml/docker-compose.yml instead.
+#
+# The 'include' directive below (Compose v2.20+) imports the canonical file:
 
-# services:
-    # =============================================================================
-    # ML MODEL TRAINING SERVICE
-    # =============================================================================
-
-    # app-ml-train:
-      # Commands for the model training service
-
-    # =============================================================================
-    # ML INFERENCE API SERVICE
-    # =============================================================================
-
-    # app-ml-inference-api:
-      # Commands for the model inference service
-
-    # =============================================================================
-    # WEB USER INTERFACE SERVICE
-    # =============================================================================
-
-    # app-ui:
-      # Commands to run User Interface Service
+include:
+  - app-ml/docker-compose.yml

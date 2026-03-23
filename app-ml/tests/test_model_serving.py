@@ -5,24 +5,12 @@ Tests FastAPI endpoints, model loading, prediction logic, A/B testing,
 and edge cases including error handling and performance scenarios.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
-from unittest.mock import Mock, patch, MagicMock
-from fastapi.testclient import TestClient
-import mlflow
-import joblib
+from unittest.mock import Mock, patch
 
-from demand_forecasting.serving.model_server import (
-    app,
-    PredictionRequest,
-    PredictionResponse,
-    ModelInfo,
-    HealthResponse,
-    prediction_requests_total,
-    prediction_duration,
-    model_accuracy,
-)
+import numpy as np
+import pytest
+from fastapi.testclient import TestClient
+
 from demand_forecasting.serving.model_router import ModelRouter
 
 
@@ -364,7 +352,6 @@ class TestEdgeCases:
     def test_concurrent_predictions(self, model_server_test_client: TestClient):
         """Test concurrent prediction requests."""
         import threading
-        import time
 
         results = []
         errors = []
@@ -433,9 +420,10 @@ class TestEdgeCases:
     @pytest.mark.slow
     def test_memory_usage_under_load(self, model_server_test_client: TestClient):
         """Test memory usage under sustained load."""
-        import psutil
-        import os
         import gc
+        import os
+
+        import psutil
 
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss

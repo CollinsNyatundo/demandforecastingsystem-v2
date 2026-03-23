@@ -3,13 +3,13 @@ Unit tests for data processing utilities.
 Tests core data processing functions and pipelines.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timedelta
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 
 class TestDataProcessing:
@@ -80,14 +80,14 @@ class TestDataProcessing:
         assert self.sample_data["weathersit"].between(1, 4).all()
         assert self.sample_data["holiday"].isin([0, 1]).all()
 
-    @patch("src.demand_forecasting.pipelines.data_processing.nodes.pd.read_csv")
+    @patch("demand_forecasting.pipelines.data_processing.nodes.pd.read_csv")
     def test_preprocess_data_function(self, mock_read_csv):
         """Test the preprocess_data function."""
         mock_read_csv.return_value = self.sample_data
 
         # Import the function (assuming it exists)
         try:
-            from src.demand_forecasting.pipelines.data_processing.nodes import (
+            from demand_forecasting.pipelines.data_processing.nodes import (
                 preprocess_data,
             )
 
@@ -129,9 +129,7 @@ class TestDataProcessing:
         for col in categorical_cols:
             assert col in df.columns
             # Check that values are in expected ranges
-            if col == "season":
-                assert df[col].between(1, 4).all()
-            elif col == "weathersit":
+            if col in {"season", "weathersit"}:
                 assert df[col].between(1, 4).all()
             elif col == "mnth":
                 assert df[col].between(1, 12).all()
@@ -177,7 +175,7 @@ class TestDataProcessing:
         assert correlations.shape[0] == correlations.shape[1]
 
         # Test target correlation with key features
-        target_corr = correlations["cnt"].abs()
+        correlations["cnt"].abs()
 
         # Temperature should have positive correlation with bike rentals
         assert correlations.loc["temp", "cnt"] > 0
@@ -261,16 +259,16 @@ class TestDataProcessing:
         hum_corr = df["hum"].corr(df["cnt"])
         assert not np.isnan(hum_corr)
 
-    @patch("src.demand_forecasting.pipelines.data_processing.nodes.pd.read_parquet")
+    @patch("demand_forecasting.pipelines.data_processing.nodes.pd.read_parquet")
     @patch(
-        "src.demand_forecasting.pipelines.data_processing.nodes.pd.DataFrame.to_parquet"
+        "demand_forecasting.pipelines.data_processing.nodes.pd.DataFrame.to_parquet"
     )
     def test_data_pipeline_integration(self, mock_to_parquet, mock_read_parquet):
         """Test data pipeline integration."""
         mock_read_parquet.return_value = self.sample_data
 
         try:
-            from src.demand_forecasting.pipelines.data_processing.pipeline import (
+            from demand_forecasting.pipelines.data_processing.pipeline import (
                 create_pipeline,
             )
 

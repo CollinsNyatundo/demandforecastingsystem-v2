@@ -1,20 +1,20 @@
-"""
-Explainability pipeline for SHAP model interpretation.
+"""Explainability pipeline for SHAP model interpretation.
 
 This pipeline provides model explainability through SHAP values,
 feature importance analysis, and MLflow artifact logging.
 """
 
 from kedro.pipeline import Pipeline, node
+
 from .nodes import (
-    generate_shap_explanations,
     calculate_feature_importance,
-    log_model_artifacts,
     create_explainability_report,
+    generate_shap_explanations,
+    log_model_artifacts,
 )
 
 
-def create_pipeline(**kwargs) -> Pipeline:
+def create_pipeline(**kwargs: object) -> Pipeline:
     """Create the explainability pipeline.
 
     Returns:

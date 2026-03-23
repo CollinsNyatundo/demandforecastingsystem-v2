@@ -1,3 +1,1 @@
-"""
-Optimization module for demand forecasting system.
-"""
+"""Optimization module for demand forecasting system."""

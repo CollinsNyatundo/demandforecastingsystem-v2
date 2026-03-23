@@ -1,3 +1,1 @@
-"""
-Monitoring module for demand forecasting system.
-"""
+"""Monitoring module for demand forecasting system."""

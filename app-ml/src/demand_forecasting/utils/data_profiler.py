@@ -1,29 +1,33 @@
-"""
-Automated data profiling and quality monitoring utilities.
-"""
+"""Automated data profiling and quality monitoring utilities."""
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any, cast
+
+import numpy as np
+import pandas as pd
 from pandas_profiling import ProfileReport
 
 logger = logging.getLogger(__name__)
 
+# Data quality threshold constants
+HIGH_MISSING_VALUES_THRESHOLD = 5
+SMALL_DATASET_THRESHOLD = 1000
+OUTLIER_THRESHOLD = 10
+MAX_PROFILES_PER_DATASET = 10
+DATAFRAME_DIMENSIONS = 2
+
 
 class DataProfiler:
-    """
-    Automated data profiling and quality monitoring inspired by EDA notebook.
+    """Automated data profiling and quality monitoring inspired by EDA notebook.
 
     Generates comprehensive data quality reports and tracks changes over time.
     """
 
     def __init__(self, profile_dir: str = "/opt/airflow/data/profiles"):
-        """
-        Initialize data profiler.
+        """Initialize data profiler.
 
         Args:
             profile_dir: Directory to store profile reports and metrics
@@ -33,8 +37,7 @@ class DataProfiler:
         self.metrics_file = self.profile_dir / "data_quality_metrics.json"
 
     def generate_profile_report(self, df: pd.DataFrame, dataset_name: str) -> str:
-        """
-        Generate comprehensive data profile report similar to EDA notebook.
+        """Generate comprehensive data profile report similar to EDA notebook.
 
         Args:
             df: DataFrame to profile
@@ -69,9 +72,8 @@ class DataProfiler:
 
     def _generate_summary_stats(
         self, df: pd.DataFrame, dataset_name: str
-    ) -> Dict[str, Any]:
-        """
-        Generate summary statistics similar to EDA notebook analysis.
+    ) -> dict[str, Any]:
+        """Generate summary statistics similar to EDA notebook analysis.
 
         Args:
             df: DataFrame to analyze
@@ -80,7 +82,8 @@ class DataProfiler:
         Returns:
             Dictionary with summary statistics
         """
-        stats = {
+        quality_flags: list[str] = []
+        stats: dict[str, Any] = {
             "dataset_name": dataset_name,
             "timestamp": datetime.now().isoformat(),
             "shape": df.shape,
@@ -91,7 +94,7 @@ class DataProfiler:
             "numeric_summary": {},
             "categorical_summary": {},
             "correlations": {},
-            "quality_flags": [],
+            "quality_flags": quality_flags,
         }
 
         # Numeric columns analysis
@@ -120,10 +123,10 @@ class DataProfiler:
         total_missing = df.isnull().sum().sum()
         missing_percentage = (total_missing / (len(df) * len(df.columns))) * 100
 
-        if missing_percentage > 5:
+        if missing_percentage > HIGH_MISSING_VALUES_THRESHOLD:
             stats["quality_flags"].append("HIGH_MISSING_VALUES")
 
-        if len(df) < 1000:
+        if len(df) < SMALL_DATASET_THRESHOLD:
             stats["quality_flags"].append("SMALL_DATASET")
 
         # Check for potential target column (cnt)
@@ -137,14 +140,18 @@ class DataProfiler:
             }
             stats["target_analysis"] = cnt_stats
 
-            if cnt_stats["zero_percentage"] > 10:
+            try:
+                zero_percentage = float(cnt_stats["zero_percentage"])  # type: ignore[arg-type]
+            except (ValueError, TypeError):
+                zero_percentage = 0.0
+
+            if zero_percentage > OUTLIER_THRESHOLD:
                 stats["quality_flags"].append("HIGH_ZERO_COUNT")
 
         return stats
 
-    def _save_metrics(self, metrics: Dict[str, Any], dataset_name: str):
-        """
-        Save metrics to JSON file for tracking over time.
+    def _save_metrics(self, metrics: dict[str, Any], dataset_name: str) -> None:
+        """Save metrics to JSON file for tracking over time.
 
         Args:
             metrics: Metrics dictionary
@@ -154,7 +161,7 @@ class DataProfiler:
         existing_metrics = {}
         if self.metrics_file.exists():
             try:
-                with open(self.metrics_file, "r") as f:
+                with self.metrics_file.open() as f:
                     existing_metrics = json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 logger.warning("Could not load existing metrics file, starting fresh")
@@ -165,17 +172,18 @@ class DataProfiler:
 
         existing_metrics[dataset_name].append(metrics)
 
-        # Keep only last 10 profiles per dataset
-        if len(existing_metrics[dataset_name]) > 10:
-            existing_metrics[dataset_name] = existing_metrics[dataset_name][-10:]
+        # Keep only last MAX_PROFILES_PER_DATASET profiles per dataset
+        if len(existing_metrics[dataset_name]) > MAX_PROFILES_PER_DATASET:
+            existing_metrics[dataset_name] = existing_metrics[dataset_name][
+                -MAX_PROFILES_PER_DATASET:
+            ]
 
         # Save updated metrics
-        with open(self.metrics_file, "w") as f:
+        with self.metrics_file.open("w") as f:
             json.dump(existing_metrics, f, indent=2, default=str)
 
-    def get_quality_summary(self, dataset_name: str = None) -> Dict[str, Any]:
-        """
-        Get quality summary for a specific dataset or all datasets.
+    def get_quality_summary(self, dataset_name: str | None = None) -> dict[str, Any]:
+        """Get quality summary for a specific dataset or all datasets.
 
         Args:
             dataset_name: Specific dataset name, or None for all datasets
@@ -186,24 +194,82 @@ class DataProfiler:
         if not self.metrics_file.exists():
             return {"error": "No metrics file found"}
 
-        with open(self.metrics_file, "r") as f:
-            all_metrics = json.load(f)
+        with self.metrics_file.open() as f:
+            all_metrics = cast(dict[str, Any], json.load(f))
 
         if dataset_name:
-            return all_metrics.get(
+            dataset_result: dict[str, Any] = all_metrics.get(
                 dataset_name, {"error": f"Dataset {dataset_name} not found"}
             )
+            return dataset_result
 
-        return all_metrics
+        all_result: dict[str, Any] = all_metrics
+        return all_result
+
+    def _compare_shape_drift(
+        self,
+        current_shape: tuple[int, int],
+        baseline_shape: tuple[int, int],
+        threshold: float,
+    ) -> dict[str, float]:
+        """Compare shape drift between current and baseline shapes.
+
+        Args:
+            current_shape: Current dataframe shape (rows, cols)
+            baseline_shape: Baseline dataframe shape (rows, cols)
+            threshold: Drift detection threshold
+
+        Returns:
+            Dictionary with drift details for rows and columns
+        """
+        if (
+            len(current_shape) != DATAFRAME_DIMENSIONS
+            or len(baseline_shape) != DATAFRAME_DIMENSIONS
+        ):
+            return {}
+
+        row_change = abs(current_shape[0] - baseline_shape[0]) / baseline_shape[0]
+        col_change = abs(current_shape[1] - baseline_shape[1]) / baseline_shape[1]
+
+        return {"shape_rows": row_change, "shape_cols": col_change}
+
+    def _compare_missing_values_drift(
+        self,
+        current_missing: dict[str, Any],
+        baseline_missing: dict[str, Any],
+        threshold: float,
+    ) -> dict[str, float]:
+        """Compare missing values drift between current and baseline.
+
+        Args:
+            current_missing: Current missing values dictionary
+            baseline_missing: Baseline missing values dictionary
+            threshold: Drift detection threshold
+
+        Returns:
+            Dictionary with drift details for missing values
+        """
+        drift_details = {}
+
+        for col, current_val in current_missing.items():
+            if col in baseline_missing:
+                baseline_val = baseline_missing[col]
+
+                if isinstance(current_val, (int, float)) and isinstance(
+                    baseline_val, (int, float)
+                ):
+                    change = abs(current_val - baseline_val) / max(baseline_val, 1)
+                    drift_details[f"missing_{col}"] = change
+
+        return drift_details
 
     def detect_data_drift(
         self,
-        current_metrics: Dict[str, Any],
-        historical_metrics: List[Dict[str, Any]],
+        current_metrics: dict[str, Any],
+        historical_metrics: list[dict[str, Any]],
         threshold: float = 0.1,
-    ) -> Dict[str, Any]:
-        """
-        Detect data drift between current and historical metrics.
+    ) -> dict[str, Any]:
+        """Detect data drift between current and historical metrics.
 
         Args:
             current_metrics: Current dataset metrics
@@ -222,7 +288,7 @@ class DataProfiler:
         # Use most recent historical metrics as baseline
         baseline = historical_metrics[-1]
 
-        drift_results = {
+        drift_results: dict[str, Any] = {
             "status": "no_drift",
             "drift_detected": False,
             "drift_score": 0.0,
@@ -236,46 +302,25 @@ class DataProfiler:
             if metric in current_metrics and metric in baseline:
                 if metric == "shape":
                     # Compare shape (rows, columns)
-                    current_shape = current_metrics[metric]
-                    baseline_shape = baseline[metric]
+                    shape_drift = self._compare_shape_drift(
+                        current_metrics[metric], baseline[metric], threshold
+                    )
+                    drift_results["drift_details"].update(shape_drift)
 
-                    if len(current_shape) == 2 and len(baseline_shape) == 2:
-                        row_change = (
-                            abs(current_shape[0] - baseline_shape[0])
-                            / baseline_shape[0]
-                        )
-                        col_change = (
-                            abs(current_shape[1] - baseline_shape[1])
-                            / baseline_shape[1]
-                        )
-
-                        drift_results["drift_details"][f"{metric}_rows"] = row_change
-                        drift_results["drift_details"][f"{metric}_cols"] = col_change
-
-                        if row_change > threshold or col_change > threshold:
-                            drift_results["drift_detected"] = True
+                    if any(change > threshold for change in shape_drift.values()):
+                        drift_results["drift_detected"] = True
 
                 elif isinstance(current_metrics[metric], dict) and isinstance(
                     baseline[metric], dict
                 ):
                     # Compare missing values percentage
-                    for col in current_metrics[metric]:
-                        if col in baseline[metric]:
-                            current_val = current_metrics[metric][col]
-                            baseline_val = baseline[metric][col]
+                    missing_drift = self._compare_missing_values_drift(
+                        current_metrics[metric], baseline[metric], threshold
+                    )
+                    drift_results["drift_details"].update(missing_drift)
 
-                            if isinstance(current_val, (int, float)) and isinstance(
-                                baseline_val, (int, float)
-                            ):
-                                change = abs(current_val - baseline_val) / max(
-                                    baseline_val, 1
-                                )
-                                drift_results["drift_details"][
-                                    f"missing_{col}"
-                                ] = change
-
-                                if change > threshold:
-                                    drift_results["drift_detected"] = True
+                    if any(change > threshold for change in missing_drift.values()):
+                        drift_results["drift_detected"] = True
 
         # Calculate overall drift score
         if drift_results["drift_details"]:
@@ -292,8 +337,7 @@ class DataProfiler:
 def profile_dataset(
     df: pd.DataFrame, dataset_name: str, profile_dir: str = "/opt/airflow/data/profiles"
 ) -> str:
-    """
-    Convenience function to profile a dataset.
+    """Convenience function to profile a dataset.
 
     Args:
         df: DataFrame to profile

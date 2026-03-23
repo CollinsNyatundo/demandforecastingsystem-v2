@@ -9,11 +9,10 @@ This test validates the complete Docker-based system including:
 - Airflow DAG execution
 """
 
+import time
+
 import pytest
 import requests
-import pandas as pd
-import time
-from pathlib import Path
 
 
 class TestE2ESystem:
@@ -43,10 +42,7 @@ class TestE2ESystem:
                 response = requests.get(
                     f"{service_endpoints['airflow']}/health", timeout=5
                 )
-                if response.status_code == 200:
-                    airflow_ready = True
-                else:
-                    airflow_ready = False
+                airflow_ready = response.status_code == 200
             except:
                 airflow_ready = False
 
@@ -55,10 +51,7 @@ class TestE2ESystem:
                 response = requests.get(
                     f"{service_endpoints['mlflow']}/health", timeout=5
                 )
-                if response.status_code == 200:
-                    mlflow_ready = True
-                else:
-                    mlflow_ready = False
+                mlflow_ready = response.status_code == 200
             except:
                 mlflow_ready = False
 
@@ -67,20 +60,15 @@ class TestE2ESystem:
                 response = requests.get(
                     f"{service_endpoints['model_server']}/health", timeout=5
                 )
-                if response.status_code == 200:
-                    model_server_ready = True
-                else:
-                    model_server_ready = False
+                model_server_ready = response.status_code == 200
             except:
                 model_server_ready = False
 
             if airflow_ready and mlflow_ready and model_server_ready:
-                print("✅ All services are ready!")
                 return True
 
             time.sleep(2)
 
-        print("❌ Services not ready within timeout")
         return False
 
     def test_service_connectivity(self, service_endpoints, wait_for_services):
@@ -90,11 +78,7 @@ class TestE2ESystem:
 
         for service_name, endpoint in service_endpoints.items():
             try:
-                if service_name == "airflow":
-                    response = requests.get(f"{endpoint}/health", timeout=10)
-                elif service_name == "model_server":
-                    response = requests.get(f"{endpoint}/health", timeout=10)
-                elif service_name == "mlflow":
+                if service_name in {"airflow", "model_server", "mlflow"}:
                     response = requests.get(f"{endpoint}/health", timeout=10)
                 else:
                     # For other services, just check basic connectivity
@@ -105,7 +89,6 @@ class TestE2ESystem:
                     403,
                     404,
                 ], f"{service_name} not accessible"
-                print(f"✅ {service_name} is accessible")
 
             except requests.exceptions.RequestException as e:
                 pytest.fail(f"Cannot connect to {service_name}: {e}")
@@ -125,15 +108,13 @@ class TestE2ESystem:
             assert response.status_code == 200
 
             dags = response.json().get("dags", [])
-            dag_ids = [dag["dag_id"] for dag in dags]
-
-            print(f"✅ Found {len(dags)} DAGs: {dag_ids}")
+            [dag["dag_id"] for dag in dags]
 
             # Check for expected DAGs (at least one should exist)
             if len(dags) > 0:
-                print(f"✅ DAGs available: {', '.join(dag_ids[:3])}")
+                pass
             else:
-                print("⚠️  No DAGs found (may be expected for fresh deployment)")
+                pass
 
         except requests.exceptions.RequestException as e:
             pytest.fail(f"Cannot check Airflow DAGs: {e}")
@@ -148,12 +129,10 @@ class TestE2ESystem:
             response = requests.get(f"{service_endpoints['mlflow']}/", timeout=10)
             assert response.status_code == 200
             assert "MLflow" in response.text
-            print("✅ MLflow UI is accessible")
 
             # Check health endpoint
             response = requests.get(f"{service_endpoints['mlflow']}/health", timeout=10)
             assert response.status_code == 200
-            print("✅ MLflow health endpoint working")
 
         except requests.exceptions.RequestException as e:
             pytest.fail(f"Cannot check MLflow: {e}")
@@ -181,8 +160,6 @@ class TestE2ESystem:
                 f"{service_endpoints['model_server']}/metrics", timeout=10
             )
             assert response.status_code == 200
-
-            print("✅ Model server endpoints are working")
 
         except requests.exceptions.RequestException as e:
             pytest.fail(f"Cannot check model server: {e}")
@@ -218,9 +195,9 @@ class TestE2ESystem:
             assert response.status_code in [200, 503]
 
             if response.status_code == 200:
-                print("✅ Prediction endpoint working with model")
+                pass
             else:
-                print("⚠️  Model not loaded (expected for fresh deployment)")
+                pass
 
         except requests.exceptions.RequestException as e:
             pytest.fail(f"Cannot test prediction endpoint: {e}")
@@ -236,9 +213,8 @@ class TestE2ESystem:
                 f"{service_endpoints['prometheus']}/api/v1/status/config", timeout=10
             )
             assert response.status_code == 200
-            print("✅ Prometheus is accessible")
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️  Prometheus not accessible: {e}")
+        except requests.exceptions.RequestException:
+            pass
 
         # Test Grafana
         try:
@@ -246,9 +222,8 @@ class TestE2ESystem:
                 f"{service_endpoints['grafana']}/api/health", timeout=10
             )
             assert response.status_code == 200
-            print("✅ Grafana is accessible")
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️  Grafana not accessible: {e}")
+        except requests.exceptions.RequestException:
+            pass
 
 
 if __name__ == "__main__":

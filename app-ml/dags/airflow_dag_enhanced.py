@@ -1,5 +1,4 @@
-"""
-Enhanced Demand Forecasting DAG with MLflow & Optuna Persistence
+"""Enhanced Demand Forecasting DAG with MLflow & Optuna Persistence.
 
 This DAG extends the refactored version with:
 - Optuna study persistence to PostgreSQL
@@ -11,15 +10,13 @@ This DAG extends the refactored version with:
 Version: 2.1.0
 """
 
-import json
 import logging
 import os
+import socket
+import subprocess
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
 
-import pandas as pd
 import pendulum
-from airflow import DAG
 from airflow.datasets import Dataset
 from airflow.decorators import dag, task
 from airflow.utils.email import send_email
@@ -32,13 +29,9 @@ from kedro.io import DataCatalog
 
 # Project Imports
 from demand_forecasting.pipelines.data_processing.nodes import preprocess_data
-from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
-    optimize_catboost_params,
-    train_catboost_model,
-)
 from demand_forecasting.pipelines.feature_engineering.nodes import (
-    extract_temporal_features,
     create_feature_interactions,
+    extract_temporal_features,
 )
 from demand_forecasting.utils import (
     get_email_config,
@@ -66,6 +59,16 @@ except ImportError:
     OPTUNA_PERSISTENCE_AVAILABLE = False
     logging.warning("Optuna RDBStorage not available. Study persistence disabled.")
 
+# ClearML Integration (complements MLflow)
+try:
+    from clearml import Task as ClearMLTask
+
+    CLEARML_AVAILABLE = True
+except ImportError:
+    CLEARML_AVAILABLE = False
+    ClearMLTask = None  # type: ignore[misc, assignment]
+    logging.warning("ClearML not installed. ClearML experiment tracking disabled.")
+
 # CONSTANTS
 PROJECT_PATH = "/opt/airflow"
 CONF_SOURCE = "conf"
@@ -77,9 +80,11 @@ MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000"
 MLFLOW_EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "demand_forecasting")
 
 # Optuna Persistence Configuration
-OPTUNA_STORAGE_URL = os.environ.get(
-    "OPTUNA_STORAGE_URL", "postgresql://airflow:airflow@postgres:5432/optuna"
-)
+# Build fallback from real credentials rather than hardcoding 'airflow:airflow'
+_pg_user = os.environ.get("POSTGRES_USER", "airflow")
+_pg_pass = os.environ.get("POSTGRES_PASSWORD", "")
+_default_optuna_url = f"postgresql://{_pg_user}:{_pg_pass}@postgres:5432/optuna"
+OPTUNA_STORAGE_URL = os.environ.get("OPTUNA_STORAGE_URL", _default_optuna_url)
 OPTUNA_STUDY_NAME = os.environ.get("OPTUNA_STUDY_NAME", "demand_forecasting_study")
 
 # Dataset Declarations
@@ -111,7 +116,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_catalog():
-    """Bootstrap Kedro Context and return DataCatalog and config loader"""
+    """Bootstrap Kedro Context and return DataCatalog and config loader."""
     configure_project(PACKAGE_NAME)
     project_path = PROJECT_PATH
     bootstrap_project(project_path)
@@ -129,9 +134,8 @@ def get_catalog():
     return catalog, conf_loader
 
 
-def setup_mlflow() -> Optional[str]:
-    """
-    Set up MLflow experiment tracking.
+def setup_mlflow() -> str | None:
+    """Set up MLflow experiment tracking.
 
     Returns:
         Run ID if MLflow is available, None otherwise
@@ -148,10 +152,10 @@ def setup_mlflow() -> Optional[str]:
         try:
             experiment = mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
             if experiment is None:
-                experiment_id = mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
+                mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
                 logger.info(f"Created MLflow experiment: {MLFLOW_EXPERIMENT_NAME}")
             else:
-                experiment_id = experiment.experiment_id
+                pass
         except Exception as e:
             logger.warning(f"Could not set up MLflow experiment: {e}")
             return None
@@ -167,6 +171,24 @@ def setup_mlflow() -> Optional[str]:
         mlflow.set_tag("pipeline_version", "2.1.0")
         mlflow.set_tag("model_type", "CatBoost")
         mlflow.set_tag("optimization", "Optuna_TPESampler")
+        mlflow.set_tag("environment", os.environ.get("ENVIRONMENT", "production"))
+        mlflow.set_tag("host", socket.gethostname())
+        mlflow.set_tag("optuna_study_name", OPTUNA_STUDY_NAME)
+
+        # Try to capture git commit for reproducibility
+        try:
+            git_commit = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=PROJECT_PATH,
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
+            mlflow.set_tag("git_commit", git_commit)
+        except Exception:
+            mlflow.set_tag("git_commit", "unknown")
 
         logger.info(f"✅ MLflow tracking enabled. Run ID: {run.info.run_id}")
         return run.info.run_id
@@ -177,8 +199,7 @@ def setup_mlflow() -> Optional[str]:
 
 
 def get_optuna_storage():
-    """
-    Get Optuna storage backend for study persistence.
+    """Get Optuna storage backend for study persistence.
 
     Returns:
         RDBStorage instance or None if not available
@@ -269,7 +290,7 @@ def send_failure_notification(context: dict, error_message: str):
     - 🏷️ Model versioning: Timestamp-based versions
     - 📈 Rich metrics logging
 
-    **Contact:** cnyagakan@gmail.com
+    **Contact:** Set AIRFLOW_ALERT_EMAIL environment variable for alerts
     **Data Source:** MinIO S3 (demand-forecasting bucket)
     **Model Output:** s3://demand-forecasting/06_models/regressor_YYYYMMDD_HHMMSS.pickle
     """,
@@ -277,8 +298,7 @@ def send_failure_notification(context: dict, error_message: str):
 def demand_forecasting_dag():
     @task()
     def t_validate_raw_data() -> dict:
-        """
-        Validate raw data quality before processing.
+        """Validate raw data quality before processing.
 
         Returns:
             Dictionary with data statistics
@@ -314,6 +334,14 @@ def demand_forecasting_dag():
                         "data_missing_pct": stats["missing_pct"],
                     }
                 )
+                # Log data version tag (hash of shape + first/last rows for reproducibility)
+                import hashlib
+
+                data_hash = hashlib.md5(
+                    f"{len(df)}_{df.columns.tolist()}_{df.iloc[0].values.tolist()}".encode()
+                ).hexdigest()[:8]
+                mlflow.set_tag("data_version", data_hash)
+                mlflow.set_tag("dataset_size", str(len(df)))
 
             logger.info(
                 f"✅ Raw data validated: {len(df)} rows, {len(df.columns)} columns"
@@ -326,15 +354,14 @@ def demand_forecasting_dag():
             return stats
 
         except Exception as e:
-            logger.error(f"❌ Data validation failed: {str(e)}")
+            logger.error(f"❌ Data validation failed: {e!s}")
             if MLFLOW_AVAILABLE and mlflow_run_id:
                 mlflow.log_param("validation_status", "failed")
             raise
 
     @task(outlets=[PREPROCESSED_DATA_DATASET])
-    def t_preprocess():
-        """
-        Preprocess and clean raw bike demand data.
+    def t_preprocess() -> str | None:
+        """Preprocess and clean raw bike demand data.
 
         Produces: PREPROCESSED_DATA_DATASET
         """
@@ -369,28 +396,24 @@ def demand_forecasting_dag():
             return "Success"
 
         except Exception as e:
-            logger.error(f"❌ Preprocessing failed: {str(e)}")
+            logger.error(f"❌ Preprocessing failed: {e!s}")
             raise
 
     @task(outlets=[MODEL_INPUT_DATASET])
-    def t_feature_eng():
-        """
-        Generate ML-ready features from preprocessed data.
+    def t_feature_eng() -> str | None:
+        """Generate ML-ready features from preprocessed data.
 
         Produces: MODEL_INPUT_DATASET
         """
         try:
-            catalog, _ = get_catalog()
+            # Issue 5 fix: call get_catalog() once — it bootstraps Kedro and returns
+            # both the DataCatalog and the OmegaConfigLoader in a single call.
+            catalog, conf_loader = get_catalog()
 
             # Load preprocessed data
             logger.info("Loading preprocessed data...")
             df = catalog.load("preprocessed_bike_data")
 
-            # Load parameters for feature engineering
-            # Parameters must be loaded from configuration (parameters.yml)
-            from kedro.config import OmegaConfigLoader
-
-            conf_loader = OmegaConfigLoader("conf")
             params = conf_loader["parameters"]
             logger.info("✅ Parameters loaded from configuration")
 
@@ -400,10 +423,11 @@ def demand_forecasting_dag():
 
             logger.info("Creating feature interactions with lag features...")
             # IMPORTANT: Pass feature_lags parameters from config to enable lag features
+            # Using 'demand_lags' (matching notebook's cnt_lag) for current demand lags
             derived_df = create_feature_interactions(
                 df_with_temporal,
                 lags=params.get("feature_engineering", {}).get(
-                    "target_lags", [1, 2, 22, 23]
+                    "demand_lags", [1, 2, 22, 23]
                 ),
                 feature_lags=params.get("feature_engineering", {}).get(
                     "feature_lags", {}
@@ -439,13 +463,12 @@ def demand_forecasting_dag():
             return "Success"
 
         except Exception as e:
-            logger.error(f"❌ Feature engineering failed: {str(e)}")
+            logger.error(f"❌ Feature engineering failed: {e!s}")
             raise
 
     @task(outlets=[TRAINED_MODEL_DATASET])
     def t_train_optimized_model():
-        """
-        Train CatBoost model with persistent Optuna optimization and MLflow tracking.
+        """Train CatBoost model with persistent Optuna optimization and MLflow tracking.
 
         This task implements:
         - Real Optuna TPESampler Bayesian optimization
@@ -464,6 +487,21 @@ def demand_forecasting_dag():
             logger.info("🚀 Starting training task...")
             catalog, conf_loader = get_catalog()
             logger.info("✅ Catalog loaded")
+
+            # Initialize ClearML task (complements MLflow)
+            clearml_task = None
+            if CLEARML_AVAILABLE:
+                try:
+                    clearml_task = ClearMLTask.init(
+                        project_name="demand_forecasting",
+                        task_name="catboost_training_dag",
+                        task_type="training",
+                        auto_connect_frameworks=True,  # Auto-capture CatBoost, Optuna
+                    )
+                    logger.info(f"✅ ClearML task initialized: {clearml_task.id}")
+                except Exception as e:
+                    logger.warning(f"ClearML init failed (non-fatal): {e}")
+                    clearml_task = None
 
             params = conf_loader["parameters"]
             logger.info("✅ Parameters loaded")
@@ -530,45 +568,41 @@ def demand_forecasting_dag():
             logger.info("Sampler: TPESampler (Bayesian optimization)")
 
             if optuna_storage:
-                logger.info(f"Storage: PostgreSQL (study will persist)")
+                logger.info("Storage: PostgreSQL (study will persist)")
                 logger.info(f"Study name: {OPTUNA_STUDY_NAME}")
             else:
                 logger.info("Storage: In-memory (study will not persist)")
 
             # Import and use catboost optimization
-            from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
-                optimize_catboost_params,
-                train_catboost_model,
-            )
-
             # CRITICAL: Split data into train/test sets BEFORE optimization
             # This ensures hyperparameters are tuned on training data and evaluated on unseen test data
             # Matches the notebook strategy: 80% train, 20% test
-            from sklearn.model_selection import (
-                train_test_split as sklearn_train_test_split,
+
+            from demand_forecasting.pipelines.demand_modeling.catboost_nodes import (
+                optimize_catboost_params,
+                train_catboost_model,
             )
 
             train_fraction = params.get("train_fraction", 0.8)
             random_state = params.get("data_processing", {}).get("random_state", 42)
 
             logger.info(
-                f"Splitting data: {train_fraction*100:.0f}% train, {(1-train_fraction)*100:.0f}% test"
+                f"Splitting data: {train_fraction * 100:.0f}% train, {(1 - train_fraction) * 100:.0f}% test"
             )
 
-            # Split the data
-            X_full = derived_df.drop("target", axis=1)
-            y_full = derived_df["target"]
+            # Split the data using SEQUENTIAL split (NO shuffle!)
+            # This is CRITICAL for time series - we must not leak future data into training
+            # Matching notebook: x_train, x_test = x[:train_size], x[train_size:]
+            X_full = df.drop("target", axis=1)
+            y_full = df["target"]
 
-            X_train, X_test, y_train, y_test = sklearn_train_test_split(
-                X_full,
-                y_full,
-                train_size=train_fraction,
-                test_size=1 - train_fraction,
-                random_state=random_state,
-                shuffle=True,
-            )
+            train_size = int(train_fraction * len(X_full))
+            X_train = X_full.iloc[:train_size]
+            X_test = X_full.iloc[train_size:]
+            y_train = y_full.iloc[:train_size]
+            y_test = y_full.iloc[train_size:]
 
-            logger.info(f"✅ Data split complete:")
+            logger.info("✅ Data split complete (sequential, no shuffle):")
             logger.info(f"   Training: {len(X_train)} samples")
             logger.info(f"   Testing: {len(X_test)} samples")
             logger.info(f"   Total: {len(X_full)} samples")
@@ -585,7 +619,7 @@ def demand_forecasting_dag():
             optimization_result = optimize_catboost_params(
                 X_train,
                 y_train,
-                n_trials=params.get("optimization", {}).get("n_trials", 150),
+                n_trials=params.get("optuna", {}).get("n_trials", 150),
                 storage=optuna_storage,
                 study_name=OPTUNA_STUDY_NAME,
             )
@@ -644,12 +678,23 @@ def demand_forecasting_dag():
 
                 # Log model to MLflow
                 try:
+                    # Log model with input signature for schema validation
+                    try:
+                        from mlflow.models.signature import infer_signature
+
+                        signature = infer_signature(
+                            X_test, catboost_model.predict(X_test)
+                        )
+                    except Exception:
+                        signature = None
+
                     mlflow.catboost.log_model(
                         catboost_model,
                         "model",
                         registered_model_name="demand_forecasting_catboost",
+                        signature=signature,
                     )
-                    logger.info("✅ Model logged to MLflow")
+                    logger.info("✅ Model logged to MLflow with signature")
                 except Exception as e:
                     logger.error(f"❌ Failed to log model to MLflow: {e}")
                     raise
@@ -658,17 +703,24 @@ def demand_forecasting_dag():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             logger.info(f"Model timestamp: {timestamp}")
 
-            # Save model to S3 with timestamp
+            # Save versioned model directly to S3 (catalog doesn't support dynamic names)
+            import pickle
+
             try:
-                versioned_model_name = f"regressor_{timestamp}"
-                logger.info(f"Saving model as: {versioned_model_name}")
-                catalog.save(versioned_model_name, catboost_model)
-                logger.info("✅ Model saved with timestamp")
+                fs = get_s3_filesystem()
+                versioned_model_path = (
+                    f"{S3_BUCKET}/06_models/regressor_{timestamp}.pickle"
+                )
+                logger.info(f"Saving versioned model to: {versioned_model_path}")
+
+                with fs.open(versioned_model_path, "wb") as f:
+                    pickle.dump(catboost_model, f)
+                logger.info("✅ Versioned model saved to S3")
             except Exception as e:
                 logger.error(f"❌ Failed to save timestamped model: {e}")
                 raise
 
-            # Also save as latest (for backward compatibility)
+            # Also save as latest using catalog (for backward compatibility)
             try:
                 logger.info("Saving model as latest (regressor_model)")
                 catalog.save("regressor_model", catboost_model)
@@ -677,14 +729,11 @@ def demand_forecasting_dag():
                 logger.error(f"❌ Failed to save latest model: {e}")
                 raise
 
-            # Verify model was saved successfully
+            # Verify versioned model was saved successfully
             try:
-                logger.info("Verifying model save...")
-                fs = get_s3_filesystem()
-                model_path = f"{S3_BUCKET}/06_models/regressor_{timestamp}.pickle"
-                logger.info(f"Verifying path: {model_path}")
-                validate_model_save(fs, model_path)
-                logger.info("✅ Model verification completed")
+                logger.info("Verifying versioned model save...")
+                validate_model_save(fs, versioned_model_path)
+                logger.info("✅ Versioned model verification completed")
             except Exception as e:
                 logger.error(f"❌ Model verification failed: {e}")
                 raise
@@ -695,12 +744,19 @@ def demand_forecasting_dag():
             # Log model path to MLflow
             if MLFLOW_AVAILABLE:
                 mlflow.set_tag("model_version", timestamp)
-                mlflow.set_tag("model_path", model_path)
+                mlflow.set_tag("model_path", versioned_model_path)
+                mlflow.set_tag("feature_count", str(len(X_train.columns)))
+                mlflow.set_tag("dataset_size", str(len(X_train)))
                 mlflow.log_param("model_timestamp", timestamp)
 
             # End MLflow run
             if MLFLOW_AVAILABLE:
                 mlflow.end_run()
+
+            # Close ClearML task
+            if clearml_task:
+                clearml_task.close()
+                logger.info("✅ ClearML task closed")
 
             # Return summary
             return {
@@ -716,20 +772,263 @@ def demand_forecasting_dag():
             }
 
         except Exception as e:
-            logger.error(f"❌ Model training failed: {str(e)}")
+            logger.error(f"❌ Model training failed: {e!s}")
             if MLFLOW_AVAILABLE:
                 mlflow.log_param("training_status", "failed")
                 mlflow.end_run(status="FAILED")
+            if clearml_task:
+                clearml_task.mark_failed(status_reason=str(e))
             raise
 
-    # Orchestration - Simplified linear pipeline
+    @task
+    def t_train_multi_objective():
+        """Train model using multi-objective optimization.
+
+        Multi-objective optimization finds Pareto-optimal solutions
+        balancing multiple metrics (RMSE, MAE, training time).
+
+        Enable via parameters.yml: advanced_features.enable_multi_objective: true
+        """
+        try:
+            logger.info("🚀 Starting multi-objective optimization...")
+            catalog, conf_loader = get_catalog()
+            params = conf_loader["parameters"]
+
+            # Check if multi-objective is enabled
+            if not params.get("advanced_features", {}).get(
+                "enable_multi_objective", False
+            ):
+                logger.info("Multi-objective optimization disabled. Skipping...")
+                return {"status": "skipped", "reason": "disabled_in_config"}
+
+            # Load data
+            df = catalog.load("model_input_table")
+            if len(df) == 0:
+                raise ValueError("Model input data is empty")
+
+            # Import multi-objective optimizer
+            from demand_forecasting.optimization.multi_objective import (
+                MultiObjectiveOptimizer,
+            )
+
+            # Sequential split for time series
+            train_fraction = params.get("train_fraction", 0.8)
+            X_full = df.drop("target", axis=1)
+            y_full = df["target"]
+
+            train_size = int(train_fraction * len(X_full))
+            X_train = X_full.iloc[:train_size]
+            X_test = X_full.iloc[train_size:]
+            y_train = y_full.iloc[:train_size]
+            y_test = y_full.iloc[train_size:]
+
+            # Configure objectives
+            objectives = params.get("advanced_features", {}).get(
+                "multi_objective_targets", ["rmse", "mae", "training_time"]
+            )
+            directions = ["minimize"] * len(objectives)
+
+            # Create and run optimizer
+            optimizer = MultiObjectiveOptimizer(objectives, directions)
+            optimizer.create_study(
+                study_name="demand_forecasting_multi_objective",
+                storage=get_optuna_storage(),
+            )
+
+            n_trials = params.get("advanced_features", {}).get(
+                "multi_objective_trials", 50
+            )
+            results = optimizer.optimize(
+                X_train, X_test, y_train, y_test, n_trials=n_trials
+            )
+
+            # Get recommended solution
+            preference_weights = params.get("advanced_features", {}).get(
+                "objective_weights", {"rmse": 0.5, "mae": 0.3, "training_time": 0.2}
+            )
+            recommendation = optimizer.recommend_solution(preference_weights)
+
+            logger.info("✅ Multi-objective optimization complete")
+            logger.info(f"Pareto-optimal solutions found: {results['n_pareto_trials']}")
+            logger.info(f"Recommended trial: {recommendation}")
+
+            # Log to MLflow
+            if MLFLOW_AVAILABLE:
+                # Issue 8 fix: nested=True creates a child run under the active main
+                # training run instead of a separate top-level run.
+                with mlflow.start_run(
+                    run_name="multi_objective_optimization", nested=True
+                ):
+                    mlflow.log_params(
+                        {
+                            "objectives": ",".join(objectives),
+                            "n_trials": n_trials,
+                            "pareto_solutions": results["n_pareto_trials"],
+                        }
+                    )
+
+            return {
+                "status": "success",
+                "pareto_solutions": results["n_pareto_trials"],
+                "recommended_params": recommendation.get("recommended_trial", {}).get(
+                    "params", {}
+                ),
+                "objectives": objectives,
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Multi-objective optimization failed: {e}")
+            return {"status": "failed", "error": str(e)}
+
+    @task
+    def t_train_ensemble():
+        """Train ensemble model combining multiple algorithms.
+
+        Ensemble methods (stacking/voting) can improve prediction robustness
+        by combining CatBoost, XGBoost, LightGBM, and RandomForest.
+
+        Enable via parameters.yml: advanced_features.enable_ensemble: true
+        """
+        try:
+            logger.info("🚀 Starting ensemble training...")
+            catalog, conf_loader = get_catalog()
+            params = conf_loader["parameters"]
+
+            # Check if ensemble is enabled
+            if not params.get("advanced_features", {}).get("enable_ensemble", False):
+                logger.info("Ensemble training disabled. Skipping...")
+                return {"status": "skipped", "reason": "disabled_in_config"}
+
+            # Load data
+            df = catalog.load("model_input_table")
+            if len(df) == 0:
+                raise ValueError("Model input data is empty")
+
+            # Import ensemble manager
+            from demand_forecasting.optimization.ensemble import EnsembleManager
+
+            # Sequential split for time series
+            train_fraction = params.get("train_fraction", 0.8)
+            X_full = df.drop("target", axis=1)
+            y_full = df["target"]
+
+            train_size = int(train_fraction * len(X_full))
+            X_train = X_full.iloc[:train_size]
+            X_test = X_full.iloc[train_size:]
+            y_train = y_full.iloc[:train_size]
+            y_test = y_full.iloc[train_size:]
+
+            # Create ensemble manager
+            ensemble_manager = EnsembleManager()
+
+            # Get ensemble type from config
+            ensemble_type = params.get("advanced_features", {}).get(
+                "ensemble_type", "stacking"
+            )
+
+            if ensemble_type == "stacking":
+                # Create stacking ensemble
+                catboost_params = params.get("model_training", {}).get("catboost", {})
+                ensemble_manager.create_stacking_ensemble(
+                    catboost_params=catboost_params
+                )
+            else:
+                # Create voting ensemble with default models
+                from catboost import CatBoostRegressor
+                from sklearn.ensemble import RandomForestRegressor
+
+                models = [
+                    (
+                        "catboost",
+                        CatBoostRegressor(
+                            iterations=500, verbose=False, random_seed=42
+                        ),
+                    ),
+                    ("rf", RandomForestRegressor(n_estimators=100, random_state=42)),
+                ]
+                ensemble_manager.create_voting_ensemble(models)
+
+            # Train ensemble
+            logger.info(f"Training {ensemble_type} ensemble...")
+            train_results = ensemble_manager.train_ensemble(
+                X_train, y_train, X_test, y_test
+            )
+
+            # Evaluate on test set
+            eval_results = ensemble_manager.evaluate_ensemble(X_test, y_test)
+
+            logger.info("✅ Ensemble training complete")
+            logger.info(
+                f"Ensemble RMSE: {eval_results['ensemble_metrics']['rmse']:.4f}"
+            )
+            logger.info(
+                f"Improvement over best base: {eval_results['improvements']['rmse_improvement_percent']:.2f}%"
+            )
+
+            # Save ensemble model
+            fs = get_s3_filesystem()
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ensemble_path = f"{S3_BUCKET}/06_models/ensemble_{timestamp}.joblib"
+
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(suffix=".joblib", delete=False) as tmp:
+                ensemble_manager.save_ensemble(tmp.name)
+                with open(tmp.name, "rb") as f:
+                    with fs.open(ensemble_path, "wb") as s3_f:
+                        s3_f.write(f.read())
+
+            logger.info(f"Ensemble saved to: {ensemble_path}")
+
+            # Log to MLflow
+            if MLFLOW_AVAILABLE:
+                # Issue 8 fix: nested=True — child run under the active main run.
+                with mlflow.start_run(run_name="ensemble_training", nested=True):
+                    mlflow.log_params(
+                        {
+                            "ensemble_type": ensemble_type,
+                            "base_models": list(ensemble_manager.base_models.keys()),
+                        }
+                    )
+                    mlflow.log_metrics(
+                        {
+                            "ensemble_rmse": eval_results["ensemble_metrics"]["rmse"],
+                            "ensemble_mae": eval_results["ensemble_metrics"]["mae"],
+                            "rmse_improvement": eval_results["improvements"][
+                                "rmse_improvement_percent"
+                            ],
+                        }
+                    )
+
+            return {
+                "status": "success",
+                "ensemble_type": ensemble_type,
+                "rmse": eval_results["ensemble_metrics"]["rmse"],
+                "mae": eval_results["ensemble_metrics"]["mae"],
+                "improvement": eval_results["improvements"]["rmse_improvement_percent"],
+                "model_path": ensemble_path,
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Ensemble training failed: {e}")
+            return {"status": "failed", "error": str(e)}
+
+    # Orchestration - Pipeline with optional advanced features
     validation = t_validate_raw_data()
     prep = t_preprocess()
     feat = t_feature_eng()
     model = t_train_optimized_model()
 
+    # Advanced features (run in parallel with main model if enabled)
+    multi_obj = t_train_multi_objective()
+    ensemble = t_train_ensemble()
+
     # Define dependencies
+    # Main pipeline
     validation >> prep >> feat >> model
+
+    # Advanced features branch from feature engineering (parallel to main model)
+    feat >> [multi_obj, ensemble]
 
 
 # Instantiate the DAG

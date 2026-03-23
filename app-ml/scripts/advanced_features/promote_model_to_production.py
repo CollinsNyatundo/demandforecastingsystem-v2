@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-MLflow Model Promotion Script
+"""MLflow Model Promotion Script.
 
 Promotes a model version to production stage in MLflow Model Registry.
 Includes validation checks and approval workflow.
@@ -31,15 +30,12 @@ Date: January 3, 2025
 import argparse
 import os
 import sys
-from datetime import datetime
-from typing import Dict, Optional, Tuple
 
 try:
     import mlflow
     from mlflow.exceptions import MlflowException
     from mlflow.tracking import MlflowClient
 except ImportError:
-    print("Error: MLflow not installed. Install with: pip install mlflow")
     sys.exit(1)
 
 
@@ -53,8 +49,7 @@ class ModelPromoter:
         rmse_threshold: float = 52.0,
         improvement_threshold: float = 1.0,
     ):
-        """
-        Initialize model promoter.
+        """Initialize model promoter.
 
         Args:
             model_name: Name of the registered model
@@ -69,8 +64,7 @@ class ModelPromoter:
         self.client = None
 
     def connect(self) -> bool:
-        """
-        Connect to MLflow tracking server.
+        """Connect to MLflow tracking server.
 
         Returns:
             True if connection successful, False otherwise
@@ -82,16 +76,13 @@ class ModelPromoter:
             # Test connection
             self.client.list_experiments()
 
-            print(f"✅ Connected to MLflow: {self.tracking_uri}")
             return True
 
-        except Exception as e:
-            print(f"❌ Failed to connect to MLflow: {e}")
+        except Exception:
             return False
 
-    def get_latest_version(self, stage: str = "None") -> Optional[Dict]:
-        """
-        Get latest model version in specified stage.
+    def get_latest_version(self, stage: str = "None") -> dict | None:
+        """Get latest model version in specified stage.
 
         Args:
             stage: Model stage to filter by
@@ -116,22 +107,19 @@ class ModelPromoter:
 
         except MlflowException as e:
             if "RESOURCE_DOES_NOT_EXIST" in str(e):
-                print(f"⚠️  Model '{self.model_name}' not found in registry")
                 return None
             raise
 
-    def get_current_production_model(self) -> Optional[Dict]:
-        """
-        Get currently deployed production model.
+    def get_current_production_model(self) -> dict | None:
+        """Get currently deployed production model.
 
         Returns:
             Dictionary with production model info or None
         """
         return self.get_latest_version(stage="Production")
 
-    def get_model_metrics(self, run_id: str) -> Dict[str, float]:
-        """
-        Get metrics for a model run.
+    def get_model_metrics(self, run_id: str) -> dict[str, float]:
+        """Get metrics for a model run.
 
         Args:
             run_id: MLflow run ID
@@ -152,15 +140,13 @@ class ModelPromoter:
 
             return {k: v for k, v in metrics.items() if v is not None}
 
-        except Exception as e:
-            print(f"⚠️  Could not retrieve metrics: {e}")
+        except Exception:
             return {}
 
     def validate_model(
-        self, version_info: Dict, current_production: Optional[Dict] = None
-    ) -> Tuple[bool, str]:
-        """
-        Validate model before promotion.
+        self, version_info: dict, current_production: dict | None = None
+    ) -> tuple[bool, str]:
+        """Validate model before promotion.
 
         Args:
             version_info: Candidate model version info
@@ -206,8 +192,7 @@ class ModelPromoter:
     def promote_model(
         self, version: str, archive_existing: bool = True, dry_run: bool = False
     ) -> bool:
-        """
-        Promote model to production.
+        """Promote model to production.
 
         Args:
             version: Model version to promote
@@ -219,11 +204,8 @@ class ModelPromoter:
         """
         try:
             if dry_run:
-                print(
-                    f"🔍 DRY RUN: Would promote {self.model_name} v{version} to Production"
-                )
                 if archive_existing:
-                    print(f"🔍 DRY RUN: Would archive existing production versions")
+                    pass
                 return True
 
             self.client.transition_model_version_stage(
@@ -233,93 +215,71 @@ class ModelPromoter:
                 archive_existing_versions=archive_existing,
             )
 
-            print(
-                f"✅ Successfully promoted {self.model_name} v{version} to Production"
-            )
-
             if archive_existing:
-                print("   Existing production versions archived")
+                pass
 
             return True
 
-        except Exception as e:
-            print(f"❌ Failed to promote model: {e}")
+        except Exception:
             return False
 
     def display_comparison(
-        self, candidate: Dict, current_production: Optional[Dict] = None
+        self, candidate: dict, current_production: dict | None = None
     ):
-        """
-        Display comparison between candidate and current production model.
+        """Display comparison between candidate and current production model.
 
         Args:
             candidate: Candidate model info
             current_production: Current production model info
         """
-        print("\n" + "=" * 80)
-        print("MODEL COMPARISON")
-        print("=" * 80)
-
         # Candidate model
         candidate_metrics = self.get_model_metrics(candidate["run_id"])
-        print(f"\n📦 Candidate Model (Version {candidate['version']}):")
-        print(f"   Run ID: {candidate['run_id']}")
 
         if candidate_metrics:
             if "rmse" in candidate_metrics:
-                print(f"   RMSE: {candidate_metrics['rmse']:.4f}")
+                pass
             if "mae" in candidate_metrics:
-                print(f"   MAE: {candidate_metrics['mae']:.4f}")
+                pass
             if "mape" in candidate_metrics:
-                print(f"   MAPE: {candidate_metrics['mape']:.4f}%")
+                pass
             if "training_time" in candidate_metrics:
-                print(f"   Training Time: {candidate_metrics['training_time']:.2f}s")
+                pass
             if "model_size" in candidate_metrics:
-                print(f"   Model Size: {candidate_metrics['model_size']:.2f} MB")
+                pass
         else:
-            print("   ⚠️  No metrics available")
+            pass
 
         # Current production model
         if current_production:
             prod_metrics = self.get_model_metrics(current_production["run_id"])
-            print(
-                f"\n🏭 Current Production Model (Version {current_production['version']}):"
-            )
-            print(f"   Run ID: {current_production['run_id']}")
 
             if prod_metrics:
                 if "rmse" in prod_metrics:
-                    print(f"   RMSE: {prod_metrics['rmse']:.4f}")
+                    pass
                 if "mae" in prod_metrics:
-                    print(f"   MAE: {prod_metrics['mae']:.4f}")
+                    pass
                 if "mape" in prod_metrics:
-                    print(f"   MAPE: {prod_metrics['mape']:.4f}%")
+                    pass
             else:
-                print("   ⚠️  No metrics available")
+                pass
 
             # Calculate improvements
             if candidate_metrics and prod_metrics:
-                print("\n📊 Improvements:")
 
                 if "rmse" in candidate_metrics and "rmse" in prod_metrics:
-                    rmse_improvement = (
+                    (
                         (prod_metrics["rmse"] - candidate_metrics["rmse"])
                         / prod_metrics["rmse"]
                     ) * 100
-                    print(f"   RMSE: {rmse_improvement:+.2f}%")
 
                 if "mae" in candidate_metrics and "mae" in prod_metrics:
-                    mae_improvement = (
+                    (
                         (prod_metrics["mae"] - candidate_metrics["mae"])
                         / prod_metrics["mae"]
                     ) * 100
-                    print(f"   MAE: {mae_improvement:+.2f}%")
 
         else:
-            print("\n🏭 Current Production Model: None")
-            print("   This will be the first production deployment")
-
-        print("\n" + "=" * 80)
+            pass
 
 
 def main():
@@ -430,14 +390,11 @@ Examples:
                 name=args.model_name, version=str(args.version)
             )
             candidate["run_id"] = version_details.run_id
-        except Exception as e:
-            print(f"❌ Could not find version {args.version}: {e}")
+        except Exception:
             sys.exit(1)
     else:
         candidate = promoter.get_latest_version(stage="None")
         if not candidate:
-            print("❌ No candidate models found (stage='None')")
-            print("   Models must be registered first before promotion")
             sys.exit(1)
 
     # Get current production model
@@ -448,25 +405,20 @@ Examples:
 
     # Validate model (unless force flag is set)
     if not args.force:
-        print("\n🔍 Validating candidate model...")
-        is_valid, reason = promoter.validate_model(candidate, current_production)
+        is_valid, _reason = promoter.validate_model(candidate, current_production)
 
         if is_valid:
-            print(f"✅ Validation passed: {reason}")
+            pass
         else:
-            print(f"❌ Validation failed: {reason}")
-            print("\n   Use --force to skip validation and promote anyway")
             sys.exit(1)
     else:
-        print("\n⚠️  Skipping validation (--force flag set)")
+        pass
 
     # Get approval (unless auto-approve or dry-run)
     if not args.auto_approve and not args.dry_run:
-        print(f"\n❓ Promote {args.model_name} v{candidate['version']} to Production?")
         response = input("   Type 'yes' to confirm: ")
 
         if response.lower() != "yes":
-            print("❌ Promotion cancelled by user")
             sys.exit(0)
 
     # Promote model
@@ -478,14 +430,7 @@ Examples:
 
     if success:
         if not args.dry_run:
-            print("\n🎉 Model promotion complete!")
-            print(f"\n   Model: {args.model_name}")
-            print(f"   Version: {candidate['version']}")
-            print(f"   Stage: Production")
-            print(f"\n   Load with:")
-            print(
-                f"   model = mlflow.pyfunc.load_model('models:/{args.model_name}/Production')"
-            )
+            pass
     else:
         sys.exit(1)
 

@@ -1,14 +1,15 @@
-"""
-Ensemble methods for demand forecasting using scikit-learn.
-"""
+"""Ensemble methods for demand forecasting using scikit-learn."""
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+import time
+from typing import Any
 
+import joblib
 import numpy as np
+import pandas as pd
 from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
-from sklearn.ensemble import RandomForestRegressor, StackingRegressor
+from sklearn.ensemble import RandomForestRegressor, StackingRegressor, VotingRegressor
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import cross_val_score
@@ -20,22 +21,22 @@ logger = logging.getLogger(__name__)
 class EnsembleManager:
     """Manage ensemble methods for demand forecasting."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize ensemble manager."""
         self.ensemble = None
-        self.base_models = {}
+        self.base_models: dict[str, Any] = {}
         self.meta_model = None
-        self.ensemble_type = None
+        self.ensemble_type: str | None = None
 
     def create_stacking_ensemble(
         self,
-        catboost_params: Dict[str, Any] = None,
-        rf_params: Dict[str, Any] = None,
-        xgb_params: Dict[str, Any] = None,
-        lgbm_params: Dict[str, Any] = None,
+        catboost_params: dict[str, Any] | None = None,
+        rf_params: dict[str, Any] | None = None,
+        xgb_params: dict[str, Any] | None = None,
+        lgbm_params: dict[str, Any] | None = None,
         cv_folds: int = 5,
     ) -> StackingRegressor:
-        """
-        Create a stacking ensemble of multiple models.
+        """Create a stacking ensemble of multiple models.
 
         Args:
             catboost_params: CatBoost hyperparameters
@@ -95,7 +96,10 @@ class EnsembleManager:
             xgb_params = {**default_xgb, **(xgb_params or {})}
             lgbm_params = {**default_lgbm, **(lgbm_params or {})}
 
-            # Create base models
+            # Ensure CatBoost verbose is False
+            catboost_params.update({"verbose": False})
+
+            # Create base models for StackingRegressor
             base_models = [
                 ("catboost", CatBoostRegressor(**catboost_params)),
                 ("rf", RandomForestRegressor(**rf_params)),
@@ -103,7 +107,7 @@ class EnsembleManager:
                 ("lgbm", LGBMRegressor(**lgbm_params)),
             ]
 
-            # Store base models for reference
+            # Store base models for reference (these should be identical to the ones in base_models)
             self.base_models = {
                 "catboost": CatBoostRegressor(**catboost_params),
                 "rf": RandomForestRegressor(**rf_params),
@@ -138,10 +142,9 @@ class EnsembleManager:
             raise
 
     def create_voting_ensemble(
-        self, models: List[Tuple[str, Any]], weights: List[float] = None
-    ) -> Any:
-        """
-        Create a voting ensemble (simplified version).
+        self, models: list[tuple[str, object]], weights: list[float] | None = None
+    ) -> object:
+        """Create a voting ensemble (simplified version).
 
         Args:
             models: List of (name, model) tuples
@@ -151,8 +154,6 @@ class EnsembleManager:
             Voting ensemble implementation
         """
         try:
-            from sklearn.ensemble import VotingRegressor
-
             self.ensemble = VotingRegressor(estimators=models, weights=weights)
 
             self.ensemble_type = "voting"
@@ -161,7 +162,7 @@ class EnsembleManager:
             logger.info(f"Created voting ensemble with {len(models)} models")
             if weights:
                 logger.info(
-                    f"Model weights: {dict(zip([m[0] for m in models], weights))}"
+                    f"Model weights: {dict(zip([m[0] for m in models], weights, strict=False))}"
                 )
 
             return self.ensemble
@@ -171,14 +172,19 @@ class EnsembleManager:
             raise
 
     def train_ensemble(
-        self, X_train, y_train, X_val=None, y_val=None
-    ) -> Dict[str, Any]:
-        """
-        Train the ensemble and individual base models.
+        self,
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        X_val: pd.DataFrame | None = None,
+        y_val: pd.Series | None = None,
+    ) -> dict[str, Any]:
+        """Train the ensemble and individual base models.
 
         Args:
-            X_train, y_train: Training data
-            X_val, y_val: Validation data (optional)
+            X_train: Training features
+            y_train: Training target values
+            X_val: Validation features
+            y_val: Validation target values
 
         Returns:
             Training results
@@ -187,8 +193,6 @@ class EnsembleManager:
             raise ValueError("Ensemble not created. Call create_*_ensemble() first.")
 
         try:
-            import time
-
             start_time = time.time()
 
             # Train ensemble
@@ -280,12 +284,14 @@ class EnsembleManager:
             logger.error(f"Ensemble training failed: {e}")
             raise
 
-    def evaluate_ensemble(self, X_test, y_test) -> Dict[str, Any]:
-        """
-        Evaluate ensemble performance on test set.
+    def evaluate_ensemble(
+        self, X_test: pd.DataFrame, y_test: pd.Series
+    ) -> dict[str, Any]:
+        """Evaluate ensemble performance on test set.
 
         Args:
-            X_test, y_test: Test data
+            X_test: Test features
+            y_test: Test target values
 
         Returns:
             Evaluation results
@@ -294,8 +300,6 @@ class EnsembleManager:
             raise ValueError("Ensemble not trained.")
 
         try:
-            import time
-
             start_time = time.time()
 
             # Make predictions
@@ -381,9 +385,8 @@ class EnsembleManager:
             logger.error(f"Ensemble evaluation failed: {e}")
             raise
 
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """
-        Get feature importance from ensemble components.
+    def get_feature_importance(self) -> dict[str, Any]:
+        """Get feature importance from ensemble components.
 
         Returns:
             Feature importance from base models
@@ -422,12 +425,14 @@ class EnsembleManager:
             logger.error(f"Failed to get feature importance: {e}")
             return {"error": str(e)}
 
-    def cross_validate_ensemble(self, X, y, cv_folds: int = 5) -> Dict[str, Any]:
-        """
-        Perform cross-validation on the ensemble.
+    def cross_validate_ensemble(
+        self, X: pd.DataFrame, y: pd.Series, cv_folds: int = 5
+    ) -> dict[str, Any]:
+        """Perform cross-validation on the ensemble.
 
         Args:
-            X, y: Data for cross-validation
+            X: Features for cross-validation
+            y: Target values for cross-validation
             cv_folds: Number of CV folds
 
         Returns:
@@ -493,14 +498,12 @@ class EnsembleManager:
             logger.error(f"Cross-validation failed: {e}")
             raise
 
-    def save_ensemble(self, filepath: str):
+    def save_ensemble(self, filepath: str) -> None:
         """Save the trained ensemble to disk."""
         if self.ensemble is None:
             raise ValueError("No ensemble to save.")
 
         try:
-            import joblib
-
             joblib.dump(self.ensemble, filepath)
             logger.info(f"Ensemble saved to {filepath}")
 
@@ -508,11 +511,9 @@ class EnsembleManager:
             logger.error(f"Failed to save ensemble: {e}")
             raise
 
-    def load_ensemble(self, filepath: str):
+    def load_ensemble(self, filepath: str) -> None:
         """Load a trained ensemble from disk."""
         try:
-            import joblib
-
             self.ensemble = joblib.load(filepath)
             self.ensemble_type = "loaded"
             logger.info(f"Ensemble loaded from {filepath}")

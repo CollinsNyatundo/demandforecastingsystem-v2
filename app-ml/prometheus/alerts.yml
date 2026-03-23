@@ -1,0 +1,131 @@
+# Prometheus Alerting Rules for Demand Forecasting System
+# AUDIT-H5: Production alerting configuration
+
+groups:
+  - name: model_performance
+    rules:
+      # High prediction latency
+      - alert: HighPredictionLatency
+        expr: histogram_quantile(0.95, rate(model_prediction_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High prediction latency detected"
+          description: "95th percentile prediction latency is above 5 seconds"
+
+      # Model drift detection
+      - alert: ModelDriftDetected
+        expr: drift_score > 0.3
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model drift detected"
+          description: "Data drift score {{ $value }} exceeds threshold 0.3"
+
+      # Low prediction confidence
+      - alert: LowPredictionConfidence
+        expr: avg(prediction_confidence) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low prediction confidence"
+          description: "Average prediction confidence is below 70%"
+
+  - name: service_health
+    rules:
+      # Model server down
+      - alert: ModelServerDown
+        expr: up{job="model-server"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model server is down"
+          description: "Model server has been unreachable for more than 2 minutes"
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "More than 5% of requests are failing with 5xx errors"
+
+      # Service memory usage
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Container memory usage is above 90%"
+
+  - name: data_pipeline
+    rules:
+      # Airflow DAG failure
+      - alert: DAGRunFailed
+        expr: airflow_dag_run_state{state="failed"} > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Airflow DAG run failed"
+          description: "DAG {{ $labels.dag_id }} has failed runs"
+
+      # Stale data detection
+      - alert: StaleDataDetected
+        expr: time() - data_last_updated_timestamp > 86400
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Stale data detected"
+          description: "Data has not been updated in over 24 hours"
+
+      # Data quality validation failure
+      - alert: DataQualityFailure
+        expr: great_expectations_validation_success == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Data quality validation failed"
+          description: "Great Expectations validation has been failing"
+
+  - name: infrastructure
+    rules:
+      # PostgreSQL connection issues
+      - alert: PostgresConnectionsHigh
+        expr: pg_stat_activity_count / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections high"
+          description: "PostgreSQL is using more than 80% of available connections"
+
+      # Redis memory usage
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis is using more than 80% of max memory"
+
+      # MinIO storage usage
+      - alert: MinIOStorageHigh
+        expr: minio_disk_storage_used_bytes / minio_disk_storage_total_bytes > 0.85
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MinIO storage usage high"
+          description: "MinIO storage is above 85% capacity"

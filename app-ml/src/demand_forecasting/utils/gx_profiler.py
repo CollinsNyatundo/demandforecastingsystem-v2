@@ -1,29 +1,27 @@
-"""
-Great Expectations data profiling and validation utilities.
+"""Great Expectations data profiling and validation utilities.
+
 Production-compatible alternative to pandas-profiling.
 """
 
-import logging
 import json
-import pandas as pd
-import numpy as np
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Data quality threshold constants
+ZERO_PERCENTAGE_THRESHOLD = 20
 
 # Great Expectations imports with graceful fallback
 try:
     from great_expectations.data_context import EphemeralDataContext
-    from great_expectations.expectations.core import (
-        ExpectTableColumnsToMatchOrderedList,
-        ExpectColumnValuesToBeOfType,
-        ExpectColumnValuesToNotBeNull,
-        ExpectColumnMinToBeBetween,
-        ExpectColumnMaxToBeBetween,
-        ExpectColumnMeanToBeBetween,
-        ExpectColumnValueZScoresToBeLessThan,
+    from great_expectations.data_context.types.base import (
+        DataContextConfig,
+        InMemoryStoreBackendDefaults,
     )
 
     GX_AVAILABLE = True
@@ -34,11 +32,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def create_gx_data_docs(
+def create_gx_data_docs(  # noqa: C901, PLR0915
     df: pd.DataFrame, dataset_name: str, docs_dir: str = "/opt/airflow/data/docs"
 ) -> str:
-    """
-    Generate Great Expectations Data Docs for a dataset.
+    """Generate Great Expectations Data Docs for a dataset.
 
     Args:
         df: DataFrame to profile
@@ -60,48 +57,38 @@ def create_gx_data_docs(
     docs_path = Path(docs_dir)
     docs_path.mkdir(parents=True, exist_ok=True)
 
-    # Create ephemeral context
-    context = EphemeralDataContext()
-
-    # Create expectation suite
-    suite_name = f"{dataset_name}_suite"
-    suite = context.create_expectation_suite(
-        expectation_suite_name=suite_name, overwrite_existing=True
+    # Create ephemeral context with proper configuration
+    data_context_config = DataContextConfig(
+        store_backend_defaults=InMemoryStoreBackendDefaults()
     )
+    context = EphemeralDataContext(project_config=data_context_config)
+
+    # Create expectation suite name
+    suite_name = f"{dataset_name}_suite"
 
     # Add expectations based on data characteristics
-    batch = context.get_batch(
-        batch_request={
-            "datasource_name": "pandas",
-            "data_connector_name": "default_in_memory_data_connector_name",
-            "data_asset_name": dataset_name,
-            "data": df,
-        }
+    validator = context.get_validator(
+        batch_data=df, create_expectation_suite_with_name=suite_name
     )
 
     # Basic structure expectations
-    suite.add_expectation(
-        ExpectTableColumnsToMatchOrderedList(column_list=list(df.columns))
-    )
+    validator.expect_table_columns_to_match_ordered_list(column_list=list(df.columns))
 
     # Column type expectations
     for col in df.columns:
         dtype_str = str(df[col].dtype)
         if "int" in dtype_str:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="int64")
-            )
+            validator.expect_column_values_to_be_of_type(column=col, type_="int")
         elif "float" in dtype_str:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="float64")
-            )
-        elif "datetime" in dtype_str:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="datetime64[ns]")
-            )
-        else:
-            suite.add_expectation(
-                ExpectColumnValuesToBeOfType(column=col, type_="object")
+            validator.expect_column_values_to_be_of_type(column=col, type_="float")
+        elif "object" in dtype_str:
+            validator.expect_column_values_to_be_of_type(column=col, type_="str")
+
+        # Outlier detection - use correct parameter name
+        if "int" in dtype_str or "float" in dtype_str:
+            validator.expect_column_z_scores_to_be_less_than(
+                column=col,
+                threshold=3.0,  # Correct parameter name
             )
 
     # Numeric column expectations
@@ -109,39 +96,24 @@ def create_gx_data_docs(
     for col in numeric_cols:
         # Non-null expectation
         if df[col].isnull().sum() == 0:
-            suite.add_expectation(ExpectColumnValuesToNotBeNull(column=col))
+            validator.expect_column_values_to_not_be_null(column=col)
 
         # Range expectations
         col_min = df[col].min()
         col_max = df[col].max()
         col_mean = df[col].mean()
-        col_median = df[col].median()
-        col_std = df[col].std()
 
         # Add reasonable range expectations
-        suite.add_expectation(
-            ExpectColumnMinToBeBetween(
-                column=col, min_value=col_min * 0.9, max_value=col_min * 1.1
-            )
+        validator.expect_column_min_to_be_between(
+            column=col, min_value=col_min * 0.9, max_value=col_min * 1.1
         )
 
-        suite.add_expectation(
-            ExpectColumnMaxToBeBetween(
-                column=col, min_value=col_max * 0.9, max_value=col_max * 1.1
-            )
+        validator.expect_column_max_to_be_between(
+            column=col, min_value=col_max * 0.9, max_value=col_max * 1.1
         )
 
-        suite.add_expectation(
-            ExpectColumnMeanToBeBetween(
-                column=col, min_value=col_mean * 0.9, max_value=col_mean * 1.1
-            )
-        )
-
-        # Outlier detection
-        suite.add_expectation(
-            ExpectColumnValueZScoresToBeLessThan(
-                column=col, max_zscore=3.0, mostly=0.95  # Allow 5% outliers
-            )
+        validator.expect_column_mean_to_be_between(
+            column=col, min_value=col_mean * 0.9, max_value=col_mean * 1.1
         )
 
     # Special handling for target column (cnt)
@@ -149,30 +121,26 @@ def create_gx_data_docs(
         cnt_col = df["cnt"]
 
         # Non-negative values
-        suite.add_expectation(
-            ExpectColumnMinToBeBetween(column="cnt", min_value=0, max_value=0)
+        validator.expect_column_min_to_be_between(
+            column="cnt", min_value=0, max_value=0
         )
 
         # Reasonable range for bike counts
-        suite.add_expectation(
-            ExpectColumnMaxToBeBetween(
-                column="cnt",
-                min_value=cnt_col.max() * 0.9,
-                max_value=cnt_col.max() * 1.1,
-            )
+        validator.expect_column_max_to_be_between(
+            column="cnt",
+            min_value=cnt_col.max() * 0.9,
+            max_value=cnt_col.max() * 1.1,
         )
 
         # Check for excessive zeros
         zero_percentage = (cnt_col == 0).sum() / len(cnt_col) * 100
-        if zero_percentage > 20:
+        if zero_percentage > ZERO_PERCENTAGE_THRESHOLD:
             logger.warning(
                 f"High zero percentage in cnt column: {zero_percentage:.1f}%"
             )
 
     # Validate expectations
-    validation_result = context.validate_batch(
-        batch=batch, expectation_suite_name=suite_name
-    )
+    validation_result = validator.validate()
 
     # Generate summary statistics
     summary_stats = {
@@ -186,10 +154,14 @@ def create_gx_data_docs(
         "numeric_summary": {},
         "validation_results": {
             "success": validation_result.success,
-            "statistics": validation_result.statistics,
-            "expectations_count": len(validation_result.results),
+            "statistics": getattr(validation_result, "statistics", {}),
+            "expectations_count": len(getattr(validation_result, "results", [])),
             "failed_expectations": len(
-                [r for r in validation_result.results if not r.success]
+                [
+                    r
+                    for r in getattr(validation_result, "results", [])
+                    if not getattr(r, "success", True)
+                ]
             ),
         },
     }
@@ -203,7 +175,7 @@ def create_gx_data_docs(
         docs_path
         / f"{dataset_name}_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with open(stats_file, "w") as f:
+    with stats_file.open("w") as f:
         json.dump(summary_stats, f, indent=2, default=str)
 
     # Build Data Docs
@@ -224,9 +196,8 @@ def profile_dataset_gx(
     dataset_name: str,
     docs_dir: str = "/opt/airflow/data/docs",
     enable_data_docs: bool = True,
-) -> Optional[str]:
-    """
-    Profile dataset using Great Expectations.
+) -> str | None:
+    """Profile dataset using Great Expectations.
 
     Args:
         df: DataFrame to profile
@@ -244,5 +215,5 @@ def profile_dataset_gx(
     try:
         return create_gx_data_docs(df, dataset_name, docs_dir)
     except Exception as e:
-        logger.error(f"Failed to generate Data Docs for {dataset_name}: {str(e)}")
+        logger.error(f"Failed to generate Data Docs for {dataset_name}: {e!s}")
         raise

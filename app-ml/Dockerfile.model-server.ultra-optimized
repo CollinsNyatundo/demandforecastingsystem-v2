@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Ultra-optimized# Multi-stage build for production model server with cache optimization
+# Multi-stage build for production model server with cache optimization
 FROM python:3.11-slim as builder
 
 # Set working directory
@@ -13,32 +13,24 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.core.txt requirements.ml.txt requirements.framework.txt requirements.airflow.txt ./
+# Copy slim model-server requirements only (NOT the full airflow/kedro requirements)
+# This drastically reduces image size by excluding training-time dependencies
+COPY requirements.model-server.txt ./
 
 # Install Python dependencies with cache mount and timeout
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --timeout=300 --retries=3 --no-cache-dir -r requirements.core.txt
+    pip install --timeout=300 --retries=3 -r requirements.model-server.txt
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --timeout=300 --retries=3 --no-cache-dir -r requirements.ml.txt
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --timeout=300 --retries=3 --no-cache-dir -r requirements.framework.txt
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --timeout=300 --retries=3 --no-cache-dir -r requirements.airflow.txt
-
-# Test stage for running tests
+# Test stage for running model server unit tests
 FROM builder AS test
 
-# Set working directory
 WORKDIR /app
 
-# Copy application code
+# Copy application code and tests
 COPY src/ ./src/
 COPY tests/ ./tests/
-COPY run_tests.py ./
+# run_tests.py lives inside tests/
+COPY tests/run_tests.py ./run_tests.py
 
 # Create test directories
 RUN mkdir -p /app/test_reports
@@ -46,9 +38,6 @@ RUN mkdir -p /app/test_reports
 # Verify pytest is available and install if needed
 RUN python -c "import pytest; print('pytest version:', pytest.__version__)" || \
     pip install --timeout=300 --retries=3 --no-cache-dir pytest==7.4.4 pytest-cov
-
-# Verify all required packages are available
-RUN python -c "import sys; print('Python executable:', sys.executable); import pytest; print('pytest available'); import pandas; print('pandas available')"
 
 # Set test environment
 ENV PYTHONPATH=/app/src
@@ -87,8 +76,8 @@ USER appuser
 # Expose ports
 EXPOSE 8000 8001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check — start_period allows time for model loading (catboost can take 10-30s)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Environment variables

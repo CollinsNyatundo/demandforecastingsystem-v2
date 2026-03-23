@@ -1,33 +1,26 @@
 #!/usr/bin/env python3
-"""
-Setup Airflow Connections for MinIO and Remote Logging
-Run this script inside the airflow-scheduler container
+"""Setup Airflow Connections for MinIO and Remote Logging
+Run this script inside the airflow-scheduler container.
 """
 
 import subprocess
 import sys
 
 
-def run_command(cmd, check=True):
-    """Run a command and return the result"""
+def run_command(cmd, check=True) -> bool:
+    """Run a command and return the result."""
     result = subprocess.run(cmd, capture_output=True, text=True)
-    if check and result.returncode != 0:
-        print(f"❌ Error: {result.stderr}")
-        return False
-    return True
+    return not (check and result.returncode != 0)
 
 
 def delete_connection(conn_id):
-    """Delete an existing connection if it exists"""
-    print(f"Checking for existing connection: {conn_id}")
+    """Delete an existing connection if it exists."""
     cmd = ["airflow", "connections", "delete", conn_id]
     run_command(cmd, check=False)
 
 
-def create_minio_connection():
-    """Create MinIO S3 connection for remote logging"""
-    print("\n📦 Creating MinIO S3 connection...")
-
+def create_minio_connection() -> bool:
+    """Create MinIO S3 connection for remote logging."""
     # Delete existing connection
     delete_connection("minio_s3")
 
@@ -49,18 +42,11 @@ def create_minio_connection():
         '{"endpoint_url": "http://minio:9000", "aws_access_key_id": "minioadmin", "aws_secret_access_key": "minioadmin"}',
     ]
 
-    if run_command(cmd):
-        print("✅ MinIO S3 connection created: minio_s3")
-        return True
-    else:
-        print("❌ Failed to create MinIO S3 connection")
-        return False
+    return bool(run_command(cmd))
 
 
-def create_airflow_logs_bucket():
-    """Create airflow-logs bucket in MinIO"""
-    print("\n📦 Creating airflow-logs bucket in MinIO...")
-
+def create_airflow_logs_bucket() -> bool:
+    """Create airflow-logs bucket in MinIO."""
     # Use mc (MinIO Client) to create bucket
     cmd = [
         "sh",
@@ -70,37 +56,19 @@ def create_airflow_logs_bucket():
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True, shell=False)
-    if "already exists" in result.stdout or result.returncode == 0:
-        print("✅ airflow-logs bucket ready")
-        return True
-    else:
-        print(
-            "⚠️  Could not create bucket (may need to run manually in minio container)"
-        )
-        return False
+    return bool("already exists" in result.stdout or result.returncode == 0)
 
 
-def verify_connections():
-    """Verify connections were created"""
-    print("\n🔍 Verifying connections...")
+def verify_connections() -> bool:
+    """Verify connections were created."""
     cmd = ["airflow", "connections", "list"]
     result = subprocess.run(cmd, capture_output=True, text=True)
 
-    if "minio_s3" in result.stdout:
-        print("✅ Connection verified: minio_s3")
-        return True
-    else:
-        print("❌ Connection not found")
-        return False
+    return "minio_s3" in result.stdout
 
 
-def main():
-    """Main setup function"""
-    print("=" * 60)
-    print("   Airflow Connections Setup")
-    print("=" * 60)
-    print()
-
+def main() -> int:
+    """Main setup function."""
     success = True
 
     # Create MinIO S3 connection
@@ -114,27 +82,10 @@ def main():
     if not verify_connections():
         success = False
 
-    print()
-    print("=" * 60)
     if success:
-        print("✅ Airflow Connections Setup Complete!")
+        pass
     else:
-        print("⚠️  Setup completed with warnings")
-    print("=" * 60)
-    print()
-    print("📝 Next Steps:")
-    print("1. Copy .env.template to .env")
-    print("2. Add your Gmail App Password to .env")
-    print("3. Restart services: docker-compose restart")
-    print()
-    print("To verify connections:")
-    print("  docker-compose exec airflow-scheduler airflow connections list")
-    print()
-    print("To create airflow-logs bucket manually (if needed):")
-    print(
-        '  docker-compose exec minio sh -c "mc alias set myminio http://localhost:9000 minioadmin minioadmin && mc mb myminio/airflow-logs"'
-    )
-    print()
+        pass
 
     return 0 if success else 1
 

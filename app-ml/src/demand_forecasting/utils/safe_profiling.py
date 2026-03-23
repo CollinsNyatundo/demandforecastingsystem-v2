@@ -1,12 +1,13 @@
 # Secure Data Profiling with pandas-profiling
 # Alternative to ydata-profiling with better security
 
-import pandas as pd
-import numpy as np
-from typing import Dict, Any, Optional
+import json
 import warnings
 from pathlib import Path
-import json
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 # Try to import pandas-profiling, fallback to basic profiling if not available
 try:
@@ -15,17 +16,18 @@ try:
     PANDAS_PROFILING_AVAILABLE = True
 except ImportError:
     PANDAS_PROFILING_AVAILABLE = False
-    warnings.warn("pandas-profiling not available. Using basic profiling instead.")
+    warnings.warn(
+        "pandas-profiling not available. Using basic profiling instead.", stacklevel=2
+    )
 
 
 def safe_data_profile(
     df: pd.DataFrame,
     sample_size: int = 10000,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
     profile_title: str = "Data Profile Report",
-) -> Dict[str, Any]:
-    """
-    Generate a secure data profile using pandas-profiling or basic analysis.
+) -> dict[str, Any]:
+    """Generate a secure data profile using pandas-profiling or basic analysis.
 
     Args:
         df: DataFrame to profile
@@ -39,17 +41,18 @@ def safe_data_profile(
     # Sample large datasets to prevent resource exhaustion
     if len(df) > sample_size:
         df = df.sample(n=sample_size, random_state=42)
-        warnings.warn(f"Dataset sampled to {sample_size} rows for profiling")
+        warnings.warn(
+            f"Dataset sampled to {sample_size} rows for profiling", stacklevel=2
+        )
 
     if PANDAS_PROFILING_AVAILABLE:
         return _pandas_profiling_report(df, output_dir, profile_title)
-    else:
-        return _basic_profiling_report(df)
+    return _basic_profiling_report(df)
 
 
 def _pandas_profiling_report(
-    df: pd.DataFrame, output_dir: Optional[str], title: str
-) -> Dict[str, Any]:
+    df: pd.DataFrame, output_dir: str | None, title: str
+) -> dict[str, Any]:
     """Generate pandas-profiling report with security constraints."""
     try:
         # Configure profiling with security settings
@@ -94,7 +97,7 @@ def _pandas_profiling_report(
                 "memory_usage": int(df.memory_usage(deep=True).sum()),
             }
 
-            with open(json_file, "w") as f:
+            with Path(json_file).open("w") as f:
                 json.dump(summary, f, indent=2, default=str)
 
         return {
@@ -107,11 +110,14 @@ def _pandas_profiling_report(
         }
 
     except Exception as e:
-        warnings.warn(f"pandas-profiling failed: {e}. Falling back to basic profiling.")
+        warnings.warn(
+            f"pandas-profiling failed: {e}. Falling back to basic profiling.",
+            stacklevel=2,
+        )
         return _basic_profiling_report(df)
 
 
-def _basic_profiling_report(df: pd.DataFrame) -> Dict[str, Any]:
+def _basic_profiling_report(df: pd.DataFrame) -> dict[str, Any]:
     """Generate basic profiling report when pandas-profiling is not available."""
     profile = {
         "status": "success",
@@ -150,9 +156,8 @@ def _basic_profiling_report(df: pd.DataFrame) -> Dict[str, Any]:
     return profile
 
 
-def quick_profile_summary(df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Generate a quick profiling summary for monitoring purposes.
+def quick_profile_summary(df: pd.DataFrame) -> dict[str, Any]:
+    """Generate a quick profiling summary for monitoring purposes.
 
     Args:
         df: DataFrame to profile
