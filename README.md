@@ -2,6 +2,7 @@
 
 [![CI/CD Pipeline](https://github.com/CollinsNyatundo/demandforecastingsystem-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/CollinsNyatundo/demandforecastingsystem-v2/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Powered by Kedro](https://img.shields.io/badge/powered_by-kedro-ffc900?logo=kedro)](https://kedro.org)
 
 UrbanFlow Intelligence is a production-grade MLOps ecosystem designed for high-precision demand forecasting. It integrates advanced machine learning engineering with automated orchestration and real-time monitoring to provide a robust solution for urban mobility and logistics optimization.
 
