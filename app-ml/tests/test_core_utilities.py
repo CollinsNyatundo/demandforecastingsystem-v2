@@ -114,6 +114,14 @@ class TestDatasetMonitorInit(unittest.TestCase):
     def setUp(self):
         if not DATASET_MONITOR_AVAILABLE:
             self.skipTest("DatasetMonitor not available")
+        import tempfile
+
+        self._temp_dir = tempfile.TemporaryDirectory()
+        self.metrics_dir = self._temp_dir.name
+
+    def tearDown(self):
+        if hasattr(self, "_temp_dir"):
+            self._temp_dir.cleanup()
 
     @patch("demand_forecasting.utils.dataset_monitor.s3fs.S3FileSystem")
     def test_init_with_explicit_credentials(self, mock_s3fs):
@@ -122,6 +130,7 @@ class TestDatasetMonitorInit(unittest.TestCase):
         mock_s3fs.return_value = mock_fs
 
         monitor = DatasetMonitor(
+            metrics_dir=self.metrics_dir,
             s3_endpoint="http://test:9000",
             s3_key="test_key",
             s3_secret="test_secret",
@@ -150,6 +159,7 @@ class TestDatasetMonitorInit(unittest.TestCase):
         mock_s3fs.return_value = mock_fs
 
         monitor = DatasetMonitor(
+            metrics_dir=self.metrics_dir,
             s3_endpoint="http://test:9000",
             s3_key=None,  # Should use env default
             s3_secret=None,  # Should use env default
@@ -169,26 +179,26 @@ class TestDatasetMonitorInit(unittest.TestCase):
     @patch("demand_forecasting.utils.dataset_monitor.s3fs.S3FileSystem")
     @patch.dict(os.environ, {}, clear=True)
     def test_init_with_default_credentials(self, mock_s3fs):
-        """Test initialization falls back to default credentials."""
+        """Test initialization avoids hardcoded credentials when env vars are unset."""
         mock_fs = Mock()
         mock_s3fs.return_value = mock_fs
 
         monitor = DatasetMonitor(
+            metrics_dir=self.metrics_dir,
             s3_endpoint="http://test:9000",
-            s3_key=None,  # Should use default
-            s3_secret=None,  # Should use default
+            s3_key=None,
+            s3_secret=None,
             s3_bucket="test-bucket",
         )
 
-        # Verify S3 filesystem was initialized with default credentials
         mock_s3fs.assert_called_once_with(
             client_kwargs={"endpoint_url": "http://test:9000"},
-            key="minioadmin",
-            secret="minioadmin",
+            key=None,
+            secret=None,
         )
 
-        assert monitor.s3_key == "minioadmin"
-        assert monitor.s3_secret == "minioadmin"
+        assert monitor.s3_key is None
+        assert monitor.s3_secret is None
 
     @patch("demand_forecasting.utils.dataset_monitor.s3fs.S3FileSystem")
     def test_init_s3_failure_handling(self, mock_s3fs):
@@ -196,7 +206,10 @@ class TestDatasetMonitorInit(unittest.TestCase):
         mock_s3fs.side_effect = Exception("S3 connection failed")
 
         monitor = DatasetMonitor(
-            s3_endpoint="http://test:9000", s3_key="test_key", s3_secret="test_secret"
+            metrics_dir=self.metrics_dir,
+            s3_endpoint="http://test:9000",
+            s3_key="test_key",
+            s3_secret="test_secret",
         )
 
         # Should handle S3 failure gracefully
@@ -205,6 +218,12 @@ class TestDatasetMonitorInit(unittest.TestCase):
 
 class TestDAGImport(unittest.TestCase):
     """Test DAG import smoke tests."""
+
+    def setUp(self):
+        try:
+            import airflow  # noqa: F401
+        except ImportError:
+            self.skipTest("apache-airflow not installed in unit test environment")
 
     def test_enhanced_dag_import(self):
         """Test that enhanced DAG can be imported without errors."""
@@ -288,12 +307,15 @@ class TestIntegrationSmoke(unittest.TestCase):
         mock_fs = Mock()
         mock_s3fs.return_value = mock_fs
 
-        monitor = DatasetMonitor()
+        import tempfile
 
-        # Should use environment variables
-        assert monitor.s3_key == "test_user"
-        assert monitor.s3_secret == "test_pass"
-        assert monitor.s3_endpoint == "http://test:9000"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monitor = DatasetMonitor(metrics_dir=tmpdir)
+
+            # Should use environment variables
+            assert monitor.s3_key == "test_user"
+            assert monitor.s3_secret == "test_pass"
+            assert monitor.s3_endpoint == "http://test:9000"
 
 
 if __name__ == "__main__":

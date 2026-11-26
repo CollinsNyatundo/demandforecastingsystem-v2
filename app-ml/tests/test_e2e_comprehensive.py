@@ -20,8 +20,11 @@ import sys
 import time
 from datetime import datetime
 
+import pytest
 import requests
 from dotenv import load_dotenv
+
+pytestmark = pytest.mark.integration
 
 # Load environment variables from .env file
 load_dotenv()

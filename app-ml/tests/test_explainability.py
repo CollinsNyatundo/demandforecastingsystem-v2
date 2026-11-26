@@ -34,15 +34,10 @@ class TestModelExplainer:
 
     def test_linear_explainer_initialization(self, sample_data: pd.DataFrame):
         """Test SHAP LinearExplainer initialization."""
+        from sklearn.linear_model import LinearRegression
 
-        # Create a simple linear model
-        class LinearModel:
-            def predict(self, X):
-                if isinstance(X, np.ndarray):
-                    return np.sum(X, axis=1, keepdims=True)
-                return np.sum(X.values, axis=1, keepdims=True)
-
-        linear_model = LinearModel()
+        y = sample_data.sum(axis=1)
+        linear_model = LinearRegression().fit(sample_data, y)
         explainer = ModelExplainer(linear_model, sample_data, model_type="linear")
 
         assert explainer.model_type == "linear"
@@ -59,13 +54,12 @@ class TestModelExplainer:
 
     def test_initialization_with_small_data(self):
         """Test initialization with small dataset."""
+        from sklearn.tree import DecisionTreeRegressor
+
         small_data = pd.DataFrame({"feature1": [1.0, 2.0], "feature2": [3.0, 4.0]})
-
-        class SimpleModel:
-            def predict(self, X):
-                return np.array([[5.0], [6.0]])
-
-        model = SimpleModel()
+        model = DecisionTreeRegressor(max_depth=2, random_state=42).fit(
+            small_data, [5.0, 6.0]
+        )
         explainer = ModelExplainer(model, small_data)
 
         assert explainer.shap_values.shape[0] == 2
@@ -73,13 +67,14 @@ class TestModelExplainer:
 
     def test_initialization_with_single_feature(self):
         """Test initialization with single feature dataset."""
-        single_feature_data = pd.DataFrame({"feature1": np.random.normal(0, 1, 100)})
+        from sklearn.tree import DecisionTreeRegressor
 
-        class SimpleModel:
-            def predict(self, X):
-                return np.random.normal(0, 1, len(X)).reshape(-1, 1)
-
-        model = SimpleModel()
+        rng = np.random.default_rng(42)
+        single_feature_data = pd.DataFrame({"feature1": rng.normal(0, 1, 100)})
+        y = single_feature_data["feature1"] * 2.0 + rng.normal(0, 0.1, 100)
+        model = DecisionTreeRegressor(max_depth=3, random_state=42).fit(
+            single_feature_data, y
+        )
         explainer = ModelExplainer(model, single_feature_data)
 
         assert explainer.shap_values.shape[1] == 1
@@ -145,7 +140,7 @@ class TestGlobalImportance:
         self, sample_data: pd.DataFrame, sample_model
     ):
         """Test global importance with top_n larger than features."""
-        explainer = ModelExplainer(sample_model, sample_model)
+        explainer = ModelExplainer(sample_model, sample_data)
         all_importance = explainer.global_importance(top_n=100)
 
         # Should return all features
@@ -210,7 +205,7 @@ class TestLocalExplanations:
     ):
         """Test explanation with custom feature names."""
         explainer = ModelExplainer(sample_model, sample_data)
-        custom_names = ["f1", "f2", "f3", "f4", "f5"]
+        custom_names = [f"f{i + 1}" for i in range(len(sample_data.columns))]
 
         explanation = explainer.explain_prediction(
             sample_idx=0, feature_names=custom_names
@@ -237,7 +232,7 @@ class TestLocalExplanations:
         self, sample_data: pd.DataFrame, sample_model
     ):
         """Test feature importance ranking in local explanations."""
-        explainer = ModelExplainer(sample_model, sample_model)
+        explainer = ModelExplainer(sample_model, sample_data)
         explanation = explainer.explain_prediction(sample_idx=0)
 
         feature_importance = explanation["feature_importance"]
@@ -330,42 +325,40 @@ class TestEdgeCases:
 
     def test_multiclass_model(self):
         """Test explainer with multiclass model."""
+        from sklearn.tree import DecisionTreeClassifier
 
-        # Create multiclass model
-        class MulticlassModel:
-            def predict(self, X):
-                return np.random.choice([0, 1, 2], len(X))
-
+        rng = np.random.default_rng(42)
         multiclass_data = pd.DataFrame(
             {
-                "feature1": np.random.normal(0, 1, 100),
-                "feature2": np.random.normal(0, 1, 100),
+                "feature1": rng.normal(0, 1, 100),
+                "feature2": rng.normal(0, 1, 100),
             }
         )
-
-        model = MulticlassModel()
+        y = rng.choice([0, 1, 2], 100)
+        model = DecisionTreeClassifier(max_depth=3, random_state=42).fit(
+            multiclass_data, y
+        )
         explainer = ModelExplainer(model, multiclass_data)
 
         # Should handle multiclass case
         assert explainer.shap_values is not None
-        # SHAP values might be list for multiclass
-        if isinstance(explainer.shap_values, list):
-            assert len(explainer.shap_values) == 3  # 3 classes
+        assert explainer.shap_values.shape[0] == len(multiclass_data)
 
     def test_constant_features(self):
         """Test explainer with constant features."""
+        from sklearn.tree import DecisionTreeRegressor
+
+        rng = np.random.default_rng(42)
         constant_data = pd.DataFrame(
             {
-                "constant_feature": [42] * 100,
-                "varying_feature": np.random.normal(0, 1, 100),
+                "constant_feature": [42.0] * 100,
+                "varying_feature": rng.normal(0, 1, 100),
             }
         )
-
-        class SimpleModel:
-            def predict(self, X):
-                return np.random.normal(0, 1, len(X)).reshape(-1, 1)
-
-        model = SimpleModel()
+        y = constant_data["varying_feature"] * 3.0 + rng.normal(0, 0.1, 100)
+        model = DecisionTreeRegressor(max_depth=3, random_state=42).fit(
+            constant_data, y
+        )
         explainer = ModelExplainer(model, constant_data)
 
         # Should handle constant features
@@ -380,22 +373,20 @@ class TestEdgeCases:
 
     def test_highly_correlated_features(self):
         """Test explainer with highly correlated features."""
-        base_feature = np.random.normal(0, 1, 100)
+        from sklearn.linear_model import Ridge
+
+        rng = np.random.default_rng(42)
+        base_feature = rng.normal(0, 1, 100)
         correlated_data = pd.DataFrame(
             {
                 "feature1": base_feature,
-                "feature2": base_feature
-                + np.random.normal(0, 0.01, 100),  # Highly correlated
-                "feature3": np.random.normal(0, 1, 100),  # Independent
+                "feature2": base_feature + rng.normal(0, 0.01, 100),
+                "feature3": rng.normal(0, 1, 100),
             }
         )
-
-        class SimpleModel:
-            def predict(self, X):
-                return np.sum(X, axis=1, keepdims=True)
-
-        model = SimpleModel()
-        explainer = ModelExplainer(model, correlated_data)
+        y = correlated_data["feature1"] + correlated_data["feature2"]
+        model = Ridge(alpha=1.0).fit(correlated_data, y)
+        explainer = ModelExplainer(model, correlated_data, model_type="linear")
 
         # Should handle correlated features
         assert explainer.shap_values is not None
@@ -418,18 +409,14 @@ class TestEdgeCases:
         """Test performance with large dataset."""
         import time
 
+        from sklearn.tree import DecisionTreeRegressor
+
+        rng = np.random.default_rng(42)
         large_data = pd.DataFrame(
-            {
-                f"feature_{i}": np.random.normal(0, 1, 10000)
-                for i in range(20)  # 20 features, 10k samples
-            }
+            {f"feature_{i}": rng.normal(0, 1, 10000) for i in range(20)}
         )
-
-        class SimpleModel:
-            def predict(self, X):
-                return np.random.normal(0, 1, len(X)).reshape(-1, 1)
-
-        model = SimpleModel()
+        y = large_data["feature_0"] + large_data["feature_1"]
+        model = DecisionTreeRegressor(max_depth=3, random_state=42).fit(large_data, y)
 
         start_time = time.time()
         explainer = ModelExplainer(model, large_data)
@@ -454,23 +441,15 @@ class TestEdgeCases:
         import os
 
         import psutil
+        from sklearn.tree import DecisionTreeRegressor
 
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss
 
-        # Create moderately large dataset
-        data = pd.DataFrame(
-            {
-                f"feature_{i}": np.random.normal(0, 1, 5000)
-                for i in range(10)  # 10 features, 5k samples
-            }
-        )
-
-        class SimpleModel:
-            def predict(self, X):
-                return np.random.normal(0, 1, len(X)).reshape(-1, 1)
-
-        model = SimpleModel()
+        rng = np.random.default_rng(42)
+        data = pd.DataFrame({f"feature_{i}": rng.normal(0, 1, 5000) for i in range(10)})
+        y = data["feature_0"] * 2.0
+        model = DecisionTreeRegressor(max_depth=3, random_state=42).fit(data, y)
         ModelExplainer(model, data)
 
         final_memory = process.memory_info().rss
@@ -493,7 +472,9 @@ class TestEdgeCases:
 
         # SHAP values should be identical (deterministic)
         np.testing.assert_array_almost_equal(
-            exp1["shap_values"], exp2["shap_values"], decimal=10
+            list(exp1["shap_values"].values()),
+            list(exp2["shap_values"].values()),
+            decimal=10,
         )
 
     def test_explanation_sum_to_prediction(
@@ -504,7 +485,7 @@ class TestEdgeCases:
         explanation = explainer.explain_prediction(sample_idx=0)
 
         # SHAP values + base value should approximately equal prediction
-        shap_sum = np.sum(explanation["shap_values"])
+        shap_sum = sum(explanation["shap_values"].values())
         base_value = explanation["base_value"]
         prediction = explanation["prediction"]
 

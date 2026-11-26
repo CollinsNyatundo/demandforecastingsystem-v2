@@ -14,6 +14,8 @@ import time
 import pytest
 import requests
 
+pytestmark = pytest.mark.integration
+
 
 class TestE2ESystem:
     """End-to-end system tests"""

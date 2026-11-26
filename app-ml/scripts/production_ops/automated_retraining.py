@@ -125,19 +125,22 @@ class RetrainingScheduler:
         self.airflow_user = os.getenv("AIRFLOW_USERNAME", "admin")
         self.airflow_password = os.getenv("AIRFLOW_PASSWORD", "admin")
 
-        # Create engine with connection pooling (pg-aiguide best practices)
-        self.engine = create_engine(
-            self.storage_url,
-            poolclass=QueuePool,
-            pool_size=3,
-            max_overflow=5,
-            pool_pre_ping=True,
-            pool_recycle=3600,
-            connect_args={
-                "connect_timeout": 10,
-                "options": "-c statement_timeout=30000",
-            },
-        )
+        # Create engine with connection pooling (PostgreSQL) or lightweight engine (SQLite)
+        if self.storage_url.startswith("sqlite"):
+            self.engine = create_engine(self.storage_url)
+        else:
+            self.engine = create_engine(
+                self.storage_url,
+                poolclass=QueuePool,
+                pool_size=3,
+                max_overflow=5,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+                connect_args={
+                    "connect_timeout": 10,
+                    "options": "-c statement_timeout=30000",
+                },
+            )
 
         # Create tables if they don't exist
         Base.metadata.create_all(self.engine)
@@ -395,6 +398,9 @@ class RetrainingScheduler:
                 "should_trigger": False,
                 "reason": "drift_based",
                 "details": f"Error: {e!s}",
+                "features_with_drift": [],
+                "n_features": 0,
+                "threshold": self.drift_threshold,
                 "error": str(e),
             }
         finally:

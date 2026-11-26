@@ -133,9 +133,9 @@ def test_fastapi_endpoints():
         headers={"X-API-Key": "test_key_123"},
         json={
             "features": {
-                "temp": 20.0,
-                "humidity": 50.0,
-                "wind_speed": 10.0,
+                "temp": 0.5,
+                "humidity": 0.5,
+                "wind_speed": 0.2,
                 "hour": 12,
                 "day_of_week": 3,
             }
@@ -241,9 +241,9 @@ def test_rate_limiting():
         headers={"X-API-Key": "test_key_123", "X-Forwarded-For": "192.168.1.201"},
         json={
             "features": {
-                "temp": 20.0,
-                "humidity": 50.0,
-                "wind_speed": 10.0,
+                "temp": 0.5,
+                "humidity": 0.5,
+                "wind_speed": 0.2,
                 "hour": 12,
                 "day_of_week": 3,
             }

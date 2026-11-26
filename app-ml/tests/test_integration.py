@@ -5,6 +5,7 @@ Tests end-to-end workflows, MLOps integration, data pipelines,
 and system-wide scenarios including failure recovery.
 """
 
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -41,45 +42,61 @@ class TestEndToEndWorkflow:
         study = optuna.create_study(directions=["minimize"])
         trial = study.ask()
 
-        # Mock MLflow for model saving
-        with patch("mlflow.catboost.log_model"):
-            # Train model
-            from catboost import CatBoostRegressor
+        # Mock MLflow for model saving (use local temp tracking URI and clean run lifecycle)
+        prev_uri = mlflow.get_tracking_uri()
+        mlflow.set_tracking_uri(f"sqlite:///{temp_directory}/e2e_mlflow.db")
+        try:
+            with patch("mlflow.catboost.log_model"), mlflow.start_run():
+                # Train model
+                from catboost import CatBoostRegressor
 
-            model = CatBoostRegressor(
-                iterations=100,
-                learning_rate=trial.suggest_float("learning_rate", 0.01, 0.3),
-                depth=trial.suggest_int("depth", 3, 8),
-                verbose=False,
-                train_dir="/tmp/catboost_info",  # Use writable temp directory
-            )
-            model.fit(X, y)
+                model = CatBoostRegressor(
+                    iterations=100,
+                    learning_rate=trial.suggest_float("learning_rate", 0.01, 0.3),
+                    depth=trial.suggest_int("depth", 3, 8),
+                    verbose=False,
+                    allow_writing_files=False,
+                )
+                model.fit(X, y)
 
-            # Log to MLflow
-            mlflow.log_params(trial.params)
-            mlflow.log_metrics({"rmse": 50.0})
-            mlflow.catboost.log_model(model, "model")
+                # Log to MLflow
+                mlflow.log_params(trial.params)
+                mlflow.log_metrics({"rmse": 50.0})
+                mlflow.catboost.log_model(model, "model")
+        finally:
+            mlflow.set_tracking_uri(prev_uri)
 
         # 3. Test model serving
-        with patch(
-            "demand_forecasting.serving.model_server.mlflow.pyfunc.load_model"
-        ) as mock_load:
-            mock_load.return_value = model
+        from demand_forecasting.serving import model_server as ms
 
+        with (
+            patch.dict(ms.ml_models, {"production": model}, clear=True),
+            patch.dict(
+                ms.feature_metadata,
+                {"feature_names": list(X.columns)},
+                clear=True,
+            ),
+            patch.dict(os.environ, {"VALID_API_KEYS": "integration-test-key"}),
+        ):
+            ms.api_key_manager.valid_key_hashes = ms.api_key_manager._load_api_key_hashes()
             client = TestClient(model_server_app)
 
-            # Test prediction
+            # Test prediction with normalized weather features and valid API key
             request_data = {
                 "features": {
-                    "temp": 20.0,
-                    "humidity": 60.0,
-                    "wind_speed": 5.0,
+                    "temp": 0.5,
+                    "humidity": 0.6,
+                    "wind_speed": 0.15,
                     "hour": 14,
                     "day_of_week": 3,
                 }
             }
 
-            response = client.post("/predict", json=request_data)
+            response = client.post(
+                "/predict",
+                json=request_data,
+                headers={"X-API-Key": "integration-test-key"},
+            )
 
             assert response.status_code == 200
             prediction_data = response.json()
@@ -175,7 +192,7 @@ class TestEndToEndWorkflow:
 
         assert isinstance(local_explanation, dict)
         assert "shap_values" in local_explanation
-        assert "feature_importance" in local_explanation
+        assert "top_contributors" in local_explanation
 
     def test_data_leakage_detection(self, sample_data: pd.DataFrame):
         """Test that feature engineering prevents data leakage.
@@ -363,38 +380,36 @@ class TestSystemResilience:
 
     def test_model_loading_failure_recovery(self, sample_data: pd.DataFrame):
         """Test system recovery when model loading fails."""
-        # Mock MLflow failure
+        # Mock MLflow failure and empty loaded models
+        from demand_forecasting.serving import model_server as ms
+
         with (
             patch(
                 "mlflow.pyfunc.load_model", side_effect=Exception("MLflow unavailable")
             ),
             patch("joblib.load", side_effect=Exception("Local model unavailable")),
+            patch.dict(ms.ml_models, {}, clear=True),
+            patch.dict(os.environ, {"VALID_API_KEYS": "integration-test-key"}),
         ):
+            ms.api_key_manager.valid_key_hashes = ms.api_key_manager._load_api_key_hashes()
             # Test graceful degradation
+            client = TestClient(model_server_app)
+            response = client.post(
+                "/predict",
+                headers={"X-API-Key": "integration-test-key"},
+                json={
+                    "features": {
+                        "temp": 0.5,
+                        "humidity": 0.6,
+                        "wind_speed": 0.15,
+                        "hour": 14,
+                        "day_of_week": 3,
+                    }
+                },
+            )
 
-            # Should handle loading failures gracefully
-            try:
-                # This should fail gracefully
-                client = TestClient(model_server_app)
-                response = client.post(
-                    "/predict",
-                    json={
-                        "features": {
-                            "temp": 20.0,
-                            "humidity": 60.0,
-                            "wind_speed": 5.0,
-                            "hour": 14,
-                            "day_of_week": 3,
-                        }
-                    },
-                )
-
-                # Should return error, not crash
-                assert response.status_code in [500, 503]
-
-            except Exception as e:
-                # Should be a handled exception, not a crash
-                assert "model" in str(e).lower()
+            # Should return 503 Service Unavailable, not crash
+            assert response.status_code in [500, 503]
 
     def test_data_quality_robustness(self):
         """Test system robustness to data quality issues."""
@@ -487,7 +502,9 @@ class TestSystemResilience:
 
                 from catboost import CatBoostRegressor
 
-                model = CatBoostRegressor(iterations=50, verbose=False, train_dir="/tmp/catboost_info")
+                model = CatBoostRegressor(
+                    iterations=50, verbose=False, allow_writing_files=False
+                )
                 model.fit(X, y)
                 results.append("training_complete")
             except Exception as e:
@@ -508,7 +525,9 @@ class TestSystemResilience:
 
                 from catboost import CatBoostRegressor
 
-                model = CatBoostRegressor(iteratives=50, verbose=False)
+                model = CatBoostRegressor(
+                    iterations=50, verbose=False, allow_writing_files=False
+                )
                 model.fit(X, y)
 
                 ModelExplainer(model, X)
@@ -546,7 +565,9 @@ class TestPerformanceBenchmarks:
 
         from catboost import CatBoostRegressor
 
-        model = CatBoostRegressor(iterations=100, verbose=False, train_dir=\ /tmp/catboost_info\)
+        model = CatBoostRegressor(
+            iterations=100, verbose=False, allow_writing_files=False
+        )
         model.fit(X, y)
 
         # Benchmark prediction latency
@@ -653,7 +674,7 @@ class TestPerformanceBenchmarks:
 class TestSystemConfiguration:
     """Test system configuration and deployment scenarios."""
 
-    def test_configuration_validation(self):
+    def test_configuration_validation(self, sample_data: pd.DataFrame):
         """Test system configuration validation."""
         # Test valid configuration
         valid_config = {
@@ -704,10 +725,12 @@ class TestSystemConfiguration:
             assert os.environ.get("MLFLOW_TRACKING_URI") == "http://mlflow:5000"
             assert os.environ.get("POSTGRES_HOST") == "postgres"
 
-            # Test component initialization with Docker env
+            # Test component initialization with Docker env (restore URI afterward)
+            prev_uri = mlflow.get_tracking_uri()
             try:
-                # This would typically connect to Docker services
                 mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))
-                assert True  # If no exception, Docker compatibility is OK
+                assert mlflow.get_tracking_uri() == "http://mlflow:5000"
             except Exception:
                 pytest.skip("Docker services not available for testing")
+            finally:
+                mlflow.set_tracking_uri(prev_uri)

@@ -5,7 +5,10 @@ Tests all Docker services without requiring pytest.
 
 import sys
 
+import pytest
 import requests
+
+pytestmark = pytest.mark.integration
 
 
 class Colors:

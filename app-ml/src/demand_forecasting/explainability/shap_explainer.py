@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import shap
+from matplotlib.figure import Figure as MatplotlibFigure
 from plotly.graph_objects import Figure
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,11 @@ class ModelExplainer:
             data: Reference dataset for explanation
             model_type: Type of model ('tree', 'linear', 'deep', etc.)
         """
+        if not hasattr(model, "predict"):
+            raise ValueError("Model must implement a 'predict' method")
+        if data is None or not isinstance(data, pd.DataFrame) or data.empty:
+            raise ValueError("Reference data must be a non-empty DataFrame")
+
         self.model = model
         self.data = data
         self.model_type = model_type.lower()
@@ -42,9 +48,13 @@ class ModelExplainer:
             logger.info(f"Computing SHAP values for {len(data)} samples...")
             self.shap_values = self.explainer.shap_values(data)
 
-            # Handle multi-output case
+            # Handle multi-output / 3D multiclass SHAP values
             if isinstance(self.shap_values, list):
-                self.shap_values = self.shap_values[0]  # Take first output
+                self.shap_values = np.asarray(self.shap_values[0])
+            elif (
+                isinstance(self.shap_values, np.ndarray) and self.shap_values.ndim == 3  # noqa: PLR2004
+            ):
+                self.shap_values = self.shap_values[:, :, 0]
 
             logger.info("SHAP explainer initialized successfully")
 
@@ -75,7 +85,7 @@ class ModelExplainer:
                 }
             ).sort_values("importance", ascending=False)
 
-            if top_n:
+            if top_n is not None:
                 importance_df = importance_df.head(top_n)
 
             # Add rank
@@ -100,12 +110,12 @@ class ModelExplainer:
             Dictionary with prediction explanation
         """
         try:
-            if sample_idx >= len(self.data):
+            if sample_idx < 0 or sample_idx >= len(self.data):
                 raise ValueError(f"Sample index {sample_idx} out of range")
 
             # Get sample and SHAP values
             sample = self.data.iloc[sample_idx]
-            shap_vals = self.shap_values[sample_idx]
+            shap_vals = np.asarray(self.shap_values[sample_idx], dtype=float)
 
             # Use provided feature names or default to data columns
             if feature_names is None:
@@ -113,14 +123,31 @@ class ModelExplainer:
 
             # Get prediction
             if hasattr(self.model, "predict"):
-                # Convert to numpy array to handle ExtensionArray cases
-                sample_array = np.asarray(sample.values).reshape(1, -1)
-                prediction = self.model.predict(sample_array)[0]
+                sample_df = self.data.iloc[[sample_idx]]
+                prediction_raw = self.model.predict(sample_df)[0]
+                prediction: float | str = (
+                    float(np.asarray(prediction_raw).flat[0])
+                    if isinstance(prediction_raw, (int, float, np.number, np.ndarray))
+                    else str(prediction_raw)
+                )
             else:
                 prediction = "unknown"
 
+            # Extract scalar expected value cleanly across SHAP/NumPy versions
+            if hasattr(self.explainer, "expected_value"):
+                expected_arr = np.asarray(self.explainer.expected_value, dtype=float)
+                base_value = float(expected_arr.flat[0]) if expected_arr.size else 0.0
+            else:
+                base_value = 0.0
+
             # Create feature contributions dictionary
-            contributions = dict(zip(feature_names, shap_vals, strict=False))
+            contributions = {
+                name: float(val)
+                for name, val in zip(feature_names, shap_vals, strict=False)
+            }
+            feature_importance = {
+                name: float(abs(val)) for name, val in contributions.items()
+            }
 
             # Get top contributors (positive and negative)
             sorted_contributions = sorted(
@@ -131,17 +158,11 @@ class ModelExplainer:
 
             return {
                 "sample_index": sample_idx,
-                "prediction": (
-                    float(prediction)
-                    if isinstance(prediction, (int, float))
-                    else prediction
-                ),
-                "base_value": (
-                    float(self.explainer.expected_value)
-                    if hasattr(self.explainer, "expected_value")
-                    else 0.0
-                ),
+                "prediction": prediction,
+                "base_value": base_value,
+                "feature_names": feature_names,
                 "shap_values": contributions,
+                "feature_importance": feature_importance,
                 "feature_values": dict(zip(feature_names, sample.values, strict=False)),
                 "top_positive_contributors": top_positive,
                 "top_negative_contributors": top_negative,
@@ -155,20 +176,37 @@ class ModelExplainer:
 
     def create_summary_plot(
         self, plot_type: str = "bar", max_features: int = 20
-    ) -> Figure:
-        """Create SHAP summary plot using Plotly.
+    ) -> Figure | MatplotlibFigure:
+        """Create SHAP summary plot using Plotly or Matplotlib.
 
         Args:
-            plot_type: Type of plot ('bar', 'beeswarm', 'violin')
+            plot_type: Type of plot ('bar', 'beeswarm', 'violin', 'plotly', 'matplotlib')
             max_features: Maximum number of features to show
 
         Returns:
-            Plotly Figure object
+            Plotly Figure or Matplotlib Figure object
         """
+        valid_plot_types = {"bar", "beeswarm", "violin", "plotly", "matplotlib"}
+        if plot_type not in valid_plot_types:
+            raise ValueError(
+                f"Invalid plot_type '{plot_type}'. Must be one of {sorted(valid_plot_types)}"
+            )
+
         try:
             importance_df = self.global_importance(max_features)
 
-            if plot_type == "bar":
+            if plot_type == "matplotlib":
+                mpl_fig = MatplotlibFigure(
+                    figsize=(8, max(4, len(importance_df) * 0.4))
+                )
+                ax = mpl_fig.add_subplot(111)
+                ax.barh(importance_df["feature"], importance_df["importance"])
+                ax.set_xlabel("Mean |SHAP value|")
+                ax.set_ylabel("Features")
+                ax.set_title("Feature Importance (Mean |SHAP value|)")
+                return mpl_fig
+
+            if plot_type in {"bar", "plotly"}:
                 fig = Figure()
                 fig.add_trace(
                     {
@@ -258,16 +296,30 @@ class ModelExplainer:
             logger.error(f"Error creating summary plot: {e}")
             raise
 
-    def create_waterfall_plot(self, sample_idx: int, max_features: int = 10) -> Figure:
+    def create_feature_importance_plot(
+        self, max_features: int = 20, plot_type: str = "plotly"
+    ) -> Figure | MatplotlibFigure:
+        """Create global feature importance bar plot."""
+        return self.create_summary_plot(plot_type=plot_type, max_features=max_features)
+
+    def create_waterfall_plot(
+        self, sample_idx: int, max_features: int = 10, plot_type: str = "plotly"
+    ) -> Figure | MatplotlibFigure:
         """Create waterfall plot for a single prediction.
 
         Args:
             sample_idx: Index of the sample to explain
             max_features: Maximum number of features to show
+            plot_type: Backend type ('plotly' or 'matplotlib')
 
         Returns:
-            Plotly Figure object
+            Plotly Figure or Matplotlib Figure object
         """
+        if plot_type not in {"plotly", "matplotlib"}:
+            raise ValueError(
+                f"Invalid plot_type '{plot_type}'. Must be 'plotly' or 'matplotlib'"
+            )
+
         try:
             explanation = self.explain_prediction(sample_idx)
 
@@ -280,6 +332,15 @@ class ModelExplainer:
             # Prepare waterfall data
             features = ["Base Value"] + [f[0] for f in sorted_features] + ["Prediction"]
             values = [explanation["base_value"]] + [f[1] for f in sorted_features]
+
+            if plot_type == "matplotlib":
+                mpl_fig = MatplotlibFigure(figsize=(8, 5))
+                ax = mpl_fig.add_subplot(111)
+                ax.bar(range(len(values)), values)
+                ax.set_xticks(range(len(values)))
+                ax.set_xticklabels(features[: len(values)], rotation=45, ha="right")
+                ax.set_title(f"SHAP Waterfall Plot - Sample {sample_idx}")
+                return mpl_fig
 
             # Calculate cumulative values
             cumulative = [explanation["base_value"]]

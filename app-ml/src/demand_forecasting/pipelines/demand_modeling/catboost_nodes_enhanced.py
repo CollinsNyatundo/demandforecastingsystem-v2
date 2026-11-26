@@ -10,8 +10,13 @@ This module extends the base CatBoost implementation with:
 Version: 2.1.0
 """
 
+import hashlib
 import logging
 import os
+import shutil
+import socket
+import subprocess  # nosec B404
+from datetime import datetime
 from typing import Any, cast
 
 import numpy as np
@@ -71,27 +76,28 @@ def _log_full_run_to_mlflow(  # noqa: PLR0913
         study: Completed Optuna study
         model_input_table: Full input DataFrame (pre-split)
         feature_cols: List of feature column names
-        X_train / X_test: Train/test splits for row counts
-        rmse, mae, mape: Final evaluation metrics
+        X_train: Training split features for row counts
+        X_test: Test split features for row counts
+        rmse: Final root mean squared error
+        mae: Final mean absolute error
+        mape: Final mean absolute percentage error
         train_fraction: Train/test split ratio
         n_trials: Number of Optuna trials run
         study_name: Optuna study name (also logged as tag)
-        rf_rmse / rf_mae: Optional RandomForest baseline metrics for ensemble comparison
+        rf_rmse: Optional RandomForest baseline RMSE for ensemble comparison
+        rf_mae: Optional RandomForest baseline MAE for ensemble comparison
     """
     if not MLFLOW_AVAILABLE:
         return
-
-    import hashlib
-    import os
-    import socket
-    from datetime import datetime
 
     # ------------------------------------------------------------------ #
     # Compute derived values                                               #
     # ------------------------------------------------------------------ #
     model_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     data_missing_pct = float(model_input_table.isnull().mean().mean())
-    num_features = model.feature_count_ if hasattr(model, "feature_count_") else len(feature_cols)
+    num_features = (
+        model.feature_count_ if hasattr(model, "feature_count_") else len(feature_cols)
+    )
 
     # RMSE improvement over RF baseline (or 0 when RF not available)
     rmse_improvement = 0.0
@@ -104,19 +110,26 @@ def _log_full_run_to_mlflow(  # noqa: PLR0913
         + "|".join(model_input_table.columns.tolist())
         + "|".join(str(dt) for dt in model_input_table.dtypes)
     )
-    data_version = hashlib.md5(data_hash_src.encode()).hexdigest()[:12]
+    data_version = hashlib.md5(
+        data_hash_src.encode(), usedforsecurity=False
+    ).hexdigest()[:12]
 
     # Git commit (best-effort)
     git_commit = "unknown"
-    try:
-        import subprocess
-        git_commit = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            stderr=subprocess.DEVNULL,
-            timeout=3,
-        ).decode().strip()
-    except Exception:
-        pass
+    git_exe = shutil.which("git")
+    if git_exe:
+        try:
+            git_commit = (
+                subprocess.check_output(  # noqa: S603  # nosec B603
+                    [git_exe, "rev-parse", "--short", "HEAD"],
+                    stderr=subprocess.DEVNULL,
+                    timeout=3,
+                )
+                .decode()
+                .strip()
+            )
+        except Exception as exc:
+            logger.debug(f"Could not determine git commit: {exc}")
 
     # ------------------------------------------------------------------ #
     # Log metrics (15)                                                     #
@@ -250,7 +263,7 @@ def get_optuna_storage(storage_url: str | None = None) -> RDBStorage | None:
         return None
 
 
-def objective_catboost_enhanced(  # noqa: PLR0913
+def objective_catboost_enhanced(  # noqa: PLR0913, PLR0917
     trial: "optuna.Trial",
     x_train: pd.DataFrame,
     y_train: pd.Series,
@@ -377,7 +390,7 @@ def objective_catboost_enhanced(  # noqa: PLR0913
     return float(avg_rmse)
 
 
-def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915, PLR0912
+def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915, PLR0912, PLR0917
     model_input_table: pd.DataFrame,
     parameters: dict[str, Any],
     train_fraction: float = 0.8,
@@ -596,6 +609,30 @@ def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915,
 
     return final_model, metrics
 
+
+def train_catboost_model(
+    x_train: pd.DataFrame,
+    y_train: pd.Series,
+    optimized_params: dict[str, Any] | None = None,
+    x_test: pd.DataFrame | None = None,
+    y_test: pd.Series | None = None,
+) -> tuple[CatBoostRegressor, dict[str, float]]:
+    """Train a CatBoost regressor using optimized hyperparameters and compute metrics."""
+    params: dict[str, Any] = dict(optimized_params or {})
+    params.setdefault("iterations", 100)
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+
+    model = CatBoostRegressor(**params)
+    model.fit(x_train, y_train)
+
+    eval_x = x_test if x_test is not None else x_train
+    eval_y = y_test if y_test is not None else y_train
+    preds = model.predict(eval_x)
+    rmse = float(np.sqrt(mean_squared_error(eval_y, preds)))
+    mae = float(mean_absolute_error(eval_y, preds))
+    mape = float(compute_zero_safe_mape(np.asarray(eval_y), np.asarray(preds)))
+    return model, {"rmse": rmse, "mae": mae, "mape": mape}
 
 
 def compare_models_enhanced(

@@ -171,6 +171,7 @@ def test_environment_based_origins():
     expected_dev = [
         "http://localhost:3000",
         "http://localhost:8000",
+        "http://localhost:8050",
         "http://localhost:8080",
         "http://localhost:8501",
     ]

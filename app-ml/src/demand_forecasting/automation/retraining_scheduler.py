@@ -81,10 +81,14 @@ class RetrainingScheduler:
                 return True
 
             last_version = latest_versions[0]
-            # creation_timestamp from MLflow is in milliseconds, convert to datetime
-            last_training_time = datetime.fromtimestamp(
-                last_version.creation_timestamp / 1000
-            )
+            raw_ts = last_version.creation_timestamp
+            if isinstance(raw_ts, datetime):
+                last_training_time = raw_ts.replace(tzinfo=None)
+            elif hasattr(raw_ts, "to_pydatetime"):
+                last_training_time = raw_ts.to_pydatetime().replace(tzinfo=None)
+            else:
+                # creation_timestamp from MLflow is in milliseconds, convert to datetime
+                last_training_time = datetime.fromtimestamp(float(raw_ts) / 1000)
 
             # Calculate days since last training
             days_since = (datetime.now() - last_training_time).days
@@ -349,14 +353,20 @@ class RetrainingScheduler:
 
     def _calculate_priority(self, triggers: list[str]) -> str:
         """Calculate retraining priority based on trigger types."""
+        if not triggers:
+            return "LOW"
+
         priority_scores = {
-            "TIME_INTERVAL": 1,
-            "DATA_VOLUME": DEFAULT_HOURS_INTERVAL,
-            "PERFORMANCE_DEGRADATION": 3,
-            "DATA_DRIFT": DEFAULT_DAYS_INTERVAL,
+            "TIME_INTERVAL": MEDIUM_PRIORITY_THRESHOLD,
+            "DATA_VOLUME": MEDIUM_PRIORITY_THRESHOLD,
+            "PERFORMANCE_DEGRADATION": HIGH_PRIORITY_THRESHOLD,
+            "DATA_DRIFT": HIGH_PRIORITY_THRESHOLD,
         }
 
-        max_score = max([priority_scores.get(trigger, 0) for trigger in triggers])
+        if len(triggers) >= MEDIUM_PRIORITY_THRESHOLD:
+            return "CRITICAL"
+
+        max_score = max(priority_scores.get(trigger, 0) for trigger in triggers)
 
         if max_score >= CRITICAL_PRIORITY_THRESHOLD:
             return "CRITICAL"
@@ -369,19 +379,25 @@ class RetrainingScheduler:
     def _get_trigger_details(self) -> dict[str, Any]:
         """Get detailed information about each trigger."""
         return {
-            "time_interval": {
+            "TIME_INTERVAL": {
+                "active": self._check_time_trigger(),
+                "time_since_last_training": None,
                 "threshold_days": self.time_interval_days,
                 "description": f"Retrain every {self.time_interval_days} days",
             },
-            "performance": {
+            "PERFORMANCE_DEGRADATION": {
+                "active": self._check_performance_trigger(),
+                "current_performance": None,
                 "threshold_percent": self.performance_threshold,
                 "description": f"Retrain if RMSE degrades by >{self.performance_threshold}%",
             },
-            "data_volume": {
+            "DATA_VOLUME": {
+                "active": self._check_data_trigger(),
                 "threshold_samples": self.data_volume_threshold,
                 "description": f"Retrain if >{self.data_volume_threshold} new samples available",
             },
-            "drift": {
+            "DATA_DRIFT": {
+                "active": self._check_drift_trigger(),
                 "threshold_p_value": 0.05,
                 "threshold_effect_size": 0.5,
                 "description": "Retrain if significant performance drift detected",

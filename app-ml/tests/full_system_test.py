@@ -4,8 +4,11 @@
 import sys
 import time
 
+import pytest
 import requests
 from requests.auth import HTTPBasicAuth
+
+pytestmark = pytest.mark.integration
 
 
 def test_airflow_dag_trigger():

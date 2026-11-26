@@ -1,0 +1,22 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4", "DTZ", "LOG", "PIE", "RUF", "S"]
+ignore = [
+    "E501",  # Line length handled by ruff format
+    "E402",  # Dash app initializes sys.path before local page/component imports
+    "S101",  # Allow assert in tests
+    "S104",  # Dash container intentionally binds 0.0.0.0
+    "S113",  # Requests timeouts handled at client layer
+    "RUF001", # UI strings intentionally contain unicode icons/dashes
+    "RUF003", # Comments may include symbols like x/times
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

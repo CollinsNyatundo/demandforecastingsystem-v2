@@ -182,22 +182,32 @@ def drifted_data():
     return pd.DataFrame(data)
 
 
+@pytest.fixture(autouse=True)
+def _reset_model_server_rate_limits():
+    """Clear in-memory rate-limit caches between tests to prevent cross-test 429 bleed."""
+    try:
+        from demand_forecasting.serving import model_server as ms
+
+        ms.rate_limit_cache.clear()
+        ms.request_rate_cache.clear()
+    except Exception:
+        pass
+    yield
+
+
 @pytest.fixture
-def sample_model():
-    """Create a simple mock model for testing."""
-    if np is None:
-        pytest.skip("numpy not available")
+def sample_model(sample_data):
+    """Create a lightweight fitted tree model compatible with SHAP TreeExplainer."""
+    if np is None or pd is None:
+        pytest.skip("numpy or pandas not available")
 
-    class MockModel:
-        def predict(self, X):
-            if isinstance(X, np.ndarray):
-                return np.random.normal(50, 10, len(X))
-            return np.random.normal(50, 10, 1)
+    from sklearn.tree import DecisionTreeRegressor
 
-        def fit(self, X, y):
-            return self
-
-    return MockModel()
+    model = DecisionTreeRegressor(max_depth=3, random_state=42)
+    X = sample_data
+    y = sample_data["demand"] if "demand" in sample_data.columns else np.arange(len(sample_data), dtype=float)
+    model.fit(X, y)
+    return model
 
 
 @pytest.fixture
@@ -243,6 +253,10 @@ def mock_mlflow_client():
         client.get_run.return_value = Mock(
             data=Mock(metrics={"rmse": 50.0, "mae": 30.0})
         )
+        client.search_experiments.return_value = [Mock(experiment_id="0")]
+        client.search_runs.return_value = [
+            Mock(data=Mock(metrics={"rmse": 50.0, "mae": 30.0}))
+        ]
 
         yield client
 

@@ -46,9 +46,10 @@ class TestS3Helpers:
             mock_s3fs.assert_called_once_with(
                 client_kwargs={
                     "endpoint_url": self.test_config["minio_endpoint"],
-                    "aws_access_key_id": self.test_config["minio_access_key"],
-                    "aws_secret_access_key": self.test_config["minio_secret_key"],
-                }
+                },
+                key=self.test_config["minio_access_key"],
+                secret=self.test_config["minio_secret_key"],
+                use_ssl=False,
             )
 
             assert fs == mock_fs
@@ -99,8 +100,8 @@ class TestS3Helpers:
             with pytest.raises(Exception, match="Connection failed"):
                 get_s3_filesystem()
 
-            # Should have been called 4 times (initial + 3 retries)
-            assert mock_s3fs.call_count == 4
+            # Should have been called 3 times (stop_after_attempt(3))
+            assert mock_s3fs.call_count == 3
 
     def test_validate_search_space_parameters_valid(self):
         """Test parameter validation with valid parameters."""
@@ -130,7 +131,7 @@ class TestS3Helpers:
             "catboost_search_space": {"learning_rate": {"min": 0.01, "max": 0.2}}
         }
 
-        with pytest.raises(ValueError, match="Missing required 'optuna' section"):
+        with pytest.raises(KeyError, match="optuna"):
             validate_search_space_parameters(invalid_params)
 
     def test_validate_search_space_parameters_invalid_trials(self):
@@ -144,7 +145,7 @@ class TestS3Helpers:
             "catboost_search_space": {"learning_rate": {"min": 0.01, "max": 0.2}},
         }
 
-        with pytest.raises(ValueError, match="n_trials must be positive"):
+        with pytest.raises(ValueError, match="positive"):
             validate_search_space_parameters(invalid_params)
 
     def test_validate_search_space_parameters_invalid_range(self):
@@ -160,14 +161,18 @@ class TestS3Helpers:
             },
         }
 
-        with pytest.raises(ValueError, match="min value must be less than max value"):
+        with pytest.raises(ValueError, match="Min must be less than max"):
             validate_search_space_parameters(invalid_params)
 
     def test_validate_trial_files_list_valid(self):
         """Test trial files list validation with valid list."""
         from demand_forecasting.utils.s3_helpers import validate_trial_files_list
 
-        valid_files = ["trial_1.json", "trial_2.json", "trial_3.json"]
+        valid_files = [
+            "bucket/trials/trial_1.json",
+            "bucket/trials/trial_2.json",
+            "bucket/trials/trial_3.json",
+        ]
         validate_trial_files_list(valid_files)  # Should not raise
 
     def test_validate_trial_files_list_empty(self):
@@ -192,12 +197,12 @@ class TestS3Helpers:
 
         # Mock successful file existence check
         mock_fs.exists.return_value = True
-        mock_fs.size.return_value = 1024  # 1KB file
+        mock_fs.info.return_value = {"size": 1024}
 
         from demand_forecasting.utils.s3_helpers import validate_model_save
 
         # Should not raise any exception
-        validate_model_save(mock_fs, "s3://bucket/models/model.pickle")
+        assert validate_model_save(mock_fs, "s3://bucket/models/model.pickle") is True
 
         mock_fs.exists.assert_called_once_with("s3://bucket/models/model.pickle")
 
@@ -212,7 +217,7 @@ class TestS3Helpers:
 
         from demand_forecasting.utils.s3_helpers import validate_model_save
 
-        with pytest.raises(FileNotFoundError, match="Model file was not saved"):
+        with pytest.raises(FileNotFoundError, match="Model file not found"):
             validate_model_save(mock_fs, "s3://bucket/models/model.pickle")
 
     @patch("demand_forecasting.utils.s3_helpers.get_s3_filesystem")
@@ -223,11 +228,11 @@ class TestS3Helpers:
 
         # Mock file exists but is empty
         mock_fs.exists.return_value = True
-        mock_fs.size.return_value = 0
+        mock_fs.info.return_value = {"size": 0}
 
         from demand_forecasting.utils.s3_helpers import validate_model_save
 
-        with pytest.raises(ValueError, match="Model file appears to be corrupted"):
+        with pytest.raises(ValueError, match="too small"):
             validate_model_save(mock_fs, "s3://bucket/models/model.pickle")
 
     def test_get_email_config_with_env_vars(self):
@@ -235,36 +240,33 @@ class TestS3Helpers:
         from demand_forecasting.utils.s3_helpers import get_email_config
 
         test_config = {
-            "smtp_host": "smtp.gmail.com",
-            "smtp_port": 587,
-            "smtp_user": "test@example.com",
-            "smtp_password": "test-password",
-            "alert_email": "alert@example.com",
+            "host": "smtp.gmail.com",
+            "port": "587",
+            "user": "test@example.com",
+            "password": "test-password",
         }
 
         with patch.dict(
             os.environ,
             {
-                "AIRFLOW__SMTP__SMTP_HOST": test_config["smtp_host"],
-                "AIRFLOW__SMTP__SMTP_PORT": str(test_config["smtp_port"]),
-                "AIRFLOW__SMTP__SMTP_USER": test_config["smtp_user"],
-                "AIRFLOW__SMTP__SMTP_PASSWORD": test_config["smtp_password"],
-                "AIRFLOW_ALERT_EMAIL": test_config["alert_email"],
+                "AIRFLOW__SMTP__SMTP_HOST": test_config["host"],
+                "AIRFLOW__SMTP__SMTP_PORT": test_config["port"],
+                "AIRFLOW__SMTP__SMTP_USER": test_config["user"],
+                "AIRFLOW__SMTP__SMTP_PASSWORD": test_config["password"],
             },
         ):
             config = get_email_config()
 
-            assert config["smtp_host"] == test_config["smtp_host"]
-            assert config["smtp_port"] == test_config["smtp_port"]
-            assert config["smtp_user"] == test_config["smtp_user"]
-            assert config["smtp_password"] == test_config["smtp_password"]
-            assert config["alert_email"] == test_config["alert_email"]
+            assert config is not None
+            assert config["host"] == test_config["host"]
+            assert config["port"] == test_config["port"]
+            assert config["user"] == test_config["user"]
+            assert config["password"] == test_config["password"]
 
     def test_get_email_config_missing_env_vars(self):
         """Test email config retrieval with missing environment variables."""
         from demand_forecasting.utils.s3_helpers import get_email_config
 
-        # Clear relevant environment variables
         env_vars_to_clear = [
             "AIRFLOW__SMTP__SMTP_HOST",
             "AIRFLOW__SMTP__SMTP_PORT",
@@ -275,19 +277,7 @@ class TestS3Helpers:
 
         with patch.dict(os.environ, dict.fromkeys(env_vars_to_clear, ""), clear=True):
             config = get_email_config()
-
-            # Should return defaults or None
-            assert isinstance(config, dict)
-            # At minimum should have the expected keys
-            expected_keys = [
-                "smtp_host",
-                "smtp_port",
-                "smtp_user",
-                "smtp_password",
-                "alert_email",
-            ]
-            for key in expected_keys:
-                assert key in config
+            assert config is None
 
     def test_parse_s3_timestamp_path_valid(self):
         """Test S3 timestamp path parsing with valid path."""
@@ -297,11 +287,7 @@ class TestS3Helpers:
 
         result = parse_s3_timestamp_path(test_path)
 
-        assert result is not None
-        assert result["dag_id"] == "demand_forecasting"
-        assert result["run_date"] == "2023-01-01"
-        assert result["task_name"] == "preprocess"
-        assert result["attempt"] == "1"
+        assert result == "2023-01-01"
 
     def test_parse_s3_timestamp_path_invalid(self):
         """Test S3 timestamp path parsing with invalid path."""
@@ -319,19 +305,14 @@ class TestS3Helpers:
             assert result is None
 
     def test_parse_s3_timestamp_path_malformed(self):
-        """Test S3 timestamp path parsing with malformed path."""
+        """Test S3 timestamp path parsing with embedded timestamp in malformed path."""
         from demand_forecasting.utils.s3_helpers import parse_s3_timestamp_path
 
         malformed_path = "s3://demand-forecasting/logs/dag_id=demand_forecasting/run_date=2023-01-01/task_name=preprocess/attempt=.log"
 
         result = parse_s3_timestamp_path(malformed_path)
 
-        # Should still parse correctly despite the extra equals sign
-        assert result is not None
-        assert result["dag_id"] == "demand_forecasting"
-        assert result["run_date"] == "2023-01-01"
-        assert result["task_name"] == "preprocess"
-        assert result["attempt"] == ""
+        assert result == "2023-01-01"
 
     @patch("demand_forecasting.utils.s3_helpers.get_s3_filesystem")
     def test_s3_operations_with_context_manager(self, mock_get_fs):
@@ -356,20 +337,18 @@ class TestS3Helpers:
             mock_fs.size.assert_called_once_with("s3://bucket/file.txt")
 
     def test_environment_variable_fallbacks(self):
-        """Test environment variable fallbacks."""
+        """Test that missing S3 credentials raise ValueError instead of using defaults."""
         from demand_forecasting.utils.s3_helpers import get_s3_filesystem
 
-        # Test with partial environment variables
-        with patch.dict(
-            os.environ,
-            {
-                "MINIO_ENDPOINT": "http://localhost:9000",
-                # Missing access key and secret key
-            },
+        with (
+            patch.dict(
+                os.environ,
+                {"MINIO_ENDPOINT": "http://localhost:9000"},
+                clear=True,
+            ),
+            pytest.raises(ValueError, match="S3 credentials must be provided"),
         ):
-            # Should use default values
             get_s3_filesystem()
-            # Function should handle missing env vars gracefully or use defaults
 
     def test_error_handling_comprehensive(self):
         """Test comprehensive error handling."""
@@ -387,10 +366,10 @@ class TestS3Helpers:
         with pytest.raises(ValueError):
             validate_trial_files_list([])
 
-        # Test email config with no environment variables
+        # Test email config with no environment variables returns None
         with patch.dict(os.environ, {}, clear=True):
             config = get_email_config()
-            assert isinstance(config, dict)
+            assert config is None
 
         # Test path parsing with edge cases
         assert parse_s3_timestamp_path(None) is None

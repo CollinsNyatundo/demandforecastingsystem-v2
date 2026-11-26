@@ -7,10 +7,13 @@ import time
 import mlflow
 import mlflow.sklearn
 import numpy as np
+import pytest
 import requests
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
+
+pytestmark = pytest.mark.integration
 
 
 def test_mlflow_connection() -> bool | None:

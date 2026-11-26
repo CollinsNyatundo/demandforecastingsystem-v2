@@ -7,30 +7,30 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 
-# Set tracking URI
-mlflow.set_tracking_uri("http://localhost:5000")
 
-# Create experiment
-with contextlib.suppress(BaseException):
-    mlflow.create_experiment("container_test")
+def main() -> None:
+    """Manual smoke test against a running local MLflow tracking container."""
+    mlflow.set_tracking_uri("http://localhost:5000")
 
-mlflow.set_experiment("container_test")
+    with contextlib.suppress(BaseException):
+        mlflow.create_experiment("container_test")
 
-# Start run
-with mlflow.start_run(run_name="container_test_run") as run:
-    # Simple model
-    X = np.random.rand(20, 2)
-    y = np.random.rand(20)
+    mlflow.set_experiment("container_test")
 
-    model = RandomForestRegressor(n_estimators=3, random_state=42)
-    model.fit(X, y)
+    with mlflow.start_run(run_name="container_test_run"):
+        X = np.random.rand(20, 2)
+        y = np.random.rand(20)
 
-    # Log metrics
-    y_pred = model.predict(X)
-    mse = mean_squared_error(y, y_pred)
+        model = RandomForestRegressor(n_estimators=3, random_state=42)
+        model.fit(X, y)
 
-    mlflow.log_param("model_type", "RandomForest")
-    mlflow.log_metric("mse", float(mse))
+        y_pred = model.predict(X)
+        mse = mean_squared_error(y, y_pred)
 
-    # Log model
-    mlflow.sklearn.log_model(model, "model")
+        mlflow.log_param("model_type", "RandomForest")
+        mlflow.log_metric("mse", float(mse))
+        mlflow.sklearn.log_model(model, "model")
+
+
+if __name__ == "__main__":
+    main()

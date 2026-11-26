@@ -173,9 +173,9 @@ class TestMinioUpload:
 
             # Verify upload was called
             assert mock_client.upload_fileobj.called
-            _args, kwargs = mock_client.upload_fileobj.call_args
-            assert kwargs["Bucket"] == self.minio_config["bucket"]
-            assert kwargs["Key"] == "test/sample_data.parquet"
+            args, _kwargs = mock_client.upload_fileobj.call_args
+            assert args[1] == self.minio_config["bucket"]
+            assert args[2] == "test/sample_data.parquet"
 
         except Exception as e:
             pytest.fail(f"File upload test failed: {e}")

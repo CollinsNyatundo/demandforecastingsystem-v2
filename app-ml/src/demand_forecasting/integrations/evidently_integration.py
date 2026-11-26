@@ -15,9 +15,9 @@ _LOGGER = logging.getLogger(__name__)
 try:
     # Evidently v0.7.x API (paths changed significantly from v0.4.x)
     from evidently import Report
-    from evidently.presets import DataDriftPreset, DataSummaryPreset
-    from evidently.metrics import ValueDrift, DriftedColumnsCount
     from evidently.legacy.pipeline.column_mapping import ColumnMapping
+    from evidently.metrics import DriftedColumnsCount, ValueDrift
+    from evidently.presets import DataDriftPreset, DataSummaryPreset
 
     # Compatibility aliases so rest of module keeps working unchanged
     DataDriftTable = ValueDrift
@@ -30,7 +30,7 @@ except ImportError as e:
     _LOGGER.warning(f"Evidently not available - drift monitoring disabled: {e}")
 
 
-def generate_drift_report(
+def generate_drift_report(  # noqa: PLR0913, PLR0917
     reference_data: pd.DataFrame,
     current_data: pd.DataFrame,
     output_path: Path | str,
@@ -90,7 +90,7 @@ def generate_drift_report(
     drifted_columns: list[str] = []
 
     for metric in report.items():
-        drift_share_val = getattr(metric, 'drift_share', None)
+        drift_share_val = getattr(metric, "drift_share", None)
         if drift_share_val is not None:
             drift_share = float(drift_share_val)
             dataset_drift = drift_share > 0.0
@@ -128,8 +128,9 @@ def get_drift_metrics_for_prometheus(
         return {}
 
     # Determine total monitored columns (numeric columns shared by both sets)
-    shared_cols = set(reference_data.select_dtypes(include='number').columns) & \
-                  set(current_data.select_dtypes(include='number').columns)
+    shared_cols = set(reference_data.select_dtypes(include="number").columns) & set(
+        current_data.select_dtypes(include="number").columns
+    )
     n_total = len(shared_cols)
 
     report = Report(metrics=[DatasetDriftMetric()])
@@ -138,13 +139,13 @@ def get_drift_metrics_for_prometheus(
     drift_share = 0.0
     dataset_drift = False
     for metric in report.items():
-        ds = getattr(metric, 'drift_share', None)
+        ds = getattr(metric, "drift_share", None)
         if ds is not None:
             drift_share = float(ds)
             dataset_drift = drift_share > 0.0
             break
 
-    # Estimate drifted column count from share × total
+    # Estimate drifted column count from share x total
     n_drifted = round(drift_share * n_total) if n_total > 0 else 0
 
     return {
@@ -178,7 +179,7 @@ def check_drift_threshold(
 
     drift_share = 0.0
     for metric in report.items():
-        ds = getattr(metric, 'drift_share', None)
+        ds = getattr(metric, "drift_share", None)
         if ds is not None:
             drift_share = float(ds)
             break

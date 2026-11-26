@@ -33,6 +33,8 @@ class ModelRouter:
             model_b_uri: MLflow URI for model B
             split: Traffic split ratio for model A (0.0-1.0)
         """
+        if not 0.0 <= split <= 1.0:
+            raise ValueError(f"split must be between 0.0 and 1.0, got {split}")
         self.model_a_uri = model_a_uri
         self.model_b_uri = model_b_uri
         self.split = split  # Traffic to model A
@@ -60,7 +62,7 @@ class ModelRouter:
         """
         self.request_count += 1
         # Use random for A/B testing routing (not cryptographic purposes)
-        use_model_a = random.random() < self.split  # noqa: S311
+        use_model_a = random.random() < self.split  # noqa: S311  # nosec B311
 
         try:
             # Prepare features

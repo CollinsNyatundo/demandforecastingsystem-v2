@@ -9,6 +9,7 @@ plotly>=5.17.0
 
 # HTTP Requests
 requests>=2.32.5
+psutil>=5.9.0
 
 # AI Chat (Grok API — OpenAI-compatible SDK)
 openai>=1.0

@@ -45,11 +45,23 @@ def create_navbar():
                 html.Div(
                     [
                         html.Span(
-                            [html.I(className="bi bi-circle-fill me-1", style={"fontSize": "0.5rem"}), "Live"],
+                            [
+                                html.I(
+                                    className="bi bi-circle-fill me-1",
+                                    style={"fontSize": "0.5rem"},
+                                ),
+                                "Live",
+                            ],
                             className="badge badge-cyan me-2",
                         ),
                         html.Span(
-                            [html.I(className="bi bi-gear me-1", style={"fontSize": "0.65rem"}), "Pipeline"],
+                            [
+                                html.I(
+                                    className="bi bi-gear me-1",
+                                    style={"fontSize": "0.65rem"},
+                                ),
+                                "Pipeline",
+                            ],
                             className="badge badge-success",
                         ),
                     ],
