@@ -1,7 +1,25 @@
 window.UrbanFlow = window.UrbanFlow || {};
 
-// Client-side session store memory
+// Client-side session store memory & per-browser-tab session thread ID
 window.UrbanFlow.chatHistory = [];
+window.UrbanFlow.getThreadId = function () {
+    const storageKey = "urbanflow-chat-thread-id";
+    try {
+        let tid = window.sessionStorage.getItem(storageKey);
+        if (!tid) {
+            tid = (window.crypto && typeof window.crypto.randomUUID === "function")
+                ? `urbanflow-${window.crypto.randomUUID()}`
+                : `urbanflow-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+            window.sessionStorage.setItem(storageKey, tid);
+        }
+        return tid;
+    } catch (_e) {
+        if (!window.UrbanFlow._fallbackThreadId) {
+            window.UrbanFlow._fallbackThreadId = `urbanflow-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+        }
+        return window.UrbanFlow._fallbackThreadId;
+    }
+};
 
 window.UrbanFlow.streamChat = async function (message, initialHistory, pathname) {
     const chatContainer = document.getElementById("chat-messages");
@@ -36,9 +54,9 @@ window.UrbanFlow.streamChat = async function (message, initialHistory, pathname)
     window.UrbanFlow.chatHistory.push({ role: "user", content: message });
 
     try {
-        // Construct the LangGraph V2 Streaming schema
+        // Construct the LangGraph V2 Streaming schema with per-session thread isolation
         const payload = {
-            thread_id: "urbanflow-ui-session",
+            thread_id: window.UrbanFlow.getThreadId(),
             messages: window.UrbanFlow.chatHistory
         };
 

@@ -615,11 +615,11 @@ def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915,
     return final_model, metrics
 
 
-def optimize_catboost_params(
+def _validate_split_training_inputs(
     x_train: pd.DataFrame,
     y_train: pd.Series | pd.DataFrame,
-) -> dict[str, Any]:
-    """Select validated CatBoost hyperparameters for split Kedro training inputs."""
+) -> np.ndarray:
+    """Validate split feature/target training inputs and return 1D target array."""
     if x_train is None or x_train.empty or y_train is None or len(y_train) == 0:
         raise ValueError("Training features and targets cannot be empty")
     if len(x_train) != len(y_train):
@@ -638,15 +638,72 @@ def optimize_catboost_params(
     y_1d = np.asarray(y_train, dtype=float).reshape(-1)
     if np.isnan(y_1d).all():
         raise ValueError("Invalid target values: all targets are NaN")
+    return y_1d
 
-    return {
-        "iterations": min(200, max(20, len(x_train))),
-        "learning_rate": 0.1,
-        "depth": min(6, max(2, x_train.shape[1])),
-        "l2_leaf_reg": 3.0,
-        "verbose": False,
-        "allow_writing_files": False,
-    }
+
+def optimize_catboost_params(
+    x_train: pd.DataFrame,
+    y_train: pd.Series | pd.DataFrame,
+    optuna_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run an internal time-ordered Optuna study on training splits and return best CatBoost params."""
+    y_1d = _validate_split_training_inputs(x_train, y_train)
+
+    search_space = (optuna_config or {}).get("catboost_search_space", {})
+    lr_bounds = search_space.get("learning_rate", {"min": 0.03, "max": 0.25})
+    depth_bounds = search_space.get(
+        "depth", {"min": 2, "max": min(8, max(3, x_train.shape[1]))}
+    )
+    reg_bounds = search_space.get("l2_leaf_reg", {"min": 1.0, "max": 10.0})
+    iter_bounds = search_space.get(
+        "n_estimators", {"min": 20, "max": min(100, max(30, len(x_train)))}
+    )
+    n_trials = max(1, min(int((optuna_config or {}).get("n_trials", 3)), 50))
+
+    # Time-ordered train/validation split inside training data only (never touches held-out test)
+    split_idx = min(max(1, int(len(x_train) * 0.8)), max(1, len(x_train) - 1))
+    x_tr, x_val = x_train.iloc[:split_idx], x_train.iloc[split_idx:]
+    y_tr, y_val = y_1d[:split_idx], y_1d[split_idx:]
+    if len(x_val) == 0:
+        x_val, y_val = x_tr, y_tr
+
+    def _objective(trial: optuna.Trial) -> float:
+        min_depth = int(depth_bounds["min"])
+        max_depth = max(min_depth, int(depth_bounds["max"]))
+        min_iters = int(iter_bounds["min"])
+        max_iters = max(min_iters, int(iter_bounds["max"]))
+        candidate = {
+            "learning_rate": trial.suggest_float(
+                "learning_rate",
+                float(lr_bounds["min"]),
+                float(lr_bounds["max"]),
+                log=True,
+            ),
+            "depth": trial.suggest_int("depth", min_depth, max_depth),
+            "l2_leaf_reg": trial.suggest_float(
+                "l2_leaf_reg",
+                float(reg_bounds["min"]),
+                float(reg_bounds["max"]),
+            ),
+            "iterations": trial.suggest_int("iterations", min_iters, max_iters),
+            "random_seed": 42,
+            "verbose": False,
+            "allow_writing_files": False,
+        }
+        model = CatBoostRegressor(**candidate)
+        model.fit(x_tr, y_tr)
+        preds = np.asarray(model.predict(x_val), dtype=float).reshape(-1)
+        return float(np.sqrt(mean_squared_error(y_val, preds)))
+
+    study = optuna.create_study(
+        direction="minimize", sampler=optuna.samplers.TPESampler(seed=42)
+    )
+    study.optimize(_objective, n_trials=n_trials, show_progress_bar=False)
+
+    best_params: dict[str, Any] = dict(study.best_params)
+    best_params["verbose"] = False
+    best_params["allow_writing_files"] = False
+    return best_params
 
 
 def train_catboost_model(

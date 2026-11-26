@@ -333,17 +333,18 @@ class TestModelRouter:
             "day_of_week": 3,
         }
 
-        # Make multiple requests
-        for _ in range(100):
+        # Make enough requests that 70/30 split tolerance (±10%) is >6.8 sigma wide
+        n_requests = 1000
+        for _ in range(n_requests):
             router.route_request(data)
 
         stats = router.get_statistics()
 
-        assert stats["total_requests"] == 100
-        assert stats["model_a_requests"] + stats["model_b_requests"] == 100
-        # Allow some variance due to randomness
-        assert 60 <= stats["model_a_requests"] <= 80
-        assert 20 <= stats["model_b_requests"] <= 40
+        assert stats["total_requests"] == n_requests
+        assert stats["model_a_requests"] + stats["model_b_requests"] == n_requests
+        # Allow wide variance around 70/30 split without stochastic flakes
+        assert 600 <= stats["model_a_requests"] <= 800
+        assert 200 <= stats["model_b_requests"] <= 400
 
     @patch("mlflow.pyfunc.load_model")
     def test_confidence_calculation(self, mock_load_model):

@@ -145,11 +145,9 @@ class ModelExplainer:
             else float(expected_arr[0])
         )
 
-        if hasattr(self.model, "predict_proba"):
-            proba = self.model.predict_proba(sample_df)[0]
-            output_score: float | str = float(proba[resolved_idx])
-        else:
-            output_score = float(base_value + np.sum(shap_vals))
+        # Keep output_score strictly on the same additive scale as base_value + SHAP values
+        # (works identically for probability-scale trees and raw-margin/log-odds boosters).
+        output_score: float | str = float(base_value + np.sum(shap_vals))
 
         return shap_vals, base_value, output_score, predicted_label
 

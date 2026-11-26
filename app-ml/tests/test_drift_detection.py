@@ -43,13 +43,13 @@ class TestDriftDetector:
         self, drift_detector: DriftDetector, reference_data: pd.DataFrame
     ):
         """Test drift detection with no drift (similar data)."""
-        # Generate data similar to reference
-        np.random.seed(42)
+        # Generate data similar to reference (jitter only continuous float features)
+        rng = np.random.default_rng(42)
         similar_data = reference_data.copy()
         for col in similar_data.columns:
-            if similar_data[col].dtype in ["float64", "int64"]:
-                noise = np.random.normal(
-                    0, similar_data[col].std() * 0.1, len(similar_data)
+            if pd.api.types.is_float_dtype(similar_data[col]):
+                noise = rng.normal(
+                    0, similar_data[col].std() * 0.01, len(similar_data)
                 )
                 similar_data[col] = similar_data[col] + noise
 

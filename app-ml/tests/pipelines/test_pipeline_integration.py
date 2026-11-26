@@ -570,26 +570,43 @@ class TestPipelinePersistence:
     @pytest.mark.skipif(
         not PIPELINES_AVAILABLE, reason="Pipeline modules not available"
     )
-    def test_real_catboost_nodes_wiring_and_single_col_mape(self, sample_bike_data):
-        """Exercise real unmocked optimize_catboost_params -> train_catboost_model wiring."""
+    def test_real_catboost_nodes_wiring_and_single_col_mape(
+        self, test_catalog, sample_bike_data
+    ):
+        """Exercise real registered Kedro demand_modeling CatBoost nodes end-to-end."""
+        from kedro.pipeline import Pipeline
+
         from demand_forecasting.pipelines.demand_modeling.catboost_nodes_enhanced import (
             compute_zero_safe_mape,
-            optimize_catboost_params,
-            train_catboost_model,
         )
 
         X = sample_bike_data.drop(columns=["demand"]).iloc[:120]
         # Kedro Parquet stores target splits as one-column DataFrames
         y = sample_bike_data[["demand"]].iloc[:120]
         split = 90
-        params = optimize_catboost_params(X.iloc[:split], y.iloc[:split])
-        assert isinstance(params, dict)
-        params["iterations"] = 10
+        test_catalog.save("X_train", X.iloc[:split])
+        test_catalog.save("y_train", y.iloc[:split])
+        test_catalog.save("X_test", X.iloc[split:])
+        test_catalog.save("y_test", y.iloc[split:])
 
-        model, metrics = train_catboost_model(
-            X.iloc[:split], y.iloc[:split], params, X.iloc[split:], y.iloc[split:]
-        )
-        assert model is not None
+        # Run the actual registered Kedro nodes (no mocks on optimize/train wiring)
+        registered = register_pipelines()["demand_modeling"]
+        catboost_nodes = [
+            n
+            for n in registered.nodes
+            if n.name in {"optimize_catboost_params", "train_catboost_model"}
+        ]
+        assert len(catboost_nodes) == 2
+
+        runner = SequentialRunner()
+        runner.run(Pipeline(catboost_nodes), catalog=test_catalog)
+
+        # Free outputs persist in catalog (intermediate optimized_params is released after handoff)
+        catboost_model = test_catalog.load("catboost_model")
+        metrics = test_catalog.load("catboost_metrics")
+
+        assert catboost_model is not None
+        assert "learning_rate" in catboost_model.get_params()
         assert metrics["rmse"] >= 0.0
         assert metrics["mae"] >= 0.0
         assert metrics["mape"] >= 0.0

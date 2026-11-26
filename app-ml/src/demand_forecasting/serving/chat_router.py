@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import traceback
@@ -29,8 +30,10 @@ async def stream_chat(
     """Stream multi-agent reasoning and responses via Server-Sent Events."""
 
     async def event_generator():
-        # Inject the parsed user profile/token into graph state so LLM tools can use it natively
-        config = {"configurable": {"thread_id": request.thread_id}}
+        # Scope thread_id to caller API key digest so distinct callers never share chat state
+        caller_scope = hashlib.sha256(x_api_key.encode("utf-8")).hexdigest()[:16]
+        scoped_thread_id = f"{caller_scope}:{request.thread_id}"
+        config = {"configurable": {"thread_id": scoped_thread_id}}
 
         try:
             async for event in app.astream_events(
