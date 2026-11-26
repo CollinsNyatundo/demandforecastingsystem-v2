@@ -375,6 +375,8 @@ services:
       MODEL_STAGE: ${MODEL_STAGE:-Production}
       # Path to the actual model file (lives in experiments/ subdirectory)
       MODEL_PATH: "/app/models/experiments/final_catboost_model.cbm"
+      # LLM Chat Assistant (forwarded from host environment; never hardcode)
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     volumes:
       # Mount full models dir; model lives at models/experiments/final_catboost_model.cbm
       - ./models:/app/models

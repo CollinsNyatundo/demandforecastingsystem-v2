@@ -566,3 +566,35 @@ class TestPipelinePersistence:
             # Verify arguments passed to training node
             args, _kwargs = mock_train.call_args
             assert len(args) >= 4  # X_train, y_train, optimized_params, X_test, y_test
+
+    @pytest.mark.skipif(
+        not PIPELINES_AVAILABLE, reason="Pipeline modules not available"
+    )
+    def test_real_catboost_nodes_wiring_and_single_col_mape(self, sample_bike_data):
+        """Exercise real unmocked optimize_catboost_params -> train_catboost_model wiring."""
+        from demand_forecasting.pipelines.demand_modeling.catboost_nodes_enhanced import (
+            compute_zero_safe_mape,
+            optimize_catboost_params,
+            train_catboost_model,
+        )
+
+        X = sample_bike_data.drop(columns=["demand"]).iloc[:120]
+        # Kedro Parquet stores target splits as one-column DataFrames
+        y = sample_bike_data[["demand"]].iloc[:120]
+        split = 90
+        params = optimize_catboost_params(X.iloc[:split], y.iloc[:split])
+        assert isinstance(params, dict)
+        params["iterations"] = 10
+
+        model, metrics = train_catboost_model(
+            X.iloc[:split], y.iloc[:split], params, X.iloc[split:], y.iloc[split:]
+        )
+        assert model is not None
+        assert metrics["rmse"] >= 0.0
+        assert metrics["mae"] >= 0.0
+        assert metrics["mape"] >= 0.0
+
+        # Perfect forecast on a (n, 1) DataFrame must yield exactly 0% MAPE (no broadcasting)
+        actual_2d = np.array([[100.0], [200.0]])
+        pred_1d = np.array([100.0, 200.0])
+        assert compute_zero_safe_mape(actual_2d, pred_1d) == pytest.approx(0.0)

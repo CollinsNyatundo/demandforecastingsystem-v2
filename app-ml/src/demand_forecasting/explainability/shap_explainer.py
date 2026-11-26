@@ -46,15 +46,23 @@ class ModelExplainer:
 
             # Calculate SHAP values for the dataset
             logger.info(f"Computing SHAP values for {len(data)} samples...")
-            self.shap_values = self.explainer.shap_values(data)
+            raw_shap_values = self.explainer.shap_values(data)
+            self._multiclass_shap_values: np.ndarray | None = None
 
-            # Handle multi-output / 3D multiclass SHAP values
-            if isinstance(self.shap_values, list):
-                self.shap_values = np.asarray(self.shap_values[0])
+            # Preserve full output axis for multiclass/multi-output models
+            if isinstance(raw_shap_values, list):
+                stacked = np.stack(
+                    [np.asarray(v, dtype=float) for v in raw_shap_values], axis=-1
+                )
+                self._multiclass_shap_values = stacked
+                self.shap_values = stacked[:, :, 0]
             elif (
-                isinstance(self.shap_values, np.ndarray) and self.shap_values.ndim == 3  # noqa: PLR2004
+                isinstance(raw_shap_values, np.ndarray) and raw_shap_values.ndim == 3  # noqa: PLR2004
             ):
-                self.shap_values = self.shap_values[:, :, 0]
+                self._multiclass_shap_values = np.asarray(raw_shap_values, dtype=float)
+                self.shap_values = self._multiclass_shap_values[:, :, 0]
+            else:
+                self.shap_values = np.asarray(raw_shap_values, dtype=float)
 
             logger.info("SHAP explainer initialized successfully")
 
@@ -97,14 +105,66 @@ class ModelExplainer:
             logger.error(f"Error calculating global importance: {e}")
             raise
 
+    def _resolve_multiclass_output(
+        self,
+        sample_idx: int,
+        sample_df: pd.DataFrame,
+        class_idx: int | None,
+    ) -> tuple[np.ndarray, float, float | str, Any]:
+        """Select matching class contributions, baseline, score, and label for multiclass models."""
+        if self._multiclass_shap_values is None:
+            raise ValueError("Multiclass SHAP values not available")
+        predicted_label: Any = None
+        resolved_idx = class_idx
+        if hasattr(self.model, "predict"):
+            predicted_label = self.model.predict(sample_df)[0]
+            if resolved_idx is None and hasattr(self.model, "classes_"):
+                classes = list(self.model.classes_)
+                if predicted_label in classes:
+                    resolved_idx = classes.index(predicted_label)
+        if resolved_idx is None:
+            resolved_idx = 0
+
+        n_outputs = self._multiclass_shap_values.shape[2]
+        if resolved_idx < 0 or resolved_idx >= n_outputs:
+            raise ValueError(
+                f"Class index {resolved_idx} out of range for {n_outputs} outputs"
+            )
+
+        shap_vals = np.asarray(
+            self._multiclass_shap_values[sample_idx, :, resolved_idx], dtype=float
+        )
+        expected_arr = (
+            np.asarray(self.explainer.expected_value, dtype=float).reshape(-1)
+            if hasattr(self.explainer, "expected_value")
+            else np.array([0.0])
+        )
+        base_value = (
+            float(expected_arr[resolved_idx])
+            if resolved_idx < expected_arr.size
+            else float(expected_arr[0])
+        )
+
+        if hasattr(self.model, "predict_proba"):
+            proba = self.model.predict_proba(sample_df)[0]
+            output_score: float | str = float(proba[resolved_idx])
+        else:
+            output_score = float(base_value + np.sum(shap_vals))
+
+        return shap_vals, base_value, output_score, predicted_label
+
     def explain_prediction(
-        self, sample_idx: int, feature_names: list[str] | None = None
+        self,
+        sample_idx: int,
+        feature_names: list[str] | None = None,
+        class_idx: int | None = None,
     ) -> dict[str, Any]:
         """Explain a single prediction.
 
         Args:
             sample_idx: Index of the sample to explain
             feature_names: Optional feature names (uses data columns if None)
+            class_idx: Optional output class index for multiclass models
 
         Returns:
             Dictionary with prediction explanation
@@ -113,32 +173,43 @@ class ModelExplainer:
             if sample_idx < 0 or sample_idx >= len(self.data):
                 raise ValueError(f"Sample index {sample_idx} out of range")
 
-            # Get sample and SHAP values
+            # Get sample and feature names
             sample = self.data.iloc[sample_idx]
-            shap_vals = np.asarray(self.shap_values[sample_idx], dtype=float)
-
-            # Use provided feature names or default to data columns
+            sample_df = self.data.iloc[[sample_idx]]
             if feature_names is None:
                 feature_names = list(self.data.columns)
 
-            # Get prediction
-            if hasattr(self.model, "predict"):
-                sample_df = self.data.iloc[[sample_idx]]
-                prediction_raw = self.model.predict(sample_df)[0]
-                prediction: float | str = (
-                    float(np.asarray(prediction_raw).flat[0])
-                    if isinstance(prediction_raw, (int, float, np.number, np.ndarray))
-                    else str(prediction_raw)
-                )
+            predicted_class: Any = None
+            if self._multiclass_shap_values is not None:
+                (
+                    shap_vals,
+                    base_value,
+                    prediction,
+                    predicted_class,
+                ) = self._resolve_multiclass_output(sample_idx, sample_df, class_idx)
             else:
-                prediction = "unknown"
+                shap_vals = np.asarray(self.shap_values[sample_idx], dtype=float)
+                if hasattr(self.model, "predict"):
+                    prediction_raw = self.model.predict(sample_df)[0]
+                    prediction = (
+                        float(np.asarray(prediction_raw).flat[0])
+                        if isinstance(
+                            prediction_raw, (int, float, np.number, np.ndarray)
+                        )
+                        else str(prediction_raw)
+                    )
+                else:
+                    prediction = "unknown"
 
-            # Extract scalar expected value cleanly across SHAP/NumPy versions
-            if hasattr(self.explainer, "expected_value"):
-                expected_arr = np.asarray(self.explainer.expected_value, dtype=float)
-                base_value = float(expected_arr.flat[0]) if expected_arr.size else 0.0
-            else:
-                base_value = 0.0
+                if hasattr(self.explainer, "expected_value"):
+                    expected_arr = np.asarray(
+                        self.explainer.expected_value, dtype=float
+                    )
+                    base_value = (
+                        float(expected_arr.flat[0]) if expected_arr.size else 0.0
+                    )
+                else:
+                    base_value = 0.0
 
             # Create feature contributions dictionary
             contributions = {
@@ -156,7 +227,7 @@ class ModelExplainer:
             top_positive = [(f, v) for f, v in sorted_contributions if v > 0][:5]
             top_negative = [(f, v) for f, v in sorted_contributions if v < 0][:5]
 
-            return {
+            explanation: dict[str, Any] = {
                 "sample_index": sample_idx,
                 "prediction": prediction,
                 "base_value": base_value,
@@ -169,6 +240,13 @@ class ModelExplainer:
                 "top_contributors": sorted_contributions[:5],
                 "total_contribution": float(np.sum(shap_vals)),
             }
+            if predicted_class is not None:
+                explanation["predicted_class"] = (
+                    predicted_class.item()
+                    if isinstance(predicted_class, np.generic)
+                    else predicted_class
+                )
+            return explanation
 
         except Exception as e:
             logger.error(f"Error explaining prediction: {e}")

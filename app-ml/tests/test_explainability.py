@@ -340,9 +340,17 @@ class TestEdgeCases:
         )
         explainer = ModelExplainer(model, multiclass_data)
 
-        # Should handle multiclass case
+        # Should handle multiclass case and match predicted class output
         assert explainer.shap_values is not None
         assert explainer.shap_values.shape[0] == len(multiclass_data)
+
+        # Find a sample whose predicted class is non-zero if available
+        preds = model.predict(multiclass_data)
+        target_idx = next((i for i, p in enumerate(preds) if p != 0), 0)
+        exp = explainer.explain_prediction(sample_idx=target_idx)
+        assert exp["predicted_class"] == int(preds[target_idx])
+        shap_sum = sum(exp["shap_values"].values())
+        assert abs(shap_sum + exp["base_value"] - exp["prediction"]) < 1e-6
 
     def test_constant_features(self):
         """Test explainer with constant features."""

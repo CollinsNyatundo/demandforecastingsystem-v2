@@ -62,7 +62,7 @@ class RetrainingScheduler:
             "triggers": triggers,
             "priority": self._calculate_priority(triggers),
             "timestamp": datetime.now().isoformat(),
-            "trigger_details": self._get_trigger_details(),
+            "trigger_details": self._get_trigger_details(triggers),
         }
 
     def _check_time_trigger(self) -> bool:
@@ -376,28 +376,45 @@ class RetrainingScheduler:
             return "MEDIUM"
         return "LOW"
 
-    def _get_trigger_details(self) -> dict[str, Any]:
+    def _get_trigger_details(self, triggers: list[str] | None = None) -> dict[str, Any]:
         """Get detailed information about each trigger."""
+        active_set = set(triggers) if triggers is not None else None
         return {
             "TIME_INTERVAL": {
-                "active": self._check_time_trigger(),
+                "active": (
+                    "TIME_INTERVAL" in active_set
+                    if active_set is not None
+                    else self._check_time_trigger()
+                ),
                 "time_since_last_training": None,
                 "threshold_days": self.time_interval_days,
                 "description": f"Retrain every {self.time_interval_days} days",
             },
             "PERFORMANCE_DEGRADATION": {
-                "active": self._check_performance_trigger(),
+                "active": (
+                    "PERFORMANCE_DEGRADATION" in active_set
+                    if active_set is not None
+                    else self._check_performance_trigger()
+                ),
                 "current_performance": None,
                 "threshold_percent": self.performance_threshold,
                 "description": f"Retrain if RMSE degrades by >{self.performance_threshold}%",
             },
             "DATA_VOLUME": {
-                "active": self._check_data_trigger(),
+                "active": (
+                    "DATA_VOLUME" in active_set
+                    if active_set is not None
+                    else self._check_data_trigger()
+                ),
                 "threshold_samples": self.data_volume_threshold,
                 "description": f"Retrain if >{self.data_volume_threshold} new samples available",
             },
             "DATA_DRIFT": {
-                "active": self._check_drift_trigger(),
+                "active": (
+                    "DATA_DRIFT" in active_set
+                    if active_set is not None
+                    else self._check_drift_trigger()
+                ),
                 "threshold_p_value": 0.05,
                 "threshold_effect_size": 0.5,
                 "description": "Retrain if significant performance drift detected",

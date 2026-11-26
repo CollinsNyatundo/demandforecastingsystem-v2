@@ -219,10 +219,15 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     Returns:
         MAPE as percentage
     """
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
+    y_true_arr = np.asarray(y_true, dtype=float).reshape(-1)
+    y_pred_arr = np.asarray(y_pred, dtype=float).reshape(-1)
     return float(
-        np.mean(np.abs((y_true - y_pred) / np.where(y_true == 0, 0.01, y_true))) * 100
+        np.mean(
+            np.abs(
+                (y_true_arr - y_pred_arr) / np.where(y_true_arr == 0, 0.01, y_true_arr)
+            )
+        )
+        * 100
     )
 
 
@@ -610,12 +615,46 @@ def optimize_catboost_hyperparameters_enhanced(  # noqa: C901, PLR0913, PLR0915,
     return final_model, metrics
 
 
+def optimize_catboost_params(
+    x_train: pd.DataFrame,
+    y_train: pd.Series | pd.DataFrame,
+) -> dict[str, Any]:
+    """Select validated CatBoost hyperparameters for split Kedro training inputs."""
+    if x_train is None or x_train.empty or y_train is None or len(y_train) == 0:
+        raise ValueError("Training features and targets cannot be empty")
+    if len(x_train) != len(y_train):
+        raise ValueError("Training features and target lengths must match")
+
+    non_numeric = [
+        col
+        for col in x_train.columns
+        if not pd.api.types.is_numeric_dtype(x_train[col])
+    ]
+    if non_numeric:
+        raise ValueError(
+            f"Invalid non-numeric feature columns for CatBoost training: {non_numeric}"
+        )
+
+    y_1d = np.asarray(y_train, dtype=float).reshape(-1)
+    if np.isnan(y_1d).all():
+        raise ValueError("Invalid target values: all targets are NaN")
+
+    return {
+        "iterations": min(200, max(20, len(x_train))),
+        "learning_rate": 0.1,
+        "depth": min(6, max(2, x_train.shape[1])),
+        "l2_leaf_reg": 3.0,
+        "verbose": False,
+        "allow_writing_files": False,
+    }
+
+
 def train_catboost_model(
     x_train: pd.DataFrame,
-    y_train: pd.Series,
+    y_train: pd.Series | pd.DataFrame,
     optimized_params: dict[str, Any] | None = None,
     x_test: pd.DataFrame | None = None,
-    y_test: pd.Series | None = None,
+    y_test: pd.Series | pd.DataFrame | None = None,
 ) -> tuple[CatBoostRegressor, dict[str, float]]:
     """Train a CatBoost regressor using optimized hyperparameters and compute metrics."""
     params: dict[str, Any] = dict(optimized_params or {})
@@ -623,15 +662,17 @@ def train_catboost_model(
     params.setdefault("verbose", False)
     params.setdefault("allow_writing_files", False)
 
+    y_train_1d = np.asarray(y_train, dtype=float).reshape(-1)
     model = CatBoostRegressor(**params)
-    model.fit(x_train, y_train)
+    model.fit(x_train, y_train_1d)
 
     eval_x = x_test if x_test is not None else x_train
     eval_y = y_test if y_test is not None else y_train
-    preds = model.predict(eval_x)
-    rmse = float(np.sqrt(mean_squared_error(eval_y, preds)))
-    mae = float(mean_absolute_error(eval_y, preds))
-    mape = float(compute_zero_safe_mape(np.asarray(eval_y), np.asarray(preds)))
+    eval_y_1d = np.asarray(eval_y, dtype=float).reshape(-1)
+    preds_1d = np.asarray(model.predict(eval_x), dtype=float).reshape(-1)
+    rmse = float(np.sqrt(mean_squared_error(eval_y_1d, preds_1d)))
+    mae = float(mean_absolute_error(eval_y_1d, preds_1d))
+    mape = float(compute_zero_safe_mape(eval_y_1d, preds_1d))
     return model, {"rmse": rmse, "mae": mae, "mape": mape}
 
 
