@@ -9,7 +9,10 @@ from .schemas import RawBikeDataSchema
 logger = logging.getLogger(__name__)
 
 
-def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
+_MAX_SKEWNESS_THRESHOLD = 2
+
+
+def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:  # noqa: C901, PLR0912
     """Validate data quality and size for ETL processing.
 
     Args:
@@ -68,7 +71,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
         logger.error(f"Empty dataset detected at {stage_name}")
         return False
 
-    if len(df) < 100:
+    if len(df) < MIN_TRAINING_SAMPLES:
         logger.warning(
             f"Dataset at {stage_name} has only {len(df)} rows. "
             "This may not be sufficient for reliable analysis."
@@ -120,7 +123,7 @@ def validate_etl_data(df: pd.DataFrame, stage_name: str) -> bool:
     for col in numeric_cols:
         if col in df.columns:
             skewness = df[col].skew()
-            if abs(skewness) > 2:
+            if abs(skewness) > _MAX_SKEWNESS_THRESHOLD:
                 logger.warning(
                     f"Column '{col}' at {stage_name} has high skewness: {skewness:.2f}. "
                     "Consider transformation if this affects model performance."

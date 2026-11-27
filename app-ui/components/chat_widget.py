@@ -1,6 +1,6 @@
 """Floating AI chat widget — rendered in the app shell, available on every page."""
 
-from dash import html, dcc
+from dash import dcc, html
 
 from config_theme import THEME
 
@@ -44,7 +44,6 @@ def create_chat_widget():
                 className="chat-fab",
                 n_clicks=0,
             ),
-
             # Chat Panel (hidden by default)
             html.Div(
                 [
@@ -53,8 +52,13 @@ def create_chat_widget():
                         [
                             html.Div(
                                 [
-                                    html.I(className="bi bi-robot me-2", style={"color": THEME["cyan"]}),
-                                    html.Span("UrbanFlow AI", className="fw-bold text-white"),
+                                    html.I(
+                                        className="bi bi-robot me-2",
+                                        style={"color": THEME["cyan"]},
+                                    ),
+                                    html.Span(
+                                        "UrbanFlow AI", className="fw-bold text-white"
+                                    ),
                                 ],
                                 className="d-flex align-items-center",
                             ),
@@ -67,7 +71,6 @@ def create_chat_widget():
                         ],
                         className="chat-header",
                     ),
-
                     # Messages area
                     html.Div(
                         [
@@ -76,7 +79,13 @@ def create_chat_widget():
                                 [
                                     html.Div(
                                         [
-                                            html.I(className="bi bi-robot me-2", style={"color": THEME["cyan"], "fontSize": "0.85rem"}),
+                                            html.I(
+                                                className="bi bi-robot me-2",
+                                                style={
+                                                    "color": THEME["cyan"],
+                                                    "fontSize": "0.85rem",
+                                                },
+                                            ),
                                             html.Span(
                                                 "Hi! I'm UrbanFlow AI. Ask me about demand patterns, "
                                                 "model health, or optimization strategies.",
@@ -91,10 +100,8 @@ def create_chat_widget():
                         id="chat-messages",
                         className="chat-messages",
                     ),
-
                     # Suggested prompts
                     html.Div(id="chat-suggestions", className="chat-suggestions"),
-
                     # Input bar
                     html.Div(
                         [
@@ -120,7 +127,6 @@ def create_chat_widget():
                 className="chat-panel",
                 style={"display": "none"},
             ),
-
             # Client-side stores
             dcc.Store(id="chat-history-store", data=[]),
             dcc.Store(id="chat-visible-store", data=False),

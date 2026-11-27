@@ -61,7 +61,7 @@ def init_clearml_task(
         return None
 
 
-def log_optuna_study(task: "Task | None", study: Any) -> None:
+def log_optuna_study(task: "Task | None", study: object) -> None:
     """Log Optuna study visualizations to ClearML.
 
     ClearML auto-captures Optuna, but this adds explicit plots.
@@ -74,7 +74,7 @@ def log_optuna_study(task: "Task | None", study: Any) -> None:
         return
 
     try:
-        import optuna.visualization as vis
+        import optuna.visualization as vis  # noqa: PLC0415
 
         logger = task.get_logger()
 
@@ -89,8 +89,8 @@ def log_optuna_study(task: "Task | None", study: Any) -> None:
         try:
             fig = vis.plot_param_importances(study)
             logger.report_plotly("Hyperparameters", "Parameter Importance", fig)
-        except Exception:
-            pass  # May fail with insufficient trials
+        except Exception as e:
+            _LOGGER.debug(f"Could not create parameter importances: {e}")
 
         # Optimization history
         try:
@@ -106,7 +106,7 @@ def log_optuna_study(task: "Task | None", study: Any) -> None:
 
 def log_model_artifact(
     task: "Task | None",
-    model: Any,
+    model: object,
     model_name: str = "model",
     framework: str = "catboost",
 ) -> None:
@@ -173,7 +173,7 @@ def with_clearml_tracking(
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
             task = init_clearml_task(
                 project_name=project_name,
                 task_name=task_name or func.__name__,

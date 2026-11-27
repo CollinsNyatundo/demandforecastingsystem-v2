@@ -7,7 +7,7 @@ so that all pages and components import from one location.
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -28,7 +28,7 @@ THEME = {
     "bg": "#09090b",
     "paper": "rgba(24, 24, 27, 0.65)",
     "text": "#fafafa",
-    "text_secondary": "#b4b4be",          # WCAG-AA contrast on dark bg
+    "text_secondary": "#b4b4be",  # WCAG-AA contrast on dark bg
     "blue": "#3b82f6",
     "cyan": "#06b6d4",
     "green": "#10b981",
@@ -39,25 +39,25 @@ THEME = {
 }
 
 # Plotly template shared across all charts
-PLOTLY_DEFAULTS = dict(
-    template="plotly_dark",
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(
-        family="Inter, system-ui, sans-serif",
-        color=THEME["text"],
-        size=12,
-    ),
-    margin=dict(l=40, r=20, t=20, b=20),
-    hovermode="x unified",
-)
+PLOTLY_DEFAULTS = {
+    "template": "plotly_dark",
+    "paper_bgcolor": "rgba(0,0,0,0)",
+    "plot_bgcolor": "rgba(0,0,0,0)",
+    "font": {
+        "family": "Inter, system-ui, sans-serif",
+        "color": THEME["text"],
+        "size": 12,
+    },
+    "margin": {"l": 40, "r": 20, "t": 20, "b": 20},
+    "hovermode": "x unified",
+}
 
 # ---------------------------------------------------------------------------
 # Application state (shared across pages)
 # ---------------------------------------------------------------------------
 app_state = {
     "data_loaded": False,
-    "startup_time": datetime.utcnow().isoformat(),
+    "startup_time": datetime.now(UTC).isoformat(),
     "error": None,
     "row_count": 0,
 }
@@ -132,4 +132,3 @@ try:
     load_data()
 except Exception as e:
     logger.warning(f"Initial data load failed: {e}")
-

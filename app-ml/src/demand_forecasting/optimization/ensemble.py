@@ -123,7 +123,7 @@ class EnsembleManager:
                 estimators=base_models,
                 final_estimator=self.meta_model,
                 cv=cv_folds,
-                n_jobs=-1,
+                n_jobs=1,
                 passthrough=False,  # Don't pass original features to meta-model
             )
 

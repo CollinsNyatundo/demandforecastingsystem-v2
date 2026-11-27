@@ -80,23 +80,14 @@ class TestHealthEndpoints:
         response = client.get("/metrics")
         assert response.status_code == 200
 
-    def test_metrics_endpoint_returns_json(self, client):
-        """Test that /metrics endpoint returns valid JSON."""
+    def test_metrics_endpoint_returns_prometheus_text(self, client):
+        """Test that /metrics endpoint returns Prometheus exposition metrics."""
         response = client.get("/metrics")
-        data = response.get_json()
+        body = response.get_data(as_text=True)
 
-        assert data is not None
-        assert "service" in data
-        assert "data_loaded" in data
-        assert "uptime_seconds" in data
-        assert "timestamp" in data
-
-    def test_metrics_endpoint_service_name(self, client):
-        """Test that /metrics returns correct service name."""
-        response = client.get("/metrics")
-        data = response.get_json()
-
-        assert data["service"] == "demand-forecasting-ui"
+        assert response.mimetype == "text/plain"
+        assert "dash_app_memory_bytes" in body
+        assert "dash_app_cpu_percent" in body
 
 
 class TestAppState:

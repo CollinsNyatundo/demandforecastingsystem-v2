@@ -128,7 +128,11 @@ def chat(
     # Sanitize input
     clean_msg = _sanitize_input(user_message)
     if not clean_msg:
-        return {"response": "Please enter a valid message.", "error": "empty_input", "rate_limited": False}
+        return {
+            "response": "Please enter a valid message.",
+            "error": "empty_input",
+            "rate_limited": False,
+        }
 
     # Injection check
     if _check_injection(clean_msg):
@@ -149,22 +153,29 @@ def chat(
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=GROK_API_KEY, base_url=GROK_BASE_URL)
+        client = OpenAI(api_key=GROQ_API_KEY, base_url=GROQ_BASE_URL)
 
         # Build messages
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT.format(context=page_context or "No page context available.")},
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT.format(
+                    context=page_context or "No page context available."
+                ),
+            },
         ]
         # Add history (force role to be user/assistant only)
         for msg in (history or [])[-10:]:  # Keep last 10 for context window
             role = "user" if msg.get("role") == "user" else "assistant"
-            messages.append({"role": role, "content": _sanitize_input(msg.get("content", ""))})
+            messages.append(
+                {"role": role, "content": _sanitize_input(msg.get("content", ""))}
+            )
 
         # Add current message
         messages.append({"role": "user", "content": clean_msg})
 
         response = client.chat.completions.create(
-            model=GROK_MODEL,
+            model=GROQ_MODEL,
             messages=messages,
             max_tokens=500,
             temperature=0.7,

@@ -13,7 +13,7 @@ from datetime import datetime
 
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, callback, dcc, html, ctx
+from dash import Input, Output, State, callback, ctx, dcc, html
 from flask import jsonify
 
 # Configure structured logging
@@ -47,9 +47,9 @@ server = app.server
 # ---------------------------------------------------------------------------
 # Components
 # ---------------------------------------------------------------------------
-from components.sidebar import create_sidebar
-from components.navbar import create_navbar
 from components.chat_widget import create_chat_widget
+from components.navbar import create_navbar
+from components.sidebar import create_sidebar
 
 # ---------------------------------------------------------------------------
 # Layout
@@ -57,10 +57,8 @@ from components.chat_widget import create_chat_widget
 app.layout = html.Div(
     [
         dcc.Location(id="url", refresh=False),
-
         # Sidebar
         create_sidebar(),
-
         # Main content area
         html.Div(
             [
@@ -72,7 +70,6 @@ app.layout = html.Div(
             ],
             className="content-area",
         ),
-
         # Floating AI Chat Widget (available on all pages)
         create_chat_widget(),
     ],
@@ -109,9 +106,12 @@ def toggle_chat(fab_clicks, close_clicks, visible):
 )
 def update_suggestions(pathname):
     from components.chat_widget import PAGE_PROMPTS
+
     prompts = PAGE_PROMPTS.get(pathname, PAGE_PROMPTS.get("/", []))
     return [
-        html.Button(p, className="chat-suggestion-chip", id={"type": "suggestion", "index": i})
+        html.Button(
+            p, className="chat-suggestion-chip", id={"type": "suggestion", "index": i}
+        )
         for i, p in enumerate(prompts)
     ]
 
@@ -129,7 +129,7 @@ app.clientside_callback(
         if (window.UrbanFlow && window.UrbanFlow.streamChat) {
             window.UrbanFlow.streamChat(message, history, pathname);
         }
-        
+
         // Return clear input and preserve history state (JS manages DOM and history via window object)
         return ["", window.dash_clientside.no_update];
     }
@@ -148,7 +148,7 @@ app.clientside_callback(
 
 def _build_page_context(pathname: str) -> str:
     """Build context string based on current page."""
-    from config_theme import df, app_state
+    from config_theme import df
 
     context_parts = [f"Current page: {pathname}"]
 
@@ -158,14 +158,19 @@ def _build_page_context(pathname: str) -> str:
 
     try:
         from api_client import get_all_service_health, get_drift_metrics
+
         services = get_all_service_health()
         healthy = sum(1 for s in services if s.get("healthy"))
         context_parts.append(f"Services healthy: {healthy}/{len(services)}")
 
         drift = get_drift_metrics()
         if drift:
-            context_parts.append(f"Drift share: {drift.get('evidently_drift_share', 0):.1%}")
-            context_parts.append(f"Dataset drift detected: {'Yes' if drift.get('evidently_dataset_drift', 0) > 0 else 'No'}")
+            context_parts.append(
+                f"Drift share: {drift.get('evidently_drift_share', 0):.1%}"
+            )
+            context_parts.append(
+                f"Dataset drift detected: {'Yes' if drift.get('evidently_dataset_drift', 0) > 0 else 'No'}"
+            )
     except Exception:
         context_parts.append("Backend services: not connected (demo mode)")
 
@@ -175,52 +180,69 @@ def _build_page_context(pathname: str) -> str:
 # ---------------------------------------------------------------------------
 # Flask health and proxy endpoints
 # ---------------------------------------------------------------------------
-from flask import request, Response, stream_with_context
+from flask import Response, request, stream_with_context
+
 
 @server.route("/chat/stream", methods=["POST"])
 def proxy_chat_stream():
     import requests
-    from api_client import MODEL_SERVER_URL, MODEL_API_KEY
-    
+
+    from api_client import MODEL_API_KEY, MODEL_SERVER_URL
+
     data = request.json
+
     def generate():
         try:
             resp = requests.post(
                 f"{MODEL_SERVER_URL}/chat/stream",
                 json=data,
-                headers={"X-API-Key": MODEL_API_KEY, "Content-Type": "application/json"},
+                headers={
+                    "X-API-Key": MODEL_API_KEY,
+                    "Content-Type": "application/json",
+                },
                 stream=True,
-                timeout=60
+                timeout=60,
             )
             for chunk in resp.iter_content(chunk_size=None):
                 if chunk:
                     yield chunk
         except Exception as e:
-            yield f"data: {{\"error\": \"{str(e)}\"}}\n\n".encode("utf-8")
+            yield f'data: {{"error": "{e!s}"}}\n\n'.encode()
 
     return Response(stream_with_context(generate()), content_type="text/event-stream")
 
 
 @server.route("/health")
 def health_check():
-    return jsonify({
-        "status": "healthy",
-        "service": "demand-forecasting-ui",
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    from datetime import UTC
+
+    return jsonify(
+        {
+            "status": "healthy",
+            "service": "demand-forecasting-ui",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+    )
 
 
 @server.route("/ready")
 def readiness_check():
+    from datetime import UTC
+
     is_ready = app_state["data_loaded"] and app_state["error"] is None
-    return jsonify({
-        "ready": is_ready,
-        "checks": {
-            "data_loaded": app_state["data_loaded"],
-            "no_errors": app_state["error"] is None,
-        },
-        "timestamp": datetime.utcnow().isoformat(),
-    }), 200 if is_ready else 503
+    return (
+        jsonify(
+            {
+                "ready": is_ready,
+                "checks": {
+                    "data_loaded": app_state["data_loaded"],
+                    "no_errors": app_state["error"] is None,
+                },
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        ),
+        200 if is_ready else 503,
+    )
 
 
 @server.route("/metrics")
@@ -232,16 +254,19 @@ def metrics():
     cpu_percent = process.cpu_percent()
 
     return Response(
-        f"dash_app_memory_bytes {mem_info.rss}\n"
-        f"dash_app_cpu_percent {cpu_percent}\n",
+        f"dash_app_memory_bytes {mem_info.rss}\ndash_app_cpu_percent {cpu_percent}\n",
         mimetype="text/plain",
     )
+
 
 @server.route("/reports/<path:filename>")
 def serve_report(filename):
     import os
+
     from flask import send_from_directory
+
     from config_theme import project_root
+
     reports_dir = os.path.join(project_root, "app-ml", "data", "09_reports")
     return send_from_directory(reports_dir, filename)
 

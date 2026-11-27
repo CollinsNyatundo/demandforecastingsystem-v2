@@ -11,19 +11,67 @@ def create_sidebar():
     nav_items = [
         {"label": "Home", "icon": "bi bi-house-door", "href": "/"},
         {"label": "Dashboard", "icon": "bi bi-speedometer2", "href": "/dashboard"},
-        {"label": "Predictions", "icon": "bi bi-lightning-charge", "href": "/predictions"},
-        {"label": "Model Health", "icon": "bi bi-heart-pulse", "href": "/model-metrics"},
+        {
+            "label": "Predictions",
+            "icon": "bi bi-lightning-charge",
+            "href": "/predictions",
+        },
+        {
+            "label": "Model Health",
+            "icon": "bi bi-heart-pulse",
+            "href": "/model-metrics",
+        },
     ]
 
     external_links = [
-        {"label": "MLflow", "icon": "bi bi-graph-up", "href": "http://localhost:5000", "external": True},
-        {"label": "Airflow", "icon": "bi bi-hdd-network", "href": "http://localhost:8081", "external": True},
-        {"label": "Grafana", "icon": "bi bi-bar-chart-line", "href": "http://localhost:3000", "external": True},
-        {"label": "MinIO", "icon": "bi bi-box-seam", "href": "http://localhost:9001", "external": True},
-        {"label": "Prometheus", "icon": "bi bi-activity", "href": "http://localhost:9090", "external": True},
-        {"label": "Optuna", "icon": "bi bi-speedometer2", "href": "http://localhost:8084", "external": True},
-        {"label": "ClearML", "icon": "bi bi-broadcast", "href": "http://localhost:8082", "external": True},
-        {"label": "Nginx Status", "icon": "bi bi-diagram-2", "href": "http://localhost:8888/nginx_status", "external": True},
+        {
+            "label": "MLflow",
+            "icon": "bi bi-graph-up",
+            "href": "http://localhost:5000",
+            "external": True,
+        },
+        {
+            "label": "Airflow",
+            "icon": "bi bi-hdd-network",
+            "href": "http://localhost:8081",
+            "external": True,
+        },
+        {
+            "label": "Grafana",
+            "icon": "bi bi-bar-chart-line",
+            "href": "http://localhost:3000",
+            "external": True,
+        },
+        {
+            "label": "MinIO",
+            "icon": "bi bi-box-seam",
+            "href": "http://localhost:9001",
+            "external": True,
+        },
+        {
+            "label": "Prometheus",
+            "icon": "bi bi-activity",
+            "href": "http://localhost:9090",
+            "external": True,
+        },
+        {
+            "label": "Optuna",
+            "icon": "bi bi-speedometer2",
+            "href": "http://localhost:8084",
+            "external": True,
+        },
+        {
+            "label": "ClearML",
+            "icon": "bi bi-broadcast",
+            "href": "http://localhost:8082",
+            "external": True,
+        },
+        {
+            "label": "Nginx Status",
+            "icon": "bi bi-diagram-2",
+            "href": "http://localhost:8888/nginx_status",
+            "external": True,
+        },
     ]
 
     nav_links = []
@@ -47,7 +95,10 @@ def create_sidebar():
                 [
                     html.I(className=f"{item['icon']} me-3"),
                     html.Span(item["label"]),
-                    html.I(className="bi bi-box-arrow-up-right ms-auto", style={"fontSize": "0.7rem"}),
+                    html.I(
+                        className="bi bi-box-arrow-up-right ms-auto",
+                        style={"fontSize": "0.7rem"},
+                    ),
                 ],
                 href=item["href"],
                 target="_blank",
@@ -68,15 +119,25 @@ def create_sidebar():
                     ),
                     html.Div(
                         [
-                            html.Span("URBAN", className="text-white fw-bold", style={"fontSize": "0.9rem"}),
-                            html.Span("FLOW", style={"color": THEME["blue"], "fontWeight": 300, "fontSize": "0.9rem"}),
+                            html.Span(
+                                "URBAN",
+                                className="text-white fw-bold",
+                                style={"fontSize": "0.9rem"},
+                            ),
+                            html.Span(
+                                "FLOW",
+                                style={
+                                    "color": THEME["blue"],
+                                    "fontWeight": 300,
+                                    "fontSize": "0.9rem",
+                                },
+                            ),
                         ],
                     ),
                 ],
                 className="sidebar-brand",
             ),
             html.Hr(className="sidebar-divider"),
-
             # Navigation
             html.Div(
                 [
@@ -85,7 +146,6 @@ def create_sidebar():
                 ],
                 className="mb-4",
             ),
-
             # External Services
             html.Div(
                 [
@@ -94,7 +154,6 @@ def create_sidebar():
                 ],
                 className="mb-4",
             ),
-
             # System Status (bottom)
             html.Div(
                 [
@@ -102,7 +161,9 @@ def create_sidebar():
                     html.Div(
                         [
                             html.Div(className="status-dot-live"),
-                            html.Small("System Operational", className="text-muted ms-2"),
+                            html.Small(
+                                "System Operational", className="text-muted ms-2"
+                            ),
                         ],
                         className="d-flex align-items-center px-3 py-2",
                     ),

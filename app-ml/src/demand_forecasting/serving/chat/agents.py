@@ -1,3 +1,5 @@
+import os
+
 from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 from langgraph_supervisor import create_supervisor
@@ -8,8 +10,6 @@ from demand_forecasting.serving.chat.tools import (
     read_minio_object,
     search_mlflow_runs,
 )
-
-import os
 
 # Core LLM initialized for the backend
 # Relies on GROQ_API_KEY environment variable injected via Docker
@@ -27,28 +27,28 @@ analytics_worker = create_react_agent(
     model=model,
     tools=[search_mlflow_runs],
     name="analytics_worker",
-    prompt="You are an MLOps analytics expert. Use the search_mlflow_runs tool to fetch model performance metrics and help the user analyze them."
+    prompt="You are an MLOps analytics expert. Use the search_mlflow_runs tool to fetch model performance metrics and help the user analyze them.",
 )
 
 pipeline_worker = create_react_agent(
     model=model,
     tools=[check_airflow_dag_status],
     name="pipeline_worker",
-    prompt="You are a data engineering pipeline specialist. Use the check_airflow_dag_status tool to examine Airflow DAG execution states."
+    prompt="You are a data engineering pipeline specialist. Use the check_airflow_dag_status tool to examine Airflow DAG execution states.",
 )
 
 storage_worker = create_react_agent(
     model=model,
     tools=[read_minio_object],
     name="storage_worker",
-    prompt="You are an infrastructure storage expert. Use the read_minio_object tool to inspect CSV datasets or raw debug logs residing in MinIO buckets."
+    prompt="You are an infrastructure storage expert. Use the read_minio_object tool to inspect CSV datasets or raw debug logs residing in MinIO buckets.",
 )
 
 # -------------------------------------------------------------------------
 # Orchestrating Supervisor
 # -------------------------------------------------------------------------
 
-# The orchestrator dynamically builds the Command(goto=...) framework internally 
+# The orchestrator dynamically builds the Command(goto=...) framework internally
 workflow = create_supervisor(
     [analytics_worker, pipeline_worker, storage_worker],
     model=model,

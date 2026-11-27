@@ -112,7 +112,7 @@ class ErrorHandler:
             )
 
         if reraise:
-            raise
+            raise error
 
         return error_id
 

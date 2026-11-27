@@ -1,4 +1,7 @@
 import pytest
+
+pytest.importorskip("langchain_core")
+pytest.importorskip("langgraph")
 from langchain_core.messages import HumanMessage
 from demand_forecasting.serving.chat.agents import workflow
 

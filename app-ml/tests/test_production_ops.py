@@ -149,8 +149,9 @@ class TestDriftDetector:
     def test_database_table_creation(self, drift_detector):
         """Test that database tables are created."""
         # Check if drift_records table exists
-        inspector = drift_detector.engine
-        tables = inspector.table_names()
+        from sqlalchemy import inspect
+
+        tables = inspect(drift_detector.engine).get_table_names()
         assert "drift_records" in tables
 
     def test_detect_no_drift(
@@ -327,8 +328,9 @@ class TestRetrainingScheduler:
 
     def test_database_table_creation(self, retraining_scheduler):
         """Test that database tables are created."""
-        inspector = retraining_scheduler.engine
-        tables = inspector.table_names()
+        from sqlalchemy import inspect
+
+        tables = inspect(retraining_scheduler.engine).get_table_names()
         assert "retraining_records" in tables
 
     def test_time_trigger_no_previous(self, retraining_scheduler):
@@ -395,8 +397,11 @@ class TestRetrainingScheduler:
         # Should not trigger without baseline
         assert result["should_trigger"] is False
 
+    @patch("automated_retraining.os.path.exists", return_value=True)
     @patch("automated_retraining.pd.read_csv")
-    def test_data_trigger_with_growth(self, mock_read_csv, retraining_scheduler):
+    def test_data_trigger_with_growth(
+        self, mock_read_csv, _mock_exists, retraining_scheduler
+    ):
         """Test data trigger when data has grown significantly."""
         # Mock current data size
         mock_read_csv.return_value = pd.DataFrame({"col": range(1200)})
@@ -554,19 +559,21 @@ class TestIntegration:
         assert len(triggers) >= 1
 
     def test_database_persistence(
-        self, drift_detector, reference_data, production_data_with_drift
+        self, tmp_path, reference_data, production_data_with_drift
     ):
         """Test that records persist in database."""
+        storage_url = f"sqlite:///{tmp_path / 'drift_persistence.db'}"
+        detector = DriftDetector(storage_url=storage_url)
+
         # Detect drift
-        drift_detector.detect_drift(
+        detector.detect_drift(
             reference_data=reference_data,
             production_data=production_data_with_drift,
             feature_cols=["sales", "quantity"],
         )
 
         # Close and recreate detector (simulates restart)
-        storage_url = drift_detector.storage_url
-        drift_detector.engine.dispose()
+        detector.engine.dispose()
 
         new_detector = DriftDetector(storage_url=storage_url)
 
@@ -585,7 +592,7 @@ class TestIntegration:
 class TestPerformance:
     """Performance tests for production operations."""
 
-    def test_drift_detection_performance(self, drift_detector, benchmark):
+    def test_drift_detection_performance(self, drift_detector):
         """Test drift detection performance."""
         np.random.seed(42)
         reference = pd.DataFrame(

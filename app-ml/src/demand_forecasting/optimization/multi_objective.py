@@ -34,7 +34,20 @@ def compute_zero_safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
 
 
-def objective_multi(  # noqa: PLR0913
+def _validate_objective_inputs(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+) -> None:
+    """Validate that training/test inputs are non-empty and aligned."""
+    if X_train.empty or X_test.empty or len(y_train) == 0 or len(y_test) == 0:
+        raise ValueError("Training and test datasets cannot be empty")
+    if len(X_train) != len(y_train) or len(X_test) != len(y_test):
+        raise ValueError("Feature and target lengths must match")
+
+
+def objective_multi(  # noqa: PLR0913, PLR0917
     trial: Trial,
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
@@ -57,6 +70,8 @@ def objective_multi(  # noqa: PLR0913
     """
     if objectives is None:
         objectives = ["rmse", "mae", "training_time"]
+
+    _validate_objective_inputs(X_train, X_test, y_train, y_test)
 
     # Suggest hyperparameters
     params = {
@@ -110,11 +125,7 @@ def objective_multi(  # noqa: PLR0913
             cv_rmse = -np.mean(cv_scores)
             objectives_values.append(cv_rmse)
 
-        return (
-            tuple(objectives_values)
-            if len(objectives_values) > 1
-            else objectives_values[0]
-        )
+        return tuple(float(val) for val in objectives_values)
 
     except Exception as e:
         logger.error(f"Trial {trial.number} failed: {e}")
@@ -176,7 +187,7 @@ class MultiObjectiveOptimizer:
             logger.error(f"Failed to create study: {e}")
             raise
 
-    def optimize(  # noqa: PLR0913
+    def optimize(  # noqa: PLR0913, PLR0917
         self,
         X_train: pd.DataFrame,
         X_test: pd.DataFrame,

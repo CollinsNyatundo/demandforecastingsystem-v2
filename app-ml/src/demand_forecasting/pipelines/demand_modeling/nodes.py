@@ -23,11 +23,13 @@ try:
 except ImportError:
     _CLEARML_AVAILABLE = False
 
-    def init_clearml_task(**kwargs):
-        return None  # type: ignore[misc]
+    def init_clearml_task(**kwargs: object) -> None:
+        """Fallback no-op when ClearML is unavailable."""
+        return
 
-    def log_metrics(*args):
-        return None  # type: ignore[misc]
+    def log_metrics(*args: object) -> None:
+        """Fallback no-op when ClearML is unavailable."""
+        return
 
 
 _LOGGER = logging.getLogger(__name__)

@@ -202,19 +202,30 @@ def _validate_catboost_search_space(catboost_space: dict[str, Any]) -> None:  # 
                 )
 
 
+def _validate_min_max_ranges(space: dict[str, Any]) -> None:
+    """Validate that every min/max hyperparameter range satisfies min < max."""
+    for param, cfg in space.items():
+        if isinstance(cfg, dict) and "min" in cfg and "max" in cfg:
+            if cfg["min"] >= cfg["max"]:
+                raise ValueError(
+                    f"Invalid range for '{param}': min={cfg['min']} >= max={cfg['max']}. "
+                    f"Min must be less than max."
+                )
+
+
 def _validate_random_forest_search_space(rf_space: dict[str, Any]) -> None:
-    """Validate RandomForest search space parameters."""
-    # Validate n_estimators
+    """Validate search space parameters (RandomForest and generic min/max bounds)."""
+    if not rf_space:
+        raise ValueError("search_space cannot be empty.")
+
+    _validate_min_max_ranges(rf_space)
+
+    # Validate n_estimators bounds
     if "n_estimators" in rf_space:
         n_est_config = rf_space["n_estimators"]
         if "min" in n_est_config and "max" in n_est_config:
             min_est = n_est_config["min"]
             max_est = n_est_config["max"]
-
-            if min_est >= max_est:
-                raise ValueError(
-                    f"Invalid n_estimators range: min={min_est} >= max={max_est}"
-                )
 
             if not (
                 MIN_N_ESTIMATORS <= min_est <= MAX_N_ESTIMATORS
@@ -224,17 +235,12 @@ def _validate_random_forest_search_space(rf_space: dict[str, Any]) -> None:
                     f"n_estimators range [{min_est}, {max_est}] is outside valid bounds [{MIN_N_ESTIMATORS}, {MAX_N_ESTIMATORS}]"
                 )
 
-    # Validate max_depth
+    # Validate max_depth bounds
     if "max_depth" in rf_space:
         depth_config = rf_space["max_depth"]
         if "min" in depth_config and "max" in depth_config:
             min_depth = depth_config["min"]
             max_depth = depth_config["max"]
-
-            if min_depth >= max_depth:
-                raise ValueError(
-                    f"Invalid max_depth range: min={min_depth} >= max={max_depth}"
-                )
 
             if not (
                 1 <= min_depth <= MAX_DEPTH_LIMIT and 1 <= max_depth <= MAX_DEPTH_LIMIT
@@ -269,6 +275,9 @@ def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
         ... }
         >>> validate_search_space_parameters(params)  # No exception = valid
     """
+    if not isinstance(parameters, dict):
+        raise ValueError("Parameters must be a dictionary.")
+
     # Check if optuna key exists
     if "optuna" not in parameters:
         raise KeyError(
@@ -280,13 +289,26 @@ def validate_search_space_parameters(parameters: dict[str, Any]) -> None:
     # Validate Optuna configuration
     _validate_optuna_config(optuna_params)
 
+    has_catboost_space = (
+        "catboost_search_space" in optuna_params
+        or "catboost_search_space" in parameters
+    )
+    has_search_space = "search_space" in optuna_params
+
+    if not has_catboost_space and not has_search_space:
+        raise KeyError(
+            "Missing 'search_space' or 'catboost_search_space' in optuna configuration."
+        )
+
     # Validate CatBoost search space (recommended primary model)
-    if "catboost_search_space" in optuna_params:
-        catboost_space = optuna_params["catboost_search_space"]
+    if has_catboost_space:
+        catboost_space = optuna_params.get(
+            "catboost_search_space", parameters.get("catboost_search_space", {})
+        )
         _validate_catboost_search_space(catboost_space)
 
-    # Validate RandomForest search space if present
-    if "search_space" in optuna_params:
+    # Validate RandomForest / generic search space if present
+    if has_search_space:
         rf_space = optuna_params["search_space"]
         _validate_random_forest_search_space(rf_space)
 
@@ -388,7 +410,7 @@ def get_email_config() -> dict[str, str] | None:
     """
     required_vars = {
         "user": "AIRFLOW__SMTP__SMTP_USER",
-        "password": "AIRFLOW__SMTP__SMTP_PASSWORD",
+        "password": "AIRFLOW__SMTP__SMTP_PASSWORD",  # nosec B105
         "host": "AIRFLOW__SMTP__SMTP_HOST",
         "port": "AIRFLOW__SMTP__SMTP_PORT",
     }
@@ -439,12 +461,13 @@ def parse_s3_timestamp_path(path: str) -> str | None:
         # Split path and look for timestamp-like patterns
         parts = path.split("/")
 
-        # Look for YYYY-MM-DD pattern
+        # Look for YYYY-MM-DD pattern (standalone or embedded e.g. run_date=2024-01-15)
         timestamp_pattern = r"\d{4}-\d{2}-\d{2}"
 
         for part in parts:
-            if re.match(timestamp_pattern, part):
-                return part
+            match = re.search(timestamp_pattern, part)
+            if match:
+                return match.group(0)
 
         return None
 

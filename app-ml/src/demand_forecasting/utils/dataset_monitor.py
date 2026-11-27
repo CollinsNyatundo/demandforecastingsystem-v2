@@ -36,7 +36,7 @@ class DatasetMonitor:
     def __init__(
         self,
         metrics_dir: str = "/opt/airflow/data/dataset_metrics",
-        s3_endpoint: str = "http://host.docker.internal:9000",
+        s3_endpoint: str | None = None,
         s3_key: str | None = None,
         s3_secret: str | None = None,
         s3_bucket: str = "demand-forecasting",
@@ -46,7 +46,9 @@ class DatasetMonitor:
         self.metrics_dir.mkdir(parents=True, exist_ok=True)
 
         # S3 filesystem for actual file timestamp checking
-        self.s3_endpoint = s3_endpoint
+        self.s3_endpoint = s3_endpoint or os.getenv(
+            "MINIO_ENDPOINT", "http://host.docker.internal:9000"
+        )
         # Load credentials from environment - NO hardcoded defaults for security
         self.s3_key = (
             s3_key or os.getenv("MINIO_ACCESS_KEY") or os.getenv("MINIO_ROOT_USER")
@@ -68,11 +70,11 @@ class DatasetMonitor:
         # Initialize S3 filesystem
         try:
             self.fs = s3fs.S3FileSystem(
-                client_kwargs={"endpoint_url": s3_endpoint},
+                client_kwargs={"endpoint_url": self.s3_endpoint},
                 key=self.s3_key,
                 secret=self.s3_secret,
             )
-            logger.info(f"S3 filesystem initialized for endpoint: {s3_endpoint}")
+            logger.info(f"S3 filesystem initialized for endpoint: {self.s3_endpoint}")
         except Exception as e:
             logger.warning(f"Failed to initialize S3 filesystem: {e}")
             self.fs = None

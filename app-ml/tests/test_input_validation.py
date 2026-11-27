@@ -50,13 +50,13 @@ def test_missing_features():
                 "day_of_week": 3,
             }
         )
-    assert "Missing required features" in str(exc_info.value)
+    assert "Missing required core features" in str(exc_info.value)
     assert "temp" in str(exc_info.value)
 
     # Test multiple missing features
     with pytest.raises(ValidationError) as exc_info:
         PredictionRequest(features={"temp": 0.5, "humidity": 0.65})
-    assert "Missing required features" in str(exc_info.value)
+    assert "Missing required core features" in str(exc_info.value)
     assert "wind_speed" in str(exc_info.value)
     assert "hour" in str(exc_info.value)
     assert "day_of_week" in str(exc_info.value)

@@ -110,19 +110,22 @@ class DriftDetector:
             "DRIFT_STORAGE_URL", "postgresql://airflow:airflow@localhost:5432/optuna"
         )
 
-        # Create engine with connection pooling (pg-aiguide best practices)
-        self.engine = create_engine(
-            self.storage_url,
-            poolclass=QueuePool,
-            pool_size=3,
-            max_overflow=5,
-            pool_pre_ping=True,
-            pool_recycle=3600,
-            connect_args={
-                "connect_timeout": 10,
-                "options": "-c statement_timeout=30000",
-            },
-        )
+        # Create engine with connection pooling (PostgreSQL) or lightweight engine (SQLite)
+        if self.storage_url.startswith("sqlite"):
+            self.engine = create_engine(self.storage_url)
+        else:
+            self.engine = create_engine(
+                self.storage_url,
+                poolclass=QueuePool,
+                pool_size=3,
+                max_overflow=5,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+                connect_args={
+                    "connect_timeout": 10,
+                    "options": "-c statement_timeout=30000",
+                },
+            )
 
         # Create tables if they don't exist
         Base.metadata.create_all(self.engine)
@@ -155,15 +158,18 @@ class DriftDetector:
         logger.info(f"Production data: {len(production_data)} rows")
 
         # Auto-detect feature columns if not provided
+        auto_detect_categorical = feature_cols is None and categorical_cols is None
         if feature_cols is None:
             feature_cols = reference_data.select_dtypes(
                 include=[np.number]
             ).columns.tolist()
 
         if categorical_cols is None:
-            categorical_cols = reference_data.select_dtypes(
-                include=["object", "category"]
-            ).columns.tolist()
+            categorical_cols = (
+                reference_data.select_dtypes(include=["object", "category"]).columns.tolist()
+                if auto_detect_categorical
+                else []
+            )
 
         results = {}
         session = self.Session()
@@ -239,22 +245,27 @@ class DriftDetector:
         """
         # Kolmogorov-Smirnov test
         ks_stat, ks_pvalue = stats.ks_2samp(reference, production)
-        ks_drift = ks_pvalue < self.alpha
+        ks_stat = float(ks_stat)
+        ks_pvalue = float(ks_pvalue)
+        ks_drift = bool(ks_pvalue < self.alpha)
 
         # Population Stability Index (PSI)
-        psi_score = self._calculate_psi(reference, production)
-        psi_drift = psi_score > self.psi_threshold
-
-        # Wasserstein distance
-        wasserstein = stats.wasserstein_distance(reference, production)
-        wasserstein_drift = wasserstein > self.wasserstein_threshold
-
-        # Overall drift detection (if any test detects drift)
-        drift_detected = ks_drift or psi_drift or wasserstein_drift
+        psi_score = float(self._calculate_psi(reference, production))
+        psi_drift = bool(psi_score > self.psi_threshold)
 
         # Calculate summary statistics
-        ref_mean, ref_std = reference.mean(), reference.std()
-        prod_mean, prod_std = production.mean(), production.std()
+        ref_mean, ref_std = float(reference.mean()), float(reference.std())
+        prod_mean, prod_std = float(production.mean()), float(production.std())
+
+        # Wasserstein distance (normalized by reference std for scale-invariant threshold)
+        wasserstein = float(stats.wasserstein_distance(reference, production))
+        normalized_wasserstein = (
+            wasserstein / (ref_std + 1e-10) if ref_std > 0 else wasserstein
+        )
+        wasserstein_drift = bool(normalized_wasserstein > self.wasserstein_threshold)
+
+        # Overall drift detection (if any test detects drift)
+        drift_detected = bool(ks_drift or psi_drift or wasserstein_drift)
 
         result = {
             "drift_detected": drift_detected,
@@ -314,13 +325,15 @@ class DriftDetector:
 
         # Chi-square test
         chi2_stat, chi2_pvalue = stats.chisquare(prod_aligned, ref_aligned)
-        chi2_drift = chi2_pvalue < self.alpha
+        chi2_stat = float(chi2_stat)
+        chi2_pvalue = float(chi2_pvalue)
+        chi2_drift = bool(chi2_pvalue < self.alpha)
 
         # PSI for categorical
-        psi_score = self._calculate_psi_categorical(ref_aligned, prod_aligned)
-        psi_drift = psi_score > self.psi_threshold
+        psi_score = float(self._calculate_psi_categorical(ref_aligned, prod_aligned))
+        psi_drift = bool(psi_score > self.psi_threshold)
 
-        drift_detected = chi2_drift or psi_drift
+        drift_detected = bool(chi2_drift or psi_drift)
 
         result = {
             "drift_detected": drift_detected,
@@ -372,6 +385,9 @@ class DriftDetector:
         Returns:
             PSI score
         """
+        if len(reference) == 0 or len(production) == 0:
+            return 0.0
+
         # Create bins based on reference data
         bins = np.percentile(reference, np.linspace(0, 100, n_bins + 1))
         bins = np.unique(bins)  # Remove duplicates

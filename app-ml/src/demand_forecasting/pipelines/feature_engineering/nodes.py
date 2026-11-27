@@ -3,6 +3,7 @@
 Temporal feature extraction, validation, and feature interaction creation.
 """
 
+import contextlib
 import logging
 from typing import Any
 
@@ -80,7 +81,7 @@ def extract_temporal_features(
         raise
 
 
-def create_feature_interactions(  # noqa: C901, PLR0912
+def create_feature_interactions(  # noqa: C901, PLR0912, PLR0915
     df: pd.DataFrame,
     lags: list[int] | None = None,
     feature_lags: dict[str, list[int]] | None = None,
@@ -188,7 +189,7 @@ def create_feature_interactions(  # noqa: C901, PLR0912
             for lag in lags:
                 df[f"demand_lag{lag}"] = df[demand_col].shift(lag)
             _LOGGER.info(
-                f"Created demand lag features: {[f'demand_lag{l}' for l in lags]}"
+                f"Created demand lag features: {[f'demand_lag{lag}' for lag in lags]}"
             )
 
         # Create feature lags matching notebook experimentation
@@ -210,17 +211,13 @@ def create_feature_interactions(  # noqa: C901, PLR0912
         # Skip columns that can't be downcasted safely
         int_cols = df.select_dtypes(include=["int64"]).columns.tolist()
         for col in int_cols:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 df[col] = pd.to_numeric(df[col].values, downcast="integer")
-            except (TypeError, ValueError):
-                pass  # Skip columns that can't be downcasted
 
         float_cols = df.select_dtypes(include=["float64"]).columns.tolist()
         for col in float_cols:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 df[col] = pd.to_numeric(df[col].values, downcast="float")
-            except (TypeError, ValueError):
-                pass  # Skip columns that can't be downcasted
 
         # Create some basic interactions (only if columns are unique)
         if "hour" in df.columns and "day_of_week" in df.columns:

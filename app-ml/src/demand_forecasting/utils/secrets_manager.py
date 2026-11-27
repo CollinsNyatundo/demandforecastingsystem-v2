@@ -14,6 +14,7 @@ Usage:
     validate_secrets(["POSTGRES_PASSWORD", "MINIO_ROOT_PASSWORD", "REDIS_PASSWORD"])
 """
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ class SecretsConfig:
 
     # AWS Secrets Manager configuration (alternative)
     aws_secrets_enabled: bool = False
-    aws_secret_name: str = "demand_forecasting"
+    aws_secret_name: str = "demand_forecasting"  # noqa: S105
     aws_region: str = "us-east-1"
 
 
@@ -176,11 +177,11 @@ def _get_from_env_file(key: str) -> str | None:
         return None
 
     try:
-        with open(_config.env_file) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
+        with _config.env_file.open() as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    k, v = stripped.split("=", 1)
                     if k.strip() == key:
                         return v.strip().strip('"').strip("'")
     except Exception as e:
@@ -195,7 +196,7 @@ def _get_from_vault(key: str) -> str | None:
     Requires: hvac package (pip install hvac)
     """
     try:
-        import hvac
+        import hvac  # noqa: PLC0415
 
         client = hvac.Client(url=_config.vault_addr, token=_config.vault_token)
 
@@ -226,9 +227,7 @@ def _get_from_aws_secrets(key: str) -> str | None:
     Requires: boto3 package (pip install boto3)
     """
     try:
-        import json
-
-        import boto3
+        import boto3  # noqa: PLC0415
 
         client = boto3.client("secretsmanager", region_name=_config.aws_region)
 
@@ -281,7 +280,7 @@ def list_available_backends() -> list[str]:
 
     if _config.vault_enabled:
         try:
-            import hvac  # noqa: F401
+            import hvac  # noqa: F401, PLC0415
 
             backends.append("vault")
         except ImportError:
@@ -289,7 +288,7 @@ def list_available_backends() -> list[str]:
 
     if _config.aws_secrets_enabled:
         try:
-            import boto3  # noqa: F401
+            import boto3  # noqa: F401, PLC0415
 
             backends.append("aws_secrets_manager")
         except ImportError:

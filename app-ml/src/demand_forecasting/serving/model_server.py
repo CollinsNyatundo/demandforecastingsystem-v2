@@ -1,12 +1,17 @@
 """Production-grade FastAPI model server for demand forecasting."""
 
+import hashlib
+import json
 import logging
 import math
 import os
+import pickle  # nosec B403
+import secrets
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, ClassVar
 
 import argon2
@@ -41,8 +46,15 @@ from pydantic import (
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Chatbot Multi-Agent SSE Router
-from demand_forecasting.serving.chat_router import chat_router
+# Chatbot Multi-Agent SSE Router (optional when chat dependencies are not installed)
+try:
+    from demand_forecasting.serving.chat_router import chat_router
+
+    CHAT_ROUTER_AVAILABLE = True
+except ImportError:
+    chat_router = None  # type: ignore[assignment]
+    CHAT_ROUTER_AVAILABLE = False
+    logging.warning("Chat router dependencies not available. Chat endpoints disabled.")
 
 # Evidently drift monitoring integration
 try:
@@ -223,7 +235,9 @@ class PredictionRequest(BaseModel):
 
     @field_validator("features")
     @classmethod
-    def validate_feature_structure(cls, v: dict[str, float | int]) -> dict[str, float | int]:
+    def validate_feature_structure(
+        cls, v: dict[str, float | int]
+    ) -> dict[str, float | int]:
         """Validate feature keys and basic structure."""
         # Check for minimum required features
         missing = cls.CORE_FEATURES - set(v.keys())
@@ -361,7 +375,7 @@ class HealthResponse(BaseModel):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: C901, PLR0912, PLR0915
     """Load models during startup and cleanup on shutdown. Fails if no model available."""
     try:
         logger.info("Starting model server...")
@@ -408,8 +422,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Try to load from MinIO/S3 as last resort
             if not model_loaded and S3FS_AVAILABLE:
                 try:
-                    import pickle
-
                     s3_endpoint = os.environ.get(
                         "MLFLOW_S3_ENDPOINT_URL", "http://minio:9000"
                     )
@@ -434,7 +446,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         latest_model_path = model_files[0]
                         logger.info(f"Loading model from S3: {latest_model_path}")
                         with fs.open(latest_model_path, "rb") as f:
-                            ml_models["production"] = pickle.load(f)  # noqa: S301
+                            ml_models["production"] = pickle.load(f)  # noqa: S301  # nosec B301
                         logger.info("Model loaded successfully from MinIO/S3")
                         model_loaded = True
                 except Exception as s3_error:
@@ -452,12 +464,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Load feature metadata for correct feature engineering
         try:
-            import json
-            from pathlib import Path
-
             metadata_path = Path("models/feature_metadata.json")
             if metadata_path.exists():
-                with open(metadata_path) as f:
+                with metadata_path.open() as f:
                     feature_metadata.update(json.load(f))
                 logger.info(
                     f"Loaded feature metadata: {feature_metadata.get('n_features', 0)} features"
@@ -793,11 +802,10 @@ app.add_middleware(RateLimitMiddleware)
 allowed_hosts = ["localhost", "127.0.0.1"]
 env = os.getenv("ENVIRONMENT", "development")
 
-# Add 0.0.0.0 only in development for local access (development environment only)
+# Add 0.0.0.0 and testserver only in development for local access and FastAPI TestClient
 if env == "development":
-    allowed_hosts.append(
-        "0.0.0.0"
-    )  # Development: allows local access only  # noqa: S104
+    allowed_hosts.append("0.0.0.0")  # noqa: S104  # nosec B104
+    allowed_hosts.append("testserver")
     # Issue 6 fix: Docker service hostname so Nginx proxy requests pass TrustedHostMiddleware
     allowed_hosts.extend(["model-server", "model-server:8000", "model-server:8001"])
 if env == "production":
@@ -842,9 +850,17 @@ class APIKeyManager:
     def __init__(self) -> None:
         """Initialize API key manager."""
         # Load hashed keys from environment
+        self._loaded_env_keys = os.environ.get("VALID_API_KEYS", "")
         self.valid_key_hashes = self._load_api_key_hashes()
 
-    def _load_api_key_hashes(self) -> dict[str, str]:
+    def refresh_if_changed(self) -> None:
+        """Reload hashed keys if VALID_API_KEYS changed in environment."""
+        current_env = os.environ.get("VALID_API_KEYS", "")
+        if current_env != self._loaded_env_keys:
+            self._loaded_env_keys = current_env
+            self.valid_key_hashes = self._load_api_key_hashes()
+
+    def _load_api_key_hashes(self) -> dict[str, dict[str, str]]:
         """Load API keys from environment and hash them for secure storage.
 
         In production, load from secure vault (AWS Secrets Manager,
@@ -868,49 +884,43 @@ class APIKeyManager:
             salt_len=16,  # Length of random salt in bytes
         )
 
-        hashed_keys = {}
+        hashed_keys: dict[str, dict[str, str]] = {}
         keys = [k.strip() for k in keys_str.split(",") if k.strip()]
 
         for key in keys:
-            # Hash the key using Argon2id with automatic salting
+            # Index by SHA-256 digest (never store plaintext keys) and store Argon2id hash
+            key_digest = self._hash_api_key(key)
             key_hash = ph.hash(key)
-            hashed_keys[key] = key_hash
-            logger.info(f"Hashed API key: {key[:8]}...")
+            hashed_keys[key_digest] = {
+                "hash": key_hash,
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+            logger.info("Hashed API key successfully.")
 
         logger.info(f"Loaded {len(hashed_keys)} API key hashes")
         return hashed_keys
 
-    # This method is no longer needed with Argon2's verify
-    # def _hash_api_key(self, api_key: str) -> str:
-    #     """Hash provided API key for secure comparison."""
-    #     return hashlib.sha256(api_key.encode()).hexdigest()
+    def _hash_api_key(self, api_key: str) -> str:
+        """Hash provided API key with SHA-256 for non-plaintext index lookup."""
+        return hashlib.sha256(api_key.encode()).hexdigest()
 
-    # This method is no longer needed with Argon2's verify
-    # def verify_key_constant_time(self, provided_key: str) -> bool:
-    #     """Verify API key using constant-time comparison to prevent timing attacks.
-
-    #     Uses secrets.compare_digest() which takes the same amount of time
-    #     to compare strings regardless of where differences occur.
-
-    #     This is the recommended method per OWASP and FastAPI security guidelines.
-    #     """
-    #     provided_hash = self._hash_api_key(provided_key)
-
-    #     # Use secrets.compare_digest for constant-time comparison
-    #     # This prevents timing attacks by ensuring comparison time
-    #     # is independent of key validity
-    #     for valid_hash in self.valid_key_hashes:
-    #         if secrets.compare_digest(provided_hash, valid_hash):
-    #             return True
-
-    #     return False
+    def verify_key_constant_time(self, provided_key: str) -> bool:
+        """Verify API key using constant-time digest comparison across all loaded keys."""
+        if not provided_key or not self.valid_key_hashes:
+            return False
+        provided_digest = self._hash_api_key(provided_key)
+        matched = False
+        for stored_digest in self.valid_key_hashes:
+            if secrets.compare_digest(provided_digest, stored_digest):
+                matched = True
+        return matched
 
 
 # Global API key manager instance
 api_key_manager = APIKeyManager()
 
 
-async def verify_api_key_secure(
+async def verify_api_key_secure(  # noqa: C901, PLR0912
     request: Request, x_api_key: str | None = Header(None)
 ) -> str:
     """Secure API key verification with rate limiting and constant-time comparison.
@@ -968,6 +978,7 @@ async def verify_api_key_secure(
         )
 
     # Verify key using Argon2id
+    api_key_manager.refresh_if_changed()
     hashed_api_keys = api_key_manager.valid_key_hashes
     if not hashed_api_keys:
         logger.error("No valid API keys configured")
@@ -987,19 +998,25 @@ async def verify_api_key_secure(
 
     # Check if provided key matches any stored hash using Argon2 verification
     is_valid = False
-    for original_key, stored_hash in hashed_api_keys.items():
+    for key_digest, entry in hashed_api_keys.items():
+        stored_hash = entry["hash"] if isinstance(entry, dict) else entry
         try:
             # Verify the API key against the stored Argon2 hash
             ph.verify(stored_hash, x_api_key)
             # Key is valid
-            logger.info(f"Valid API key used: {x_api_key[:8]}...")
+            logger.info("Valid API key authenticated.")
 
             # Check if hash needs rehashing (parameter updates)
             if ph.check_needs_rehash(stored_hash):
                 logger.info("API key hash needs rehashing with updated parameters")
-                # In a real application, you would persist this rehashed key
-                # For this example, we just update it in memory
-                api_key_manager.valid_key_hashes[original_key] = ph.hash(x_api_key)
+                new_hash = ph.hash(x_api_key)
+                if isinstance(entry, dict):
+                    entry["hash"] = new_hash
+                else:
+                    api_key_manager.valid_key_hashes[key_digest] = {
+                        "hash": new_hash,
+                        "created_at": datetime.now(UTC).isoformat(),
+                    }
 
             is_valid = True
             break  # Authentication successful
@@ -1055,7 +1072,7 @@ async def health_check() -> HealthResponse:
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(
+async def predict(  # noqa: C901, PLR0912, PLR0915
     request: PredictionRequest, api_key: str = Depends(verify_api_key_secure)
 ) -> PredictionResponse:
     """Main prediction endpoint with metrics tracking."""
@@ -1095,25 +1112,33 @@ async def predict(
         # Prepare features in the correct order matching training data
         try:
             # Create a dictionary for DataFrame creation (fills missing with 0.0)
-            feature_dict = {f: [float(request.features.get(f, 0.0))] for f in feature_names}
+            feature_dict = {
+                f: [float(request.features.get(f, 0.0))] for f in feature_names
+            }
             features_df = pd.DataFrame(feature_dict)
-            
+
             # CatBoost strictly enforces types for categorical features.
             # Convert known categorical features to integers.
             categorical_cols = [
-                "season", "year", "month", "hour", "holiday", 
-                "day_of_week", "workingday", "weather_condition"
+                "season",
+                "year",
+                "month",
+                "hour",
+                "holiday",
+                "day_of_week",
+                "workingday",
+                "weather_condition",
             ]
             for col in categorical_cols:
                 if col in features_df.columns:
                     features_df[col] = features_df[col].astype(int)
-                    
+
         except Exception as e:
             logger.error(f"Error preparing features: {e}")
             prediction_requests_total.labels(model_id=model_id, status="error").inc()
             raise HTTPException(
                 status_code=400, detail=f"Invalid feature format: {e!s}"
-            )
+            ) from e
 
         # Bypass MLflow PyFunc signature casting which coerces ints back to floats
         try:
@@ -1127,10 +1152,12 @@ async def predict(
             # Fallback if the unwrapped model is already the native model
             else:
                 cb_model = base_model
-                
+
             prediction = cb_model.predict(features_df)[0]
         except Exception as bypass_err:
-            logger.warning(f"Failed to bypass pyfunc, falling back to standard prediction: {bypass_err}")
+            logger.warning(
+                f"Failed to bypass pyfunc, falling back to standard prediction: {bypass_err}"
+            )
             # Make prediction using standard PyFunc (might fail with categorical error)
             prediction = model.predict(features_df)[0]
 
@@ -1141,7 +1168,7 @@ async def predict(
             # Get model's prediction probabilities or leaf indices for uncertainty estimation
             # For regression, use model.get_leaf_indexes() if available
             if hasattr(model, "get_leaf_indexes"):
-                model.get_leaf_indexes(features.reshape(1, -1))
+                model.get_leaf_indexes(features_df)
                 # Confidence inversely related to leaf variance
                 confidence = 0.75  # Base confidence for regression
             else:
@@ -1207,6 +1234,7 @@ async def model_info() -> ModelInfo:
         model_id="production",
     )
 
+
 @app.get("/explain/summary", tags=["Explainability"])
 async def explain_summary() -> dict:
     """Return SHAP summary plot as a JSON serialized Plotly figure."""
@@ -1214,26 +1242,37 @@ async def explain_summary() -> dict:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     try:
-        from demand_forecasting.explainability.shap_explainer import ModelExplainer
-        import pandas as pd
-        import json
-        import plotly.io as pio
+        import plotly.io as pio  # noqa: PLC0415
+
+        from demand_forecasting.explainability.shap_explainer import (  # noqa: PLC0415
+            ModelExplainer,
+        )
 
         model = ml_models["production"]
-        
+
         # Explainer needs a DataFrame, if reference_data is empty, use empty DF
         if not reference_data:
-            df_ref = pd.DataFrame(columns=["temp", "humidity", "wind_speed", "hour", "day_of_week", "month"])
+            df_ref = pd.DataFrame(
+                columns=[
+                    "temp",
+                    "humidity",
+                    "wind_speed",
+                    "hour",
+                    "day_of_week",
+                    "month",
+                ]
+            )
         else:
             df_ref = pd.DataFrame(reference_data)
-            
+
         explainer = ModelExplainer(model, df_ref)
         fig = explainer.create_summary_plot(plot_type="bar")
         return json.loads(pio.to_json(fig))
     except Exception as e:
-        import logging
-        logging.error(f"Failed to generate SHAP summary: {e}")
-        import plotly.graph_objects as go
+        logger.error(f"Failed to generate SHAP summary: {e}")
+        import plotly.graph_objects as go  # noqa: PLC0415
+        import plotly.io as pio  # noqa: PLC0415
+
         return json.loads(pio.to_json(go.Figure()))
 
 
@@ -1251,6 +1290,9 @@ async def update_model_accuracy(
     logger.info(f"Updated model accuracy for {model_id}: {accuracy}")
 
     return {"message": f"Accuracy updated to {accuracy} for model {model_id}"}
+
+
+_DRIFT_CACHE_TTL_SECONDS = 300
 
 
 @app.get("/metrics/drift")
@@ -1277,7 +1319,8 @@ async def drift_metrics() -> dict[str, Any]:
     # Use cached metrics if checked within last 5 minutes
     if (
         last_drift_check["timestamp"]
-        and (datetime.now(UTC) - last_drift_check["timestamp"]).total_seconds() < 300
+        and (datetime.now(UTC) - last_drift_check["timestamp"]).total_seconds()
+        < _DRIFT_CACHE_TTL_SECONDS
     ):
         return {
             "status": "ok",
@@ -1346,7 +1389,7 @@ async def root() -> dict[str, str]:
         "health": "/health",
         "metrics": "/metrics",
         "drift": "/metrics/drift",
-        "chat": "/chat/stream"
+        "chat": "/chat/stream",
     }
     if ENABLE_AB_TESTING and "manager" in ab_test_manager:
         info["ab_predict"] = "/predict/ab"
@@ -1358,8 +1401,14 @@ async def root() -> dict[str, str]:
 # Chatbot Router Integration
 # =========================================================================
 
+# Mount Prometheus ASGI metrics endpoint
+app.mount("/metrics", make_asgi_app())
+
 # Securely bind the LangGraph streaming endpoints to the Argon2 API Key middleware
-app.include_router(chat_router, prefix="/chat", dependencies=[Depends(verify_api_key_secure)])
+if CHAT_ROUTER_AVAILABLE and chat_router is not None:
+    app.include_router(
+        chat_router, prefix="/chat", dependencies=[Depends(verify_api_key_secure)]
+    )
 
 
 # =========================================================================
@@ -1393,7 +1442,7 @@ if ENABLE_AB_TESTING and AB_TESTING_AVAILABLE:
         except Exception as e:
             prediction_requests_total.labels(model_id="ab_error", status="error").inc()
             logger.error(f"A/B prediction failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.get("/ab/stats")
     async def ab_test_stats() -> dict[str, Any]:

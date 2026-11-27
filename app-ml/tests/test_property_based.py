@@ -10,7 +10,9 @@ Run with: pytest tests/test_property_based.py -v
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
+
+hypothesis = pytest.importorskip("hypothesis")
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from hypothesis.extra.pandas import column, data_frames, range_indexes
 

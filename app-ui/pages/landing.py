@@ -2,9 +2,9 @@
 
 import dash
 import dash_bootstrap_components as dbc
-from dash import html, dcc, callback, Input, Output
+from dash import Input, Output, callback, dcc, html
 
-from config_theme import THEME, app_state
+from config_theme import THEME
 
 dash.register_page(__name__, path="/", name="Home", order=0)
 
@@ -17,19 +17,26 @@ def _quick_stat(id_prefix, label, icon, color):
         html.Div(
             [
                 html.Div(
-                    html.I(className=f"bi {icon}", style={"color": color, "fontSize": "1.5rem"}),
+                    html.I(
+                        className=f"bi {icon}",
+                        style={"color": color, "fontSize": "1.5rem"},
+                    ),
                     className="quick-stat-icon",
                 ),
                 html.Div(
                     [
-                        html.H3("—", id=f"{id_prefix}-value", className="quick-stat-value"),
+                        html.H3(
+                            "—", id=f"{id_prefix}-value", className="quick-stat-value"
+                        ),
                         html.Small(label, className="quick-stat-label"),
                     ],
                 ),
             ],
             className="glass-card quick-stat-card",
         ),
-        xs=6, lg=3, className="mb-4",
+        xs=6,
+        lg=3,
+        className="mb-4",
     )
 
 
@@ -80,7 +87,9 @@ layout = html.Div(
                             html.H1(
                                 [
                                     "Urban Demand ",
-                                    html.Span("Intelligence", style={"color": THEME["blue"]}),
+                                    html.Span(
+                                        "Intelligence", style={"color": THEME["blue"]}
+                                    ),
                                 ],
                                 className="hero-title",
                             ),
@@ -93,14 +102,22 @@ layout = html.Div(
                             html.Div(
                                 [
                                     dbc.Button(
-                                        [html.I(className="bi bi-speedometer2 me-2"), "Open Dashboard"],
+                                        [
+                                            html.I(className="bi bi-speedometer2 me-2"),
+                                            "Open Dashboard",
+                                        ],
                                         href="/dashboard",
                                         color="primary",
                                         className="me-3 hero-btn",
                                         size="lg",
                                     ),
                                     dbc.Button(
-                                        [html.I(className="bi bi-lightning-charge me-2"), "Try Predictions"],
+                                        [
+                                            html.I(
+                                                className="bi bi-lightning-charge me-2"
+                                            ),
+                                            "Try Predictions",
+                                        ],
                                         href="/predictions",
                                         outline=True,
                                         color="light",
@@ -118,7 +135,6 @@ layout = html.Div(
             ),
             className="hero-section",
         ),
-
         # Headline KPIs
         html.Section(
             dbc.Container(
@@ -133,10 +149,30 @@ layout = html.Div(
                     ),
                     dbc.Row(
                         [
-                            _quick_stat("kpi-home-demand", "Total Predictions", "bi-calculator", THEME["cyan"]),
-                            _quick_stat("kpi-home-accuracy", "Model Accuracy", "bi-bullseye", THEME["green"]),
-                            _quick_stat("kpi-home-response", "Avg Response", "bi-clock", THEME["purple"]),
-                            _quick_stat("kpi-home-health", "Services Up", "bi-heart-pulse", THEME["amber"]),
+                            _quick_stat(
+                                "kpi-home-demand",
+                                "Total Predictions",
+                                "bi-calculator",
+                                THEME["cyan"],
+                            ),
+                            _quick_stat(
+                                "kpi-home-accuracy",
+                                "Model Accuracy",
+                                "bi-bullseye",
+                                THEME["green"],
+                            ),
+                            _quick_stat(
+                                "kpi-home-response",
+                                "Avg Response",
+                                "bi-clock",
+                                THEME["purple"],
+                            ),
+                            _quick_stat(
+                                "kpi-home-health",
+                                "Services Up",
+                                "bi-heart-pulse",
+                                THEME["amber"],
+                            ),
                         ],
                     ),
                 ],
@@ -145,7 +181,6 @@ layout = html.Div(
             ),
             className="kpi-overview-section",
         ),
-
         # Quick-link cards
         html.Section(
             dbc.Container(
@@ -188,7 +223,6 @@ layout = html.Div(
                 className="py-5",
             ),
         ),
-
         # System ribbon
         html.Section(
             dbc.Container(
@@ -197,7 +231,6 @@ layout = html.Div(
                 className="py-4",
             ),
         ),
-
         # Interval for auto-refresh
         dcc.Interval(id="home-interval", interval=5000, n_intervals=0),
     ],
@@ -231,16 +264,47 @@ def update_home_kpis(n):
 
     try:
         from api_client import get_all_service_health
+
         services = get_all_service_health()
         healthy = sum(1 for s in services if s.get("healthy"))
         services_up = f"{healthy}/{len(services)}"
     except Exception:
         services = [
-            {"name": "Model Server", "icon": "bi-cpu", "color": "text-info", "healthy": True, "status": "Demo"},
-            {"name": "MLflow", "icon": "bi-graph-up", "color": "text-warning", "healthy": True, "status": "Demo"},
-            {"name": "Airflow", "icon": "bi-hdd-network", "color": "text-info", "healthy": True, "status": "Demo"},
-            {"name": "MinIO", "icon": "bi-box-seam", "color": "text-danger", "healthy": True, "status": "Demo"},
-            {"name": "Grafana", "icon": "bi-bar-chart-line", "color": "text-success", "healthy": True, "status": "Demo"},
+            {
+                "name": "Model Server",
+                "icon": "bi-cpu",
+                "color": "text-info",
+                "healthy": True,
+                "status": "Demo",
+            },
+            {
+                "name": "MLflow",
+                "icon": "bi-graph-up",
+                "color": "text-warning",
+                "healthy": True,
+                "status": "Demo",
+            },
+            {
+                "name": "Airflow",
+                "icon": "bi-hdd-network",
+                "color": "text-info",
+                "healthy": True,
+                "status": "Demo",
+            },
+            {
+                "name": "MinIO",
+                "icon": "bi-box-seam",
+                "color": "text-danger",
+                "healthy": True,
+                "status": "Demo",
+            },
+            {
+                "name": "Grafana",
+                "icon": "bi-bar-chart-line",
+                "color": "text-success",
+                "healthy": True,
+                "status": "Demo",
+            },
         ]
 
     # Service ribbon
@@ -250,7 +314,10 @@ def update_home_kpis(n):
         ribbon.append(
             html.Div(
                 [
-                    html.I(className=f"bi bi-circle-fill {dot_cls} me-2", style={"fontSize": "0.45rem"}),
+                    html.I(
+                        className=f"bi bi-circle-fill {dot_cls} me-2",
+                        style={"fontSize": "0.45rem"},
+                    ),
                     html.Span(svc["name"], className="small"),
                 ],
                 className="service-ribbon-item",

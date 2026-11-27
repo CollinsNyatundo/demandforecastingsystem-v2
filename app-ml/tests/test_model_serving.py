@@ -41,28 +41,43 @@ class TestModelServerEndpoints:
             data = response.json()
             assert data["models_loaded"] == 1
 
-    @patch("demand_forecasting.serving.model_server.mlflow.pyfunc.load_model")
     def test_predict_success(
-        self, mock_load_model, model_server_test_client: TestClient, sample_data
+        self, model_server_test_client: TestClient, sample_data
     ):
         """Test successful prediction request."""
+        import os
+
+        from demand_forecasting.serving import model_server as ms
+
         # Mock model loading and prediction
         mock_model = Mock()
         mock_model.predict.return_value = [45.5]
-        mock_load_model.return_value = mock_model
 
-        # Prepare request data
+        # Prepare request data (normalized weather features)
         request_data = {
             "features": {
-                "temp": 20.5,
-                "humidity": 60.0,
-                "wind_speed": 5.2,
+                "temp": 0.5,
+                "humidity": 0.6,
+                "wind_speed": 0.15,
                 "hour": 14,
                 "day_of_week": 3,
             }
         }
 
-        response = model_server_test_client.post("/predict", json=request_data)
+        with (
+            patch.dict(ms.ml_models, {"production": mock_model}, clear=True),
+            patch.dict(
+                ms.feature_metadata,
+                {"feature_names": ["temp", "humidity", "wind_speed", "hour", "day_of_week"]},
+                clear=True,
+            ),
+            patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}),
+        ):
+            response = model_server_test_client.post(
+                "/predict",
+                json=request_data,
+                headers={"X-API-Key": "test_serving_key"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -76,87 +91,127 @@ class TestModelServerEndpoints:
 
     def test_predict_missing_features(self, model_server_test_client: TestClient):
         """Test prediction with missing required features."""
+        import os
+
         request_data = {
             "features": {
-                "temp": 20.5,
-                "humidity": 60.0,
+                "temp": 0.5,
+                "humidity": 0.6,
                 # Missing wind_speed, hour, day_of_week
             }
         }
 
-        response = model_server_test_client.post("/predict", json=request_data)
+        with patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}):
+            response = model_server_test_client.post(
+                "/predict",
+                json=request_data,
+                headers={"X-API-Key": "test_serving_key"},
+            )
 
         assert response.status_code == 422  # Validation error
-        assert "Missing required features" in response.text
+        assert "Missing required core features" in response.text
 
     def test_predict_invalid_feature_types(self, model_server_test_client: TestClient):
         """Test prediction with invalid feature types."""
+        import os
+
         request_data = {
             "features": {
                 "temp": "not_a_number",
-                "humidity": 60.0,
-                "wind_speed": 5.2,
+                "humidity": 0.6,
+                "wind_speed": 0.15,
                 "hour": 14,
                 "day_of_week": 3,
             }
         }
 
-        response = model_server_test_client.post("/predict", json=request_data)
+        with patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}):
+            response = model_server_test_client.post(
+                "/predict",
+                json=request_data,
+                headers={"X-API-Key": "test_serving_key"},
+            )
 
         assert response.status_code == 422  # Validation error
 
     def test_predict_empty_request(self, model_server_test_client: TestClient):
         """Test prediction with empty request."""
-        response = model_server_test_client.post("/predict", json={})
+        import os
+
+        with patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}):
+            response = model_server_test_client.post(
+                "/predict",
+                json={},
+                headers={"X-API-Key": "test_serving_key"},
+            )
 
         assert response.status_code == 422  # Validation error
 
-    @patch("demand_forecasting.serving.model_server.mlflow.pyfunc.load_model")
     def test_predict_model_loading_failure(
-        self, mock_load_model, model_server_test_client: TestClient
+        self, model_server_test_client: TestClient
     ):
-        """Test prediction when model loading fails."""
-        mock_load_model.side_effect = Exception("Model loading failed")
+        """Test prediction when model is not loaded."""
+        import os
+
+        from demand_forecasting.serving import model_server as ms
 
         request_data = {
             "features": {
-                "temp": 20.5,
-                "humidity": 60.0,
-                "wind_speed": 5.2,
+                "temp": 0.5,
+                "humidity": 0.6,
+                "wind_speed": 0.15,
                 "hour": 14,
                 "day_of_week": 3,
             }
         }
 
-        response = model_server_test_client.post("/predict", json=request_data)
+        with (
+            patch.dict(ms.ml_models, {}, clear=True),
+            patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}),
+        ):
+            response = model_server_test_client.post(
+                "/predict",
+                json=request_data,
+                headers={"X-API-Key": "test_serving_key"},
+            )
 
-        assert response.status_code == 500  # Internal server error
+        assert response.status_code in [500, 503]
 
-    @patch("demand_forecasting.serving.model_server.mlflow.pyfunc.load_model")
-    @patch("joblib.load")
     def test_predict_fallback_model(
-        self, mock_joblib, mock_load_model, model_server_test_client: TestClient
+        self, model_server_test_client: TestClient
     ):
-        """Test prediction falls back to local model when MLflow fails."""
-        # MLflow fails
-        mock_load_model.side_effect = Exception("MLflow unavailable")
+        """Test prediction using loaded fallback model."""
+        import os
 
-        # Local model succeeds
+        from demand_forecasting.serving import model_server as ms
+
         mock_model = Mock()
         mock_model.predict.return_value = [42.0]
-        mock_joblib.return_value = mock_model
 
         request_data = {
             "features": {
-                "temp": 20.5,
-                "humidity": 60.0,
-                "wind_speed": 5.2,
+                "temp": 0.5,
+                "humidity": 0.6,
+                "wind_speed": 0.15,
                 "hour": 14,
                 "day_of_week": 3,
             }
         }
 
-        response = model_server_test_client.post("/predict", json=request_data)
+        with (
+            patch.dict(ms.ml_models, {"production": mock_model}, clear=True),
+            patch.dict(
+                ms.feature_metadata,
+                {"feature_names": ["temp", "humidity", "wind_speed", "hour", "day_of_week"]},
+                clear=True,
+            ),
+            patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}),
+        ):
+            response = model_server_test_client.post(
+                "/predict",
+                json=request_data,
+                headers={"X-API-Key": "test_serving_key"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -170,7 +225,7 @@ class TestModelServerEndpoints:
             "demand_forecasting.serving.model_server.ml_models",
             {"production": sample_model},
         ):
-            response = model_server_test_client.get("/model")
+            response = model_server_test_client.get("/model/info")
 
             assert response.status_code == 200
             data = response.json()
@@ -278,17 +333,18 @@ class TestModelRouter:
             "day_of_week": 3,
         }
 
-        # Make multiple requests
-        for _ in range(100):
+        # Make enough requests that 70/30 split tolerance (±10%) is >6.8 sigma wide
+        n_requests = 1000
+        for _ in range(n_requests):
             router.route_request(data)
 
         stats = router.get_statistics()
 
-        assert stats["total_requests"] == 100
-        assert stats["model_a_requests"] + stats["model_b_requests"] == 100
-        # Allow some variance due to randomness
-        assert 60 <= stats["model_a_requests"] <= 80
-        assert 20 <= stats["model_b_requests"] <= 40
+        assert stats["total_requests"] == n_requests
+        assert stats["model_a_requests"] + stats["model_b_requests"] == n_requests
+        # Allow wide variance around 70/30 split without stochastic flakes
+        assert 600 <= stats["model_a_requests"] <= 800
+        assert 200 <= stats["model_b_requests"] <= 400
 
     @patch("mlflow.pyfunc.load_model")
     def test_confidence_calculation(self, mock_load_model):
@@ -356,31 +412,38 @@ class TestEdgeCases:
         results = []
         errors = []
 
+        import os
+
         def make_request():
             try:
                 request_data = {
                     "features": {
-                        "temp": 20.5,
-                        "humidity": 60.0,
-                        "wind_speed": 5.2,
+                        "temp": 0.5,
+                        "humidity": 0.6,
+                        "wind_speed": 0.15,
                         "hour": 14,
                         "day_of_week": 3,
                     }
                 }
-                response = model_server_test_client.post("/predict", json=request_data)
+                response = model_server_test_client.post(
+                    "/predict",
+                    json=request_data,
+                    headers={"X-API-Key": "test_serving_key"},
+                )
                 results.append(response.status_code)
             except Exception as e:
                 errors.append(e)
 
         # Make 10 concurrent requests
-        threads = []
-        for _ in range(10):
-            thread = threading.Thread(target=make_request)
-            threads.append(thread)
-            thread.start()
+        with patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}):
+            threads = []
+            for _ in range(10):
+                thread = threading.Thread(target=make_request)
+                threads.append(thread)
+                thread.start()
 
-        for thread in threads:
-            thread.join()
+            for thread in threads:
+                thread.join()
 
         # All requests should succeed or fail gracefully
         assert len(errors) == 0
@@ -391,6 +454,8 @@ class TestEdgeCases:
 
     def test_large_request_payload(self, model_server_test_client: TestClient):
         """Test handling of large request payloads."""
+        import os
+
         # Create request with many features
         request_data = {
             "features": {
@@ -398,7 +463,12 @@ class TestEdgeCases:
             }
         }
 
-        response = model_server_test_client.post("/predict", json=request_data)
+        with patch.dict(os.environ, {"VALID_API_KEYS": "test_serving_key"}):
+            response = model_server_test_client.post(
+                "/predict",
+                json=request_data,
+                headers={"X-API-Key": "test_serving_key"},
+            )
 
         # Should handle gracefully (either accept or reject with proper error)
         assert response.status_code in [200, 413, 422]

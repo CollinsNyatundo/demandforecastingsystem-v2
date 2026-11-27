@@ -2,6 +2,7 @@
 
 from dash import html
 
+
 def create_health_panel(services, drift_metrics=None, latest_report_name=None):
     """Build the system health items list with colored left-border indicators."""
     health_items = []
@@ -25,13 +26,13 @@ def create_health_panel(services, drift_metrics=None, latest_report_name=None):
         if svc["name"] == "Airflow Pipeline":
             actions.append(
                 html.Button(
-                    "Retrain", 
+                    "Retrain",
                     id="btn-trigger-retrain",
                     n_clicks=0,
-                    className="btn btn-sm btn-outline-info me-3 py-0 px-2 fs-7"
+                    className="btn btn-sm btn-outline-info me-3 py-0 px-2 fs-7",
                 )
             )
-            
+
         actions.append(html.I(className=f"{status_icon} fs-5"))
 
         health_items.append(
@@ -42,7 +43,9 @@ def create_health_panel(services, drift_metrics=None, latest_report_name=None):
                             html.I(className=f"{svc['icon']} me-3 {svc['color']} fs-4"),
                             html.Div(
                                 [
-                                    html.Div(svc["name"], className="fw-bold text-white"),
+                                    html.Div(
+                                        svc["name"], className="fw-bold text-white"
+                                    ),
                                     html.Div(
                                         f"{svc['status']} — {svc['detail']}",
                                         className="text-muted small",
@@ -67,29 +70,40 @@ def create_health_panel(services, drift_metrics=None, latest_report_name=None):
             f"Data Drift: {'DETECTED' if drift_val > 0 else 'None'} "
             f"({drift_share:.1%} features)"
         )
-        
+
         actions = []
         if latest_report_name:
             actions.append(
                 html.Button(
-                    "View Report", 
+                    "View Report",
                     id="btn-view-drift-report",
                     n_clicks=0,
-                    className=f"btn btn-sm btn-outline-{'danger' if drift_val > 0 else 'success'} me-3 py-0 px-2 fs-7"
+                    className=f"btn btn-sm btn-outline-{'danger' if drift_val > 0 else 'success'} me-3 py-0 px-2 fs-7",
                 )
             )
-        actions.append(html.I(className=f"bi bi-{'exclamation' if drift_val > 0 else 'check'}-circle-fill {drift_color} fs-5"))
+        actions.append(
+            html.I(
+                className=f"bi bi-{'exclamation' if drift_val > 0 else 'check'}-circle-fill {drift_color} fs-5"
+            )
+        )
 
         health_items.append(
             html.Div(
                 [
                     html.Div(
                         [
-                            html.I(className=f"bi bi-graph-down me-3 {drift_color} fs-4"),
+                            html.I(
+                                className=f"bi bi-graph-down me-3 {drift_color} fs-4"
+                            ),
                             html.Div(
                                 [
-                                    html.Div("Data Drift Monitor", className="fw-bold text-white"),
-                                    html.Div(drift_label, className=f"{drift_color} small"),
+                                    html.Div(
+                                        "Data Drift Monitor",
+                                        className="fw-bold text-white",
+                                    ),
+                                    html.Div(
+                                        drift_label, className=f"{drift_color} small"
+                                    ),
                                 ]
                             ),
                         ],

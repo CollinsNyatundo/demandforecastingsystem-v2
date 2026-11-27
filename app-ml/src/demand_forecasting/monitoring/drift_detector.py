@@ -38,6 +38,13 @@ class DriftDetector:
             reference_data: Reference dataset for comparison
             threshold: P-value threshold for drift detection
         """
+        if reference_data is None or reference_data.empty:
+            raise ValueError("Reference data cannot be empty")
+        if not (0.0 < threshold < 1.0):
+            raise ValueError(
+                f"Threshold must be strictly between 0 and 1, got {threshold}"
+            )
+
         self.reference_data = reference_data.copy()
         self.reference_stats = self._compute_statistics(reference_data)
         self.threshold = threshold
@@ -129,16 +136,25 @@ class DriftDetector:
             }
 
         try:
-            # Numerical: Kolmogorov-Smirnov test
-            if pd.api.types.is_numeric_dtype(ref_values):
+            # Numerical (non-boolean): Kolmogorov-Smirnov test
+            if pd.api.types.is_numeric_dtype(
+                ref_values
+            ) and not pd.api.types.is_bool_dtype(ref_values):
                 statistic, p_value = ks_2samp(ref_values, curr_values)
-                drift_score = statistic
-                is_drifted = p_value < threshold
+                drift_score = float(statistic)
+                p_value = float(p_value)
+                is_drifted = bool(p_value < threshold)
                 method = "KS_TEST"
 
                 # Additional statistics for numerical features
-                ref_mean, curr_mean = np.mean(ref_values), np.mean(curr_values)
-                ref_std, curr_std = np.std(ref_values), np.std(curr_values)
+                ref_mean, curr_mean = (
+                    float(np.mean(ref_values)),
+                    float(np.mean(curr_values)),
+                )
+                ref_std, curr_std = (
+                    float(np.std(ref_values)),
+                    float(np.std(curr_values)),
+                )
 
                 result = {
                     "drift_score": drift_score,
@@ -153,7 +169,19 @@ class DriftDetector:
                     "std_diff": abs(ref_std - curr_std),
                 }
 
-            # Categorical: Chi-square test
+            # Datetime: Kolmogorov-Smirnov test on epoch nanoseconds
+            elif pd.api.types.is_datetime64_any_dtype(ref_values):
+                ref_ts = ref_values.astype("int64")
+                curr_ts = pd.to_datetime(curr_values).astype("int64")
+                statistic, p_value = ks_2samp(ref_ts, curr_ts)
+                result = {
+                    "drift_score": float(statistic),
+                    "p_value": float(p_value),
+                    "is_drifted": bool(p_value < threshold),
+                    "method": "KS_TEST",
+                }
+
+            # Categorical / Boolean: Chi-square test
             else:
                 # Create contingency table
                 ref_counts = ref_values.value_counts()
@@ -173,16 +201,17 @@ class DriftDetector:
                 ).T
 
                 chi2, p_value, _, _expected = chi2_contingency(contingency_table)
-                drift_score = chi2 / len(ref_values)  # Normalized chi-square
-                is_drifted = p_value < threshold
-                method = "CHI_SQUARE"
+                drift_score = float(chi2 / len(ref_values))  # Normalized chi-square
+                p_value = float(p_value)
+                is_drifted = bool(p_value < threshold)
+                method = "CHI_SQUARE_TEST"
 
                 result = {
                     "drift_score": drift_score,
                     "p_value": p_value,
                     "is_drifted": is_drifted,
                     "method": method,
-                    "chi2_statistic": chi2,
+                    "chi2_statistic": float(chi2),
                     "ref_categories": len(ref_counts),
                     "curr_categories": len(curr_counts),
                     "category_overlap": len(
@@ -209,15 +238,17 @@ class DriftDetector:
         for column in data.columns:
             col_data = data[column].dropna()
 
-            if pd.api.types.is_numeric_dtype(col_data):
+            if pd.api.types.is_numeric_dtype(
+                col_data
+            ) and not pd.api.types.is_bool_dtype(col_data):
                 stats[column] = {
-                    "mean": np.mean(col_data),
-                    "std": np.std(col_data),
-                    "min": np.min(col_data),
-                    "max": np.max(col_data),
-                    "q25": np.percentile(col_data, 25),
-                    "q50": np.percentile(col_data, 50),
-                    "q75": np.percentile(col_data, 75),
+                    "mean": float(np.mean(col_data)),
+                    "std": float(np.std(col_data)),
+                    "min": float(np.min(col_data)),
+                    "max": float(np.max(col_data)),
+                    "q25": float(np.percentile(col_data, 25)),
+                    "q50": float(np.percentile(col_data, 50)),
+                    "q75": float(np.percentile(col_data, 75)),
                     "count": len(col_data),
                     "missing_rate": data[column].isna().sum() / len(data),
                 }
@@ -240,12 +271,12 @@ class DriftDetector:
     def _get_recommendation(self, drift_score: float, threshold: float) -> str:
         """Generate recommendation based on drift score."""
         if drift_score > HIGH_DRIFT_THRESHOLD:
-            return "URGENT_RETRAIN"
+            return "Immediate retraining required"
         if drift_score > MEDIUM_DRIFT_THRESHOLD:
-            return "CONSIDER_RETRAIN"
-        if drift_score > LOW_DRIFT_THRESHOLD:
-            return "MONITOR_CLOSELY"
-        return "NO_ACTION"
+            return "Retraining recommended"
+        if drift_score > threshold:
+            return "Monitor closely"
+        return "No significant drift detected"
 
     def get_drift_trend(self, window_size: int = 10) -> dict[str, Any]:
         """Analyze drift trend over recent runs."""

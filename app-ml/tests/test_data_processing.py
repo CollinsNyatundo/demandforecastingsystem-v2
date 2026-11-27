@@ -17,29 +17,32 @@ class TestDataProcessing:
 
     def setup_method(self):
         """Set up test fixtures."""
-        # Create sample data similar to bike sharing dataset
+        # Create sample data similar to bike sharing dataset (7 full days for all weekdays)
         np.random.seed(42)
-        dates = pd.date_range("2023-01-01", periods=100, freq="h")
+        n_rows = 168
+        dates = pd.date_range("2023-01-28", periods=n_rows, freq="h")
+        temp_vals = np.random.uniform(0.2, 1.0, n_rows)
 
         self.sample_data = pd.DataFrame(
             {
                 "dteday": dates.date,
+                "yr": np.random.choice([0, 1], n_rows),
                 "hr": dates.hour,
-                "season": np.random.choice([1, 2, 3, 4], 100),
+                "season": np.random.choice([1, 2, 3, 4], n_rows),
                 "mnth": dates.month,
-                "holiday": np.random.choice([0, 1], 100, p=[0.95, 0.05]),
+                "holiday": np.random.choice([0, 1], n_rows, p=[0.95, 0.05]),
                 "weekday": dates.weekday,
-                "workingday": np.random.choice([0, 1], 100, p=[0.3, 0.7]),
+                "workingday": np.random.choice([0, 1], n_rows, p=[0.3, 0.7]),
                 "weathersit": np.random.choice(
-                    [1, 2, 3, 4], 100, p=[0.6, 0.3, 0.08, 0.02]
+                    [1, 2, 3, 4], n_rows, p=[0.6, 0.3, 0.08, 0.02]
                 ),
-                "temp": np.random.uniform(0.2, 1.0, 100),
-                "atemp": np.random.uniform(0.2, 1.0, 100),
-                "hum": np.random.uniform(0.3, 1.0, 100),
-                "windspeed": np.random.uniform(0.0, 0.8, 100),
-                "casual": np.random.randint(0, 100, 100),
-                "registered": np.random.randint(50, 300, 100),
-                "cnt": np.random.randint(10, 400, 100),
+                "temp": temp_vals,
+                "atemp": np.clip(temp_vals + np.random.uniform(-0.05, 0.05, n_rows), 0.0, 1.0),
+                "hum": np.random.uniform(0.3, 1.0, n_rows),
+                "windspeed": np.random.uniform(0.0, 0.8, n_rows),
+                "casual": np.random.randint(0, 100, n_rows),
+                "registered": np.random.randint(50, 300, n_rows),
+                "cnt": (temp_vals * 250 + np.random.randint(10, 150, n_rows)).astype(int),
             }
         )
 
@@ -54,7 +57,7 @@ class TestDataProcessing:
     def test_data_loading(self):
         """Test data loading functionality."""
         # Test that sample data has expected structure
-        assert len(self.sample_data) == 100
+        assert len(self.sample_data) == 168
         assert "datetime" in self.sample_data.columns
         assert "cnt" in self.sample_data.columns
         assert "temp" in self.sample_data.columns
@@ -94,9 +97,8 @@ class TestDataProcessing:
             # Test preprocessing
             result = preprocess_data(self.sample_data.copy())
 
-            # Verify result has expected columns
-            assert "datetime" in result.columns
-            assert "cnt" in result.columns
+            # Verify result has expected columns (preprocess_data renames cnt -> demand and sets datetime index)
+            assert "demand" in result.columns or "cnt" in result.columns
             assert len(result) > 0
 
         except ImportError:
@@ -281,7 +283,7 @@ class TestDataProcessing:
 
             # Test node names
             node_names = [node.name for node in pipeline.nodes]
-            assert "preprocess_data_node" in node_names
+            assert "preprocess_bike_data_node" in node_names
 
         except ImportError:
             pytest.skip("Data processing pipeline not implemented yet")
@@ -404,20 +406,27 @@ class TestDataProcessingIntegration:
     @pytest.mark.integration
     def test_data_persistence_workflow(self):
         """Test data save/load workflow."""
+        sample_df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2023-01-01", periods=24, freq="h"),
+                "temp": np.linspace(0.2, 0.8, 24),
+                "cnt": np.arange(10, 34),
+            }
+        )
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir) / "test_data.parquet"
 
             # Save data
-            self.sample_data.to_parquet(temp_path)
+            sample_df.to_parquet(temp_path)
 
             # Load data
             loaded_data = pd.read_parquet(temp_path)
 
             # Verify data integrity
-            pd.testing.assert_frame_equal(self.sample_data, loaded_data)
+            pd.testing.assert_frame_equal(sample_df, loaded_data)
 
-            assert len(loaded_data) == len(self.sample_data)
-            assert list(loaded_data.columns) == list(self.sample_data.columns)
+            assert len(loaded_data) == len(sample_df)
+            assert list(loaded_data.columns) == list(sample_df.columns)
 
 
 if __name__ == "__main__":

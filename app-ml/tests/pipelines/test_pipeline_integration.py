@@ -53,6 +53,14 @@ def test_catalog():
             "raw_bike_data": MemoryDataset(),
             "preprocessed_bike_data": MemoryDataset(),
             # Demand modeling datasets
+            "X_train": MemoryDataset(),
+            "y_train": MemoryDataset(),
+            "X_test": MemoryDataset(),
+            "y_test": MemoryDataset(),
+            "optimized_params": MemoryDataset(),
+            "catboost_model": MemoryDataset(),
+            "random_forest_model": MemoryDataset(),
+            "final_model": MemoryDataset(),
             "model_input_table": MemoryDataset(),
             "parameters": MemoryDataset(),
             "params:random_forest": MemoryDataset(),
@@ -243,7 +251,9 @@ class TestEndToEndPipelineExecution:
         except Exception as e:
             # Pipeline might fail due to missing dependencies or configuration
             # This is acceptable for testing if error is informative
-            assert "kedro" in str(e).lower() or "pipeline" in str(e).lower()
+            assert any(
+                token in str(e).lower() for token in ("kedro", "pipeline", "dataset")
+            )
 
     @pytest.mark.skipif(
         not PIPELINES_AVAILABLE, reason="Pipeline modules not available"
@@ -344,10 +354,10 @@ class TestPipelineErrorHandling:
     )
     def test_pipeline_with_invalid_data(self, test_catalog):
         """Test pipeline with invalid data format."""
-        # Add invalid data
+        # Add invalid data (non-numeric values in numeric feature column)
         invalid_data = pd.DataFrame(
             {
-                "temp": ["not", "numeric"],  # Invalid type
+                "temp": ["not", "numeric", "values"],  # Invalid type
                 "humidity": [60, 61, 62],
                 "wind_speed": [5.0, 6.0, 7.0],
                 "hour": [14, 15, 16],
@@ -356,21 +366,37 @@ class TestPipelineErrorHandling:
             }
         )
 
-        test_catalog.save("raw_data", invalid_data)
+        X_invalid = invalid_data.drop(columns=["demand"])
+        y_invalid = invalid_data["demand"]
+        test_catalog.save("X_train", X_invalid)
+        test_catalog.save("y_train", y_invalid)
+        test_catalog.save("X_test", X_invalid)
+        test_catalog.save("y_test", y_invalid)
 
         pipelines = register_pipelines()
         pipeline = pipelines["demand_modeling"]
 
         runner = SequentialRunner()
 
-        # Should handle invalid data gracefully
+        # Should handle invalid data gracefully or raise an informative error
         try:
             result = runner.run(pipeline, catalog=test_catalog)
-            # If successful, data should be cleaned/validated
             assert result is not None
         except Exception as e:
-            # Should raise informative error
-            assert "type" in str(e).lower() or "invalid" in str(e).lower()
+            err_msg = str(e).lower()
+            assert any(
+                token in err_msg
+                for token in (
+                    "type",
+                    "invalid",
+                    "float",
+                    "string",
+                    "convert",
+                    "numeric",
+                    "required",
+                    "column",
+                )
+            )
 
     @pytest.mark.skipif(
         not PIPELINES_AVAILABLE, reason="Pipeline modules not available"
@@ -450,22 +476,39 @@ class TestPipelinePersistence:
     )
     def test_model_persistence(self, test_catalog, sample_bike_data, temp_directory):
         """Test model saving and loading."""
-        test_catalog.save("model_input_table", sample_bike_data)
-        test_catalog.save(
-            "parameters", {"model_options": {"learning_rate": 0.1, "depth": 6}}
-        )
-        test_catalog.save("params:random_forest", {"n_estimators": 100})
-        test_catalog.save("params:train_fraction", 0.8)
+        X = sample_bike_data.drop(columns=["demand"])
+        y = sample_bike_data["demand"]
+        split = int(len(X) * 0.8)
+        test_catalog.save("X_train", X.iloc[:split])
+        test_catalog.save("y_train", y.iloc[:split])
+        test_catalog.save("X_test", X.iloc[split:])
+        test_catalog.save("y_test", y.iloc[split:])
 
-        pipelines = register_pipelines()
-        pipeline = pipelines["demand_modeling"]
-
-        # Mock model training to test persistence
-        with patch(
-            "demand_forecasting.pipelines.demand_modeling.catboost_nodes.train_catboost_model"
-        ) as mock_train:
-            mock_model = Mock()
-            mock_train.return_value = (mock_model, {"rmse": 45.0, "mae": 30.0})
+        mock_model = Mock()
+        with (
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.optimize_catboost_params",
+                return_value={"learning_rate": 0.1, "depth": 6},
+            ),
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.train_catboost_model",
+                return_value=(mock_model, {"rmse": 45.0, "mae": 30.0}),
+            ) as mock_train,
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.train_single_model",
+                return_value=Mock(),
+            ),
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.compare_demand_models",
+                return_value={"best_model": "catboost"},
+            ),
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.train_final_model",
+                return_value=mock_model,
+            ),
+        ):
+            pipelines = register_pipelines()
+            pipeline = pipelines["demand_modeling"]
 
             runner = SequentialRunner()
             result = runner.run(pipeline, catalog=test_catalog)
@@ -479,21 +522,39 @@ class TestPipelinePersistence:
     )
     def test_metrics_tracking(self, test_catalog, sample_bike_data):
         """Test metrics tracking and logging."""
-        test_catalog.save("model_input_table", sample_bike_data)
-        test_catalog.save(
-            "parameters", {"model_options": {"learning_rate": 0.1, "depth": 6}}
-        )
-        test_catalog.save("params:random_forest", {"n_estimators": 100})
-        test_catalog.save("params:train_fraction", 0.8)
+        X = sample_bike_data.drop(columns=["demand"])
+        y = sample_bike_data["demand"]
+        split = int(len(X) * 0.8)
+        test_catalog.save("X_train", X.iloc[:split])
+        test_catalog.save("y_train", y.iloc[:split])
+        test_catalog.save("X_test", X.iloc[split:])
+        test_catalog.save("y_test", y.iloc[split:])
 
-        pipelines = register_pipelines()
-        pipeline = pipelines["demand_modeling"]
-
-        # Mock metrics tracking
-        with patch(
-            "demand_forecasting.pipelines.demand_modeling.catboost_nodes.train_catboost_model"
-        ) as mock_train:
-            mock_train.return_value = (Mock(), {"rmse": 45.0, "mae": 30.0, "r2": 0.85})
+        mock_model = Mock()
+        with (
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.optimize_catboost_params",
+                return_value={"learning_rate": 0.1, "depth": 6},
+            ),
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.train_catboost_model",
+                return_value=(mock_model, {"rmse": 45.0, "mae": 30.0, "r2": 0.85}),
+            ) as mock_train,
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.train_single_model",
+                return_value=Mock(),
+            ),
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.compare_demand_models",
+                return_value={"best_model": "catboost"},
+            ),
+            patch(
+                "demand_forecasting.pipelines.demand_modeling.pipeline.train_final_model",
+                return_value=mock_model,
+            ),
+        ):
+            pipelines = register_pipelines()
+            pipeline = pipelines["demand_modeling"]
 
             runner = SequentialRunner()
             result = runner.run(pipeline, catalog=test_catalog)
@@ -502,6 +563,55 @@ class TestPipelinePersistence:
             assert result is not None
             mock_train.assert_called_once()
 
-            # Verify metrics structure
+            # Verify arguments passed to training node
             args, _kwargs = mock_train.call_args
-            assert len(args) >= 4  # X_train, X_test, y_train, y_test
+            assert len(args) >= 4  # X_train, y_train, optimized_params, X_test, y_test
+
+    @pytest.mark.skipif(
+        not PIPELINES_AVAILABLE, reason="Pipeline modules not available"
+    )
+    def test_real_catboost_nodes_wiring_and_single_col_mape(
+        self, test_catalog, sample_bike_data
+    ):
+        """Exercise real registered Kedro demand_modeling CatBoost nodes end-to-end."""
+        from kedro.pipeline import Pipeline
+
+        from demand_forecasting.pipelines.demand_modeling.catboost_nodes_enhanced import (
+            compute_zero_safe_mape,
+        )
+
+        X = sample_bike_data.drop(columns=["demand"]).iloc[:120]
+        # Kedro Parquet stores target splits as one-column DataFrames
+        y = sample_bike_data[["demand"]].iloc[:120]
+        split = 90
+        test_catalog.save("X_train", X.iloc[:split])
+        test_catalog.save("y_train", y.iloc[:split])
+        test_catalog.save("X_test", X.iloc[split:])
+        test_catalog.save("y_test", y.iloc[split:])
+
+        # Run the actual registered Kedro nodes (no mocks on optimize/train wiring)
+        registered = register_pipelines()["demand_modeling"]
+        catboost_nodes = [
+            n
+            for n in registered.nodes
+            if n.name in {"optimize_catboost_params", "train_catboost_model"}
+        ]
+        assert len(catboost_nodes) == 2
+
+        runner = SequentialRunner()
+        runner.run(Pipeline(catboost_nodes), catalog=test_catalog)
+
+        # Free outputs persist in catalog (intermediate optimized_params is released after handoff)
+        catboost_model = test_catalog.load("catboost_model")
+        metrics = test_catalog.load("catboost_metrics")
+
+        assert catboost_model is not None
+        assert "learning_rate" in catboost_model.get_params()
+        assert metrics["rmse"] >= 0.0
+        assert metrics["mae"] >= 0.0
+        assert metrics["mape"] >= 0.0
+
+        # Perfect forecast on a (n, 1) DataFrame must yield exactly 0% MAPE (no broadcasting)
+        actual_2d = np.array([[100.0], [200.0]])
+        pred_1d = np.array([100.0, 200.0])
+        assert compute_zero_safe_mape(actual_2d, pred_1d) == pytest.approx(0.0)

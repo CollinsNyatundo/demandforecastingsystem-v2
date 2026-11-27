@@ -7,9 +7,12 @@ import sys
 import mlflow
 import mlflow.sklearn
 import numpy as np
+import pytest
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
+
+pytestmark = pytest.mark.integration
 
 
 def test_mlflow_simple() -> bool | None:
